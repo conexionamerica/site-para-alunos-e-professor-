@@ -1,13 +1,14 @@
-// Arquivo: horizons-export-22fc469e-c423-4e5d-bc45-c6e823625c43 (3)/src/pages/ProfessorDashboardPage.jsx
+// Arquivo: src/pages/ProfessorDashboardPage.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu } from 'lucide-react';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useAuth } from '@/contexts/SupabaseAuthContext'; // Corrected import
+import { useAuth } from '@/contexts/SupabaseAuthContext'; // CORREÇÃO: Importado useAuth
+// import { SupabaseAuthContext } from '@/contexts/SupabaseAuthContext'; // LINHA REMOVIDA
 import HomeTab from '@/components/professor-dashboard/HomeTab';
 import AulasTab from '@/components/professor-dashboard/AulasTab';
 import AgendaTab from '@/components/professor-dashboard/AgendaTab';
@@ -15,16 +16,60 @@ import AlunosTab from '@/components/professor-dashboard/AlunosTab';
 import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 
+// Função placeholder/simulada para buscar dados do dashboard
+// Você deve substituir isso pela sua lógica real de busca de dados no Supabase.
+const fetchProfessorDashboardData = async (userId) => {
+    // Simular um atraso na rede
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Dados simulados
+    return {
+        professorId: userId,
+        professorName: "Professor(a) Conectado(a)",
+        email: "seu.email.corrigido@escola.com",
+        pendingRequests: [
+            { id: 1, studentName: "Aluno 1", date: "2025-12-01", type: "Experimental" },
+            { id: 2, studentName: "Aluno 2", date: "2025-12-03", type: "Pacote 10 Aulas" },
+        ],
+        upcomingClasses: [
+            { id: 101, studentName: "Aluno 3", date: "2025-11-26", time: "19:00", subject: "Português" },
+            { id: 102, studentName: "Aluno 4", date: "2025-11-27", time: "10:00", subject: "Matemática" },
+        ],
+        studentsCount: 25,
+        messagesCount: 3,
+        // Adicione outros dados necessários para as outras abas (Agenda, Alunos, etc.)
+    };
+};
+
 const ProfessorDashboardPage = () => {
-    const { signOut } = useAuth(); // Corrected usage (useAuth provides signOut)
+    const { profile, signOut } = useAuth(); // CORREÇÃO: Usando o hook useAuth
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [dashboardData, setDashboardData] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
 
     const handleLogout = async () => {
         await signOut();
         navigate('/professor-login');
     };
+
+    // Efeito para buscar dados do dashboard quando o perfil estiver disponível
+    useEffect(() => {
+        if (profile?.id) {
+            fetchProfessorDashboardData(profile.id).then(data => {
+                setDashboardData(data);
+                setIsLoading(false);
+            }).catch(error => {
+                console.error("Erro ao carregar dados do dashboard:", error);
+                setIsLoading(false);
+                // Opcional: mostrar um erro ao usuário
+            });
+        } else if (!profile && !isLoading) {
+            // Se não houver perfil e não estiver carregando, redirecionar
+            navigate('/professor-login');
+        }
+    }, [profile, navigate]); // Dependência em 'profile' para rodar quando estiver pronto
 
     // Função para verificar o tamanho da tela e fechar a sidebar em telas maiores
     useEffect(() => {
@@ -38,15 +83,16 @@ const ProfessorDashboardPage = () => {
     }, []);
 
     const navItems = [
-        { id: 'home', icon: Home, label: 'Início', component: HomeTab },
-        { id: 'aulas', icon: BookOpen, label: 'Minhas Aulas', component: AulasTab },
-        { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
-        { id: 'alunos', icon: Users, label: 'Meus Alunos', component: AlunosTab },
-        { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab },
-        { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
+        { id: 'home', icon: Home, label: 'Início', component: HomeTab, props: { dashboardData } },
+        { id: 'aulas', icon: BookOpen, label: 'Minhas Aulas', component: AulasTab, props: { dashboardData } },
+        { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab, props: { dashboardData } },
+        { id: 'alunos', icon: Users, label: 'Meus Alunos', component: AlunosTab, props: { dashboardData } },
+        { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab, props: { dashboardData } },
+        { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab, props: { dashboardData } },
     ];
 
     const Sidebar = () => (
+        // ... (resto do código da Sidebar sem alterações)
         <motion.div
             initial={{ x: '-100%' }}
             animate={{ x: isSidebarOpen ? '0%' : '-100%' }}
@@ -73,6 +119,8 @@ const ProfessorDashboardPage = () => {
                                 ? 'bg-blue-600 text-white shadow-lg'
                                 : 'text-gray-300 hover:bg-gray-800'
                         }`}
+                        // DESABILITAR tabs enquanto carrega dados
+                        disabled={isLoading}
                     >
                         <item.icon className="h-5 w-5 mr-3" />
                         {item.label}
@@ -88,6 +136,35 @@ const ProfessorDashboardPage = () => {
             </TabsList>
         </motion.div>
     );
+
+    // Renderizar tela de carregamento para evitar tela branca
+    if (isLoading || !profile) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-100">
+                <div className="flex flex-col items-center">
+                    <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+                    <p className="mt-4 text-xl font-semibold text-gray-700">Carregando Painel do Professor...</p>
+                </div>
+            </div>
+        );
+    }
+    
+    // Se não houver dashboardData, pode significar um erro, mas com o mock acima deve funcionar
+    if (!dashboardData) {
+         return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-100">
+                <div className="flex flex-col items-center p-8 bg-white rounded-lg shadow-xl">
+                    <LogOut className="h-12 w-12 text-red-500 mb-4" />
+                    <h2 className="text-2xl font-bold text-gray-800">Erro ao Carregar Dados</h2>
+                    <p className="mt-2 text-gray-600 text-center">Não foi possível carregar as informações do dashboard. Por favor, tente recarregar a página.</p>
+                    <Button onClick={() => window.location.reload()} className="mt-4 bg-blue-600 hover:bg-blue-700">
+                        Tentar Novamente
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
 
     return (
         <div className="flex min-h-screen bg-gray-100">
@@ -119,9 +196,9 @@ const ProfessorDashboardPage = () => {
                         <DropdownMenuContent className="w-56" align="end" forceMount>
                             <DropdownMenuLabel className="font-normal">
                                 <div className="flex flex-col space-y-1">
-                                    <p className="text-sm font-medium leading-none">Professor</p>
+                                    <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> {/* CORREÇÃO: Usando nome do dashboardData */}
                                     <p className="text-xs leading-none text-muted-foreground">
-                                        seu.email@escola.com
+                                        {dashboardData.email || 'email@escola.com'} {/* CORREÇÃO: Usando email do dashboardData */}
                                     </p>
                                 </div>
                             </DropdownMenuLabel>
@@ -141,7 +218,8 @@ const ProfessorDashboardPage = () => {
                         {/* Tabs Content */}
                         {navItems.map(item => (
                             <TabsContent key={item.id} value={item.id} className="mt-0">
-                                <item.component />
+                                {/* CORREÇÃO: Passando dashboardData para os componentes filhos */}
+                                <item.component {...item.props} />
                             </TabsContent>
                         ))}
                     </Tabs>
