@@ -1,13 +1,13 @@
 // Arquivo: horizons-export-22fc469e-c423-4e5d-bc45-c6e823625c43 (3)/src/pages/ProfessorDashboardPage.jsx
 
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { SupabaseAuthContext } from '@/contexts/SupabaseAuthContext';
+import { useAuth } from '@/contexts/SupabaseAuthContext'; // Corrected import
 import HomeTab from '@/components/professor-dashboard/HomeTab';
 import AulasTab from '@/components/professor-dashboard/AulasTab';
 import AgendaTab from '@/components/professor-dashboard/AgendaTab';
@@ -16,13 +16,13 @@ import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 
 const ProfessorDashboardPage = () => {
-    const { logout } = useContext(SupabaseAuthContext);
+    const { signOut } = useAuth(); // Corrected usage (useAuth provides signOut)
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const handleLogout = async () => {
-        await logout();
+        await signOut();
         navigate('/professor-login');
     };
 
