@@ -1,4 +1,5 @@
-// Substitua o conteúdo do seu arquivo por este:
+// Arquivo: src/components/professor-dashboard/PreferenciasTab.jsx
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
@@ -52,7 +53,14 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
 
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+    // Adiciona um listener de realtime para atualizar a lista se houver novas atribuições/cancelamentos
+    const channel = supabase.channel('assigned-packages-history')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
+      .subscribe();
+      
+    return () => supabase.removeChannel(channel);
+  }, [fetchHistory, professorId]);
 
   const handleDeleteWrapper = async (log) => {
     // 1. Atualiza o status localmente para 'Cancelado'
@@ -127,10 +135,19 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   );
 };
 
-const PreferenciasTab = ({ professorId, data, loading }) => {
+// CORREÇÃO: Recebe 'dashboardData'
+const PreferenciasTab = ({ dashboardData }) => {
   const { toast } = useToast();
   const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
+  // Extração segura das propriedades
+  const data = dashboardData?.data || {};
+  const loading = dashboardData?.loading || false;
+  const professorId = dashboardData?.professorId;
+  const students = data.students || [];
+  const packages = data.packages || [];
+  const classSlots = data.classSlots || [];
+    
   const [slots, setSlots] = useState([]);
   const [isSavingSlots, setIsSavingSlots] = useState(false);
 
@@ -144,14 +161,18 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
   // NOVO: Estado para a Data de Fim/Validade
   const [endDate, setEndDate] = useState(addMonths(new Date(), 1));
 
-  const selectedStudent = data.students.find(s => s.id === selectedStudentId);
-  const isCustomPackageSelected = data.packages.find(p => p.id === parseInt(selectedPackage))?.name === 'Personalizado';
+  const selectedStudent = students.find(s => s.id === selectedStudentId); // Usa students extraído
+  // CORREÇÃO: Verifica packages antes de tentar encontrar o pacote.
+  const isCustomPackageSelected = packages.find(p => p.id === parseInt(selectedPackage))?.name === 'Personalizado';
 
+
+  // CORREÇÃO: Usa 'classSlots' extraído do dashboardData
   useEffect(() => {
-    if (!Array.isArray(data.classSlots)) return;
+    if (!Array.isArray(classSlots)) return;
 
     const existingSlotsMap = new Map();
-    data.classSlots.forEach(slot => {
+    classSlots.forEach(slot => {
+      // Garante que o formato seja HH:mm:ss
       const startTime = slot.start_time.length === 5 ? `${slot.start_time}:00` : slot.start_time;
       existingSlotsMap.set(`${slot.day_of_week}-${startTime}`, slot);
     });
@@ -176,7 +197,7 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
     }
 
     setSlots(mergedSlots);
-  }, [data.classSlots, professorId, data.loading]);
+  }, [classSlots, professorId, loading]); // Depende de classSlots e loading
 
   const handleSlotToggle = (dayIndex, time) => {
     setSlots(currentSlots =>
@@ -205,17 +226,24 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
     setIsSavingSlots(true);
 
     const slotsToUpsert = slots.map(s => {
-      const { id, created_at, ...rest } = s;
+      // Remove campos desnecessários ou que causam conflito
+      const { id, created_at, ...rest } = s; 
       return { ...rest, professor_id: professorId };
     });
 
     try {
+      // CORREÇÃO: Verifica se professorId existe antes de chamar a API
+      if (!professorId) throw new Error("ID do Professor não está disponível.");
+      
       const { error } = await supabase.from('class_slots').upsert(slotsToUpsert, {
         onConflict: 'professor_id, day_of_week, start_time'
       });
 
       if (error) throw error;
       toast({ variant: 'default', title: 'Sucesso!', description: 'Suas preferências de horário foram salvas.' });
+      
+      // Opcional: Forçar recarga dos dados do Dashboard pai se o prop onUpdate estiver disponível
+
     } catch (error) {
       console.error("Error saving slots:", error);
       toast({ variant: 'destructive', title: 'Erro ao salvar', description: `Não foi possível salvar as alterações: ${error.message}` });
@@ -224,6 +252,7 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
     }
   };
 
+  // Funções de exclusão e reversão (mantidas, mas usando professorId extraído)
   const handleDeleteLog = useCallback(async (log) => {
     const { id: logId, student_id: studentId, package_id: packageId } = log;
     
@@ -295,7 +324,7 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
             const { data: slotsToRevert, error: slotsFetchError } = await supabase
               .from('class_slots')
               .select('id')
-              .eq('professor_id', professorId)
+              .eq('professor_id', professorId) // Usa professorId extraído
               .in('day_of_week', horarios.days)
               .gte('start_time', horarios.time)
               .eq('status', 'filled');
@@ -342,7 +371,7 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
         description: `Ocorreu um erro: ${error.message}` 
       });
     }
-  }, [professorId, toast]);
+  }, [professorId, toast]); // Depende de professorId
 
   const handleAssignPackage = async (e) => {
     e.preventDefault();
@@ -351,7 +380,8 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
       return;
     }
     
-    const selectedPackageData = data.packages.find(p => p.id === parseInt(selectedPackage));
+    // CORREÇÃO: Usa 'packages' extraído
+    const selectedPackageData = packages.find(p => p.id === parseInt(selectedPackage));
     const isCustomPackage = selectedPackageData?.name === 'Personalizado';
     
     if (isCustomPackage && (!customClassCount || parseInt(customClassCount) <= 0)) {
@@ -362,6 +392,12 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
       toast({ variant: 'destructive', title: 'Pacote não encontrado' });
       setIsSubmittingPackage(false);
       return;
+    }
+    // CORREÇÃO: Verifica se professorId existe
+    if (!professorId) {
+        toast({ variant: 'destructive', title: 'Erro de Autenticação', description: 'ID do Professor não está disponível.' });
+        setIsSubmittingPackage(false);
+        return;
     }
 
     setIsSubmittingPackage(true);
@@ -393,7 +429,7 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
     }
 
     const { error: logError } = await supabase.from('assigned_packages_log').insert({
-      professor_id: professorId,
+      professor_id: professorId, // Usa professorId extraído
       student_id: selectedStudentId,
       package_id: selectedPackageData.id,
       observation: observation,
@@ -440,6 +476,7 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
             <DialogTrigger asChild>
               <Button variant="outline"><History className="mr-2 h-4 w-4" /> Ver Histórico</Button>
             </DialogTrigger>
+            {/* CORREÇÃO: Passa professorId extraído */}
             <AssignedPackagesHistory professorId={professorId} onDelete={handleDeleteLog} />
           </Dialog>
         </div>
@@ -457,7 +494,8 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
                 <CommandList>
                   <CommandEmpty>Nenhum aluno encontrado.</CommandEmpty>
                   <CommandGroup>
-                    {data.students.map((student) => (
+                    {/* CORREÇÃO: Usa students extraído */}
+                    {students.map((student) => (
                       <CommandItem
                         key={student.id}
                         value={student.full_name}
@@ -482,7 +520,8 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
                 <SelectValue placeholder="Selecione um pacote" />
               </SelectTrigger>
               <SelectContent>
-                {data.packages.map((pkg) => (
+                {/* CORREÇÃO: Usa packages extraído */}
+                {packages.map((pkg) => (
                   <SelectItem key={pkg.id} value={pkg.id.toString()}>{pkg.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -589,7 +628,7 @@ const PreferenciasTab = ({ professorId, data, loading }) => {
                     />
                   </div>
                 </div>
-                {loading ? (
+                {loading ? ( // CORREÇÃO: Usa o 'loading' do dashboardData
                   <Loader2 className="h-6 w-6 animate-spin" />
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
