@@ -1,3 +1,5 @@
+// Arquivo: src/components/professor-dashboard/AgendaTab.jsx
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { format, parseISO, getDay, startOfWeek, endOfWeek, isSameDay, addDays } from 'date-fns';
@@ -20,11 +22,17 @@ const daysOfWeekMap = {
     6: 'Sábado'
 };
 
-const AgendaTab = ({ professorId }) => {
+// CORREÇÃO: Recebe 'dashboardData' em vez de 'professorId' e extrai a ID.
+// Assume que o objeto completo do dashboard é passado para as abas.
+const AgendaTab = ({ dashboardData }) => {
+    // Extrai professorId do objeto de dados
+    const professorId = dashboardData?.professorId;
+    
     const today = useMemo(() => new Date(), []);
     const todayDayOfWeek = useMemo(() => getDay(today), [today]); // 0 (Dom) a 6 (Sáb)
 
-    const [loading, setLoading] = useState(true);
+    // CORREÇÃO: Renomeado 'loading' para 'isLoadingTab' e inicializado com base no dashboardData
+    const [isLoadingTab, setIsLoadingTab] = useState(false);
     const [appointments, setAppointments] = useState([]);
     const [selectedDate, setSelectedDate] = useState(today);
     // Inicia com o dia da semana atual selecionado visualmente
@@ -101,13 +109,16 @@ const AgendaTab = ({ professorId }) => {
 
             setAppointments(filteredData);
         }
-        setLoading(false);
+        setIsLoadingTab(false);
         setLoadingDay(false);
     }, [professorId, today]);
 
     useEffect(() => {
-        fetchAppointments(selectedDate, selectedDayOfWeek, quickFilter);
-    }, [fetchAppointments, selectedDate, selectedDayOfWeek, quickFilter]);
+        // CORREÇÃO: Chama fetchAppointments apenas se professorId estiver disponível
+        if (professorId) {
+            fetchAppointments(selectedDate, selectedDayOfWeek, quickFilter);
+        }
+    }, [fetchAppointments, selectedDate, selectedDayOfWeek, quickFilter, professorId]);
     
     // Handler para os botões de filtro de dia da semana (Antiga lógica semanal)
     const handleDayFilter = (dayIndex) => {
@@ -195,6 +206,12 @@ const AgendaTab = ({ professorId }) => {
     
     // CORRIGIDO: O calendário fica desabilitado APENAS se o filtro for 'ALL'.
     const isCalendarDisabled = quickFilter === 'ALL';
+    
+    // Renderização de carregamento mais robusta (usa o estado do tab e o ID do professor)
+    // O dashboardData?.loading não está disponível neste componente, mas a verificação do ID é suficiente para evitar falhas.
+    if (!professorId) {
+        return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-sky-600" /></div>;
+    }
 
 
     return (
@@ -317,7 +334,7 @@ const AgendaTab = ({ professorId }) => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {(loading || loadingDay) ? (
+                        {(isLoadingTab || loadingDay) ? (
                             <TableRow><TableCell colSpan="5" className="text-center p-8"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
                         ) : appointments.length > 0 ? (
                             appointments.map(apt => (
