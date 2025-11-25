@@ -1,4 +1,4 @@
-// Archivo: src/components/professor-dashboard/AlunosTab.jsx
+// Arquivo: src/components/professor-dashboard/AlunosTab.jsx
 
 import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
@@ -7,11 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, Package, Loader2 } from 'lucide-react';
 
-// CORRECCIÓN: Ahora recibe dashboardData en lugar de 'data' y 'loading' separados
+// CORREÇÃO: Agora recebe dashboardData
 const AlunosTab = ({ dashboardData }) => {
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Extrae de forma segura las propiedades
+  // Extrai de forma segura as propriedades
   const data = dashboardData?.data || {};
   const loading = dashboardData?.loading || false;
   
@@ -19,26 +19,29 @@ const AlunosTab = ({ dashboardData }) => {
   const students = data.students || [];
   const allBillings = data.allBillings || [];
   const allAppointments = data.allAppointments || [];
-  const assignedLogs = data.assignedLogs || [];
-  
-  // CORRECCIÓN: El Memo ahora depende de las propiedades extraídas del objeto data.
+  const assignedLogs = data.assignedLogs || []; // Logs de atribuição de pacotes
+
   const studentsWithAvailableClasses = useMemo(() => {
-    if (!students || !allBillings || !allAppointments) return [];
+    if (!students || !allBillings || !allAppointments || !assignedLogs) return [];
     
     return students.map(student => {
-      const studentBillings = allBillings.filter(b => b.user_id === student.id);
       const studentAppointments = allAppointments.filter(a => a.student_id === student.id);
-      const studentLogs = assignedLogs.filter(l => l.student_id === student.id && l.status !== 'Cancelado'); // Excluir logs cancelados
       
-      // Cálculo de clases totales: sumar clases asignadas de los logs
+      // Filtra logs ativos (não cancelados) e pertencentes ao aluno
+      const studentLogs = assignedLogs.filter(l => 
+        l.student_id === student.id && l.status !== 'Cancelado'
+      );
+      
+      // Cálculo de classes totais: sumar classes atribuídas e ativas dos logs
       const totalClasses = studentLogs.reduce((acc, log) => {
           return acc + (log.assigned_classes || 0);
       }, 0);
       
-      const usedClasses = studentAppointments.filter(a => ['scheduled', 'completed', 'missed'].includes(a.status)).length;
+      // Clases usadas/agendadas: scheduled (agendada), completed (realizada), missed (falta).
+      const usedClasses = studentAppointments.filter(a => 
+        ['scheduled', 'completed', 'missed'].includes(a.status)
+      ).length;
       
-      // Nota: El cálculo en el HomePage.jsx del alumno es más complejo e incluye 'rescheduledCount' como compensación. 
-      // Aquí solo se usa el cálculo simple para el profesor: lo que se cargó (totalClasses) - lo que se consumió o agendó (usedClasses)
       const availableClasses = totalClasses - usedClasses;
 
       return {
@@ -46,7 +49,7 @@ const AlunosTab = ({ dashboardData }) => {
         availableClasses: Math.max(0, availableClasses),
       };
     });
-  }, [students, allBillings, allAppointments, assignedLogs]);
+  }, [students, allBillings, allAppointments, assignedLogs]); // Dependências corrigidas
 
   const filteredStudents = studentsWithAvailableClasses.filter(s => 
     s.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
