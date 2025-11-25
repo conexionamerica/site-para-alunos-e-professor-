@@ -1,3 +1,5 @@
+// Arquivo: src/components/professor-dashboard/AulasTab.jsx
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { format, parseISO, parse, isValid, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -311,7 +313,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
             const { error: creditError } = await supabase
                 .from('assigned_packages_log')
                 .insert({
-                    professor_id: appointment.professor_id,
+                    professor_id: appointment.professorId, // CORREÇÃO: Usa o professorId do appointment
                     student_id: appointment.student_id,
                     package_id: appointment.customPackageId, 
                     assigned_classes: 1, // Creditar 1 aula (para compensar a aula original)
@@ -380,7 +382,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0">
-                            <UICalendar
+                            <Calendar
                                 mode="single"
                                 selected={newDate}
                                 onSelect={(date) => {
@@ -433,7 +435,8 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
 };
 
 
-const AulasTab = ({ data, loading, onUpdate }) => {
+// CORREÇÃO PRINCIPAL: Recebe 'dashboardData' e 'onUpdate'
+const AulasTab = ({ dashboardData, onUpdate }) => {
   const { toast } = useToast();
   const [nameFilter, setNameFilter] = useState("");
   const [dateFilter, setDateFilter] = useState(null);
@@ -441,16 +444,26 @@ const AulasTab = ({ data, loading, onUpdate }) => {
   const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
   const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
   
+  // Extração segura das propriedades
+  // Assume que a estrutura de dados detalhada está em dashboardData.data
+  const data = dashboardData?.data || {}; 
+  const loading = dashboardData?.loading || false; 
+  const professorId = dashboardData?.professorId; 
+  const appointments = data.appointments || [];
+  const packages = data.packages || [];
+
+
   const handleUpdate = () => onUpdate();
 
   // 1. OBTENÇÃO DO ID DO PACOTE 'PERSONALIZADO'
   const customPackageId = useMemo(() => {
-    // Asume que o pacote 'Personalizado' é o que se usa para créditos manuais (incluindo reagendamento)
-    return data.packages?.find(p => p.name === 'Personalizado')?.id;
-  }, [data.packages]);
+    // Acessa packages de forma segura
+    return packages.find(p => p.name === 'Personalizado')?.id;
+  }, [packages]);
 
   const handleMarkAsMissed = async (appointment) => {
-    if (!window.confirm(`Tem certeza que deseja marcar a aula de ${appointment.student.full_name} como FALTA? Esta ação não pode ser desfeita e consumirá um crédito do aluno.`)) return;
+    // CORREÇÃO: Verifica se o aluno existe antes de acessar full_name
+    if (!window.confirm(`Tem certeza que deseja marcar a aula de ${appointment.student?.full_name || 'este aluno'} como FALTA? Esta ação não pode ser desfeita e consumirá um crédito do aluno.`)) return;
 
     // 1. Atualiza o status da aula
     const { error } = await supabase.from('appointments').update({ status: 'missed' }).eq('id', appointment.id);
@@ -461,9 +474,9 @@ const AulasTab = ({ data, loading, onUpdate }) => {
     
     // 2. CORREÇÃO: Registrar o débito da falta na assigned_packages_log para consumo do crédito.
     const { error: debitError } = await supabase.from('assigned_packages_log').insert({
-        professor_id: appointment.professor_id,
+        professor_id: professorId, // Usa o professorId do dashboardData
         student_id: appointment.student_id,
-        package_id: customPackageId,
+        package_id: customPackageId, // Usa o ID do pacote 'Personalizado'
         assigned_classes: -1, 
         status: 'missed',
         observation: `Débito de falta: ${format(parseISO(appointment.class_datetime), 'dd/MM/yyyy HH:mm')}`
@@ -482,20 +495,21 @@ const AulasTab = ({ data, loading, onUpdate }) => {
   };
 
   const handleOpenReschedule = (appointment) => {
-    // Adiciona o customPackageId ao objeto appointment para ser usado no dialog
-    setSelectedAppointment({ ...appointment, customPackageId });
+    // Adiciona o customPackageId e professorId ao objeto appointment
+    setSelectedAppointment({ ...appointment, customPackageId, professorId }); 
     setIsRescheduleDialogOpen(true);
   }
   
-  const filteredAppointments = (data.appointments || []).filter(apt => {
+  // CORREÇÃO: Filtra appointments usando a variável appointments extraída
+  const filteredAppointments = (appointments || []).filter(apt => {
     const nameMatch = apt.student?.full_name?.toLowerCase().includes(nameFilter.toLowerCase());
     const dateMatch = !dateFilter || (apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === format(new Date(dateFilter), 'yyyy-MM-dd'));
     return nameMatch && dateMatch;
   }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime)); 
 
   const openFeedbackDialog = (appointment) => {
-    // Passa o customPackageId para o FeedbackDialog para que ele possa registrar o débito
-    setSelectedAppointment({ ...appointment, customPackageId });
+    // Passa o customPackageId e professorId para o FeedbackDialog 
+    setSelectedAppointment({ ...appointment, customPackageId, professorId }); 
     setIsFeedbackDialogOpen(true);
   }
 
