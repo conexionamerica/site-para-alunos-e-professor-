@@ -1,3 +1,5 @@
+// Arquivo: src/components/professor-dashboard/HomeTab.jsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
@@ -9,14 +11,20 @@ import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays } from 'lucide-re
 
 const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
 
+// CORREÇÃO: O componente agora recebe props de dados agregados: 
+// professorId: ID do professor.
+// data: Objeto contendo coleções (scheduleRequests, nextClass).
+// loading: Status de carregamento.
+// onUpdate: Callback para forçar a atualização dos dados no pai.
 const HomeTab = ({ professorId, data, loading, onUpdate }) => {
   const { toast } = useToast();
   const [updatingRequestId, setUpdatingRequestId] = useState(null);
   const [solicitudes, setSolicitudes] = useState([]);
 
   useEffect(() => {
-    setSolicitudes(data.scheduleRequests || []);
-  }, [data.scheduleRequests]);
+    // CORREÇÃO: Usar o operador de encadeamento opcional para evitar erro se 'data' for nulo
+    setSolicitudes(data?.scheduleRequests || []);
+  }, [data?.scheduleRequests]); // Depende da propriedade do array de solicitações
 
   const handleUpdateRequestStatus = async (solicitudId, newStatus) => {
     setUpdatingRequestId(solicitudId);
@@ -28,6 +36,7 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
       return;
     }
     
+    // 1. Atualiza o status da solicitação
     const { error: updateError } = await supabase
       .from('solicitudes_clase')
       .update({ status: newStatus })
@@ -39,6 +48,7 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
       return;
     }
 
+    // 2. Cria as aulas recorrentes se a solicitação for aceita
     if (newStatus === 'Aceita' && request.is_recurring) {
       try {
         const proposedSchedule = JSON.parse(request.horarios_propuestos);
@@ -55,7 +65,6 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
         const endDate = parseISO(billingData.end_date);
         const totalClassesInPackage = billingData.packages.number_of_classes;
         const classDuration = billingData.packages.class_duration_minutes;
-        // O slot padrão é de 15 minutos, precisamos saber quantos slots a aula ocupa.
         const slotsPerClass = Math.ceil(classDuration / 15);
         
         const { data: allSlots, error: slotsError } = await supabase.from('class_slots').select('id, day_of_week, start_time').eq('professor_id', professorId);
@@ -71,7 +80,8 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
 
           if (proposedSchedule.days.includes(dayOfWeek)) {
             const startTime = proposedSchedule.time;
-            const startTimeObj = parse(startTime, 'HH:mm:ss', new Date());
+            // CORREÇÃO: Usar a data atual para garantir o fuso horário correto no parse
+            const startTimeObj = parse(startTime, 'HH:mm:ss', currentDate); 
 
             const requiredSlots = [];
             let canBook = true;
@@ -90,7 +100,8 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
             if (canBook) {
               const primarySlot = requiredSlots[0];
               const [hour, minute] = startTime.split(':').map(Number);
-              const classDateTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour, minute, 0);
+              // CORREÇÃO: Constrói o classDateTime no fuso horário do servidor/ISO
+              const classDateTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour, minute, 0); 
 
               appointmentInserts.push({
                 student_id: studentId,
@@ -114,8 +125,10 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
           if (insertError) throw new Error(`Falha ao criar aulas: ${insertError.message}`);
 
           // Bloqueia TODOS os slots que fazem parte da duração da aula
-          const { error: updateSlotsError } = await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToUpdate));
-          if (updateSlotsError) throw new Error(`Falha ao bloquear horários: ${updateSlotsError.message}`);
+          if (slotIdsToUpdate.size > 0) {
+              const { error: updateSlotsError } = await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToUpdate));
+              if (updateSlotsError) throw new Error(`Falha ao bloquear horários: ${updateSlotsError.message}`);
+          }
           
           toast({ variant: 'default', title: 'Solicitação Aceita!', description: `${appointmentInserts.length} aulas agendadas e ${slotIdsToUpdate.size} horários bloqueados.` });
         } else {
@@ -129,6 +142,7 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
       toast({ variant: 'destructive', title: 'Solicitação Rejeitada' });
     }
     
+    // 3. Chama o onUpdate do componente pai para recarregar os dados
     if (onUpdate) onUpdate(solicitudId);
     setUpdatingRequestId(null);
   };
@@ -205,7 +219,7 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
       <div className="space-y-8">
         <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
           <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
-          {loading ? <p>Carregando...</p> : data.nextClass ? (
+          {loading ? <p>Carregando...</p> : data?.nextClass ? ( {/* CORREÇÃO: Usar encadeamento opcional */}
             <>
               <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(data.nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
               <h3 className="text-lg font-bold mt-1">{data.nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
