@@ -219,7 +219,10 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
       <div className="space-y-8">
         <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
           <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
-          {loading ? <p>Carregando...</p> : data?.nextClass ? ( {/* CORREÇÃO: Usar encadeamento opcional */}
+          {/* CORREÇÃO: Estrutura do operador ternário para evitar o erro de sintaxe JSX/ESBuild */}
+          {loading ? (
+            <p>Carregando...</p> 
+          ) : data?.nextClass ? (
             <>
               <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(data.nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
               <h3 className="text-lg font-bold mt-1">{data.nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
@@ -227,7 +230,9 @@ const HomeTab = ({ professorId, data, loading, onUpdate }) => {
               <p className="text-sm"><strong>Nível:</strong> {data.nextClass.student.spanish_level || 'Não definido'}</p>
               <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
             </>
-          ) : <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>}
+          ) : (
+            <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
+          )}
         </div>
       </div>
     </div>
