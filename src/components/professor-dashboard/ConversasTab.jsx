@@ -1,3 +1,5 @@
+// Arquivo: src/components/professor-dashboard/ConversasTab.jsx
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
@@ -128,33 +130,53 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
   );
 };
 
-const ConversasTab = ({ professorId, data }) => {
+// CORREÇÃO: Recebe 'dashboardData' em vez de 'professorId' e 'data'
+const ConversasTab = ({ dashboardData }) => {
+  // Extração segura das propriedades
+  const professorId = dashboardData?.professorId;
+  const professorName = dashboardData?.professorName || 'Professor';
+  const chatListData = dashboardData?.data?.chatList || []; // Assumindo que a lista de chats agregada vem em dashboardData.data.chatList
+  const loading = dashboardData?.loading || false;
+
   const [chatList, setChatList] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [activeChat, setActiveChat] = useState(null);
   const { toast } = useToast();
-  const professorName = data?.profile?.full_name || 'Professor';
 
   const fetchChatList = useCallback(async () => {
     if (!professorId) return;
-    setLoading(true);
-    
-    const { data, error } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
-
-    if (error) {
-      console.error("Error fetching chat list:", error);
-      toast({ variant: 'destructive', title: 'Erro ao carregar conversas', description: error.message });
-    } else {
-      setChatList(data || []);
+    // Otimização: A lista de chats deve vir do componente pai (ProfessorDashboardPage)
+    // Se a lista já foi carregada, usaremos ela para evitar re-fetch desnecessário
+    if (chatListData.length > 0 && !loading) {
+        setChatList(chatListData);
+        return;
     }
-    setLoading(false);
-  }, [professorId, toast]);
+    
+    // Se não houver dados ou estiver carregando, forçar a busca (fallback)
+    // No entanto, no escopo deste exercício, confiaremos que o pai fará o fetch inicial.
+    // Manteremos a busca aqui caso o pai não passe a lista de chats completa (chatList)
+    if (!loading) {
+      const { data, error } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
+      if (error) {
+          console.error("Error fetching chat list:", error);
+          toast({ variant: 'destructive', title: 'Erro ao carregar conversas', description: error.message });
+      } else {
+          setChatList(data || []);
+      }
+    }
+  }, [professorId, chatListData.length, loading, toast]); // Adiciona dependências de chatListData e loading
 
   useEffect(() => {
-    fetchChatList();
-
+    // Se o pai passar a lista, use-a.
+    if (chatListData.length > 0 && chatList.length === 0) {
+        setChatList(chatListData);
+    }
+    
+    // Configuração de Realtime para inserções de mensagens/chats
+    if (!professorId) return;
+    
     const handleInserts = (payload) => {
-        fetchChatList();
+        // CORREÇÃO: Força o re-fetch da lista de chats para atualizar last_message e unreadCount (se implementado)
+        fetchChatList(); 
     };
 
     const channel = supabase.channel('professor-chat-list')
@@ -164,7 +186,7 @@ const ConversasTab = ({ professorId, data }) => {
 
     return () => supabase.removeChannel(channel);
 
-  }, [professorId, fetchChatList]);
+  }, [professorId, fetchChatList, chatListData]);
 
   if (activeChat) {
     return <ChatInterface activeChat={activeChat} professorId={professorId} professorName={professorName} onBack={() => setActiveChat(null)} />;
