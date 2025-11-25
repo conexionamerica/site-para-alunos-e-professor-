@@ -1,3 +1,5 @@
+// Archivo: src/components/professor-dashboard/AlunosTab.jsx
+
 import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { Input } from '@/components/ui/input';
@@ -5,28 +7,38 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, Package, Loader2 } from 'lucide-react';
 
-const AlunosTab = ({ data, loading }) => {
+// CORRECCIÓN: Ahora recibe dashboardData en lugar de 'data' y 'loading' separados
+const AlunosTab = ({ dashboardData }) => {
   const [searchTerm, setSearchTerm] = useState('');
-
+  
+  // Extrae de forma segura las propiedades
+  const data = dashboardData?.data || {};
+  const loading = dashboardData?.loading || false;
+  
+  // Asignaciones seguras, asumiendo que el componente padre proporciona estas colecciones:
+  const students = data.students || [];
+  const allBillings = data.allBillings || [];
+  const allAppointments = data.allAppointments || [];
+  const assignedLogs = data.assignedLogs || [];
+  
+  // CORRECCIÓN: El Memo ahora depende de las propiedades extraídas del objeto data.
   const studentsWithAvailableClasses = useMemo(() => {
-    if (!data.students || !data.allBillings || !data.allAppointments) return [];
+    if (!students || !allBillings || !allAppointments) return [];
     
-    return data.students.map(student => {
-      const studentBillings = data.allBillings.filter(b => b.user_id === student.id);
-      const studentAppointments = data.allAppointments.filter(a => a.student_id === student.id);
-      const studentLogs = data.assignedLogs.filter(l => l.student_id === student.id);
+    return students.map(student => {
+      const studentBillings = allBillings.filter(b => b.user_id === student.id);
+      const studentAppointments = allAppointments.filter(a => a.student_id === student.id);
+      const studentLogs = assignedLogs.filter(l => l.student_id === student.id && l.status !== 'Cancelado'); // Excluir logs cancelados
       
-      const totalClasses = studentBillings.reduce((acc, billing) => {
-        const isCustom = billing.packages.name === 'Personalizado';
-        if (isCustom) {
-            const log = studentLogs.find(l => l.package_id === billing.package_id);
-            return acc + (log?.assigned_classes || 0);
-        }
-        return acc + (billing.packages?.number_of_classes || 0);
+      // Cálculo de clases totales: sumar clases asignadas de los logs
+      const totalClasses = studentLogs.reduce((acc, log) => {
+          return acc + (log.assigned_classes || 0);
       }, 0);
-
+      
       const usedClasses = studentAppointments.filter(a => ['scheduled', 'completed', 'missed'].includes(a.status)).length;
-      const rescheduledClasses = studentAppointments.filter(a => a.status === 'rescheduled').length;
+      
+      // Nota: El cálculo en el HomePage.jsx del alumno es más complejo e incluye 'rescheduledCount' como compensación. 
+      // Aquí solo se usa el cálculo simple para el profesor: lo que se cargó (totalClasses) - lo que se consumió o agendó (usedClasses)
       const availableClasses = totalClasses - usedClasses;
 
       return {
@@ -34,7 +46,7 @@ const AlunosTab = ({ data, loading }) => {
         availableClasses: Math.max(0, availableClasses),
       };
     });
-  }, [data.students, data.allBillings, data.allAppointments, data.assignedLogs]);
+  }, [students, allBillings, allAppointments, assignedLogs]);
 
   const filteredStudents = studentsWithAvailableClasses.filter(s => 
     s.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -42,7 +54,7 @@ const AlunosTab = ({ data, loading }) => {
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm">
-      <h3 className="font-bold mb-4">Gerenciar Alunos ({data.students.length})</h3>
+      <h3 className="font-bold mb-4">Gerenciar Alunos ({students.length})</h3>
       <div className="flex justify-between items-center mb-4">
         <div className="relative w-full max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
