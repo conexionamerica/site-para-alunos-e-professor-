@@ -1,14 +1,28 @@
 // Archivo: src/pages/ProfessorDashboardPage.jsx
 
-// Reemplazar la función fetchProfessorDashboardData por la siguiente:
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { supabase } from '@/lib/customSupabaseClient'; 
+import HomeTab from '@/components/professor-dashboard/HomeTab';
+import AulasTab from '@/components/professor-dashboard/AulasTab';
+import AgendaTab from '@/components/professor-dashboard/AgendaTab';
+import AlunosTab from '@/components/professor-dashboard/AlunosTab';
+import ConversasTab from '@/components/professor-dashboard/ConversasTab';
+import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
+import { useToast } from '@/components/ui/use-toast'; 
 
+// Función de búsqueda de datos (se mantiene la corrección de 'email')
 const fetchProfessorDashboardData = async (professorId) => {
-    // Aquí está la lógica consolidada de busca de datos para todas las abas:
     const today = new Date().toISOString();
     
-    // 1. Fetch del perfil del profesor (para nombre y email)
+    // 1. Fetch del perfil del profesor (solo nombre, el email viene del AuthContext)
     const { data: professorProfile, error: profProfileError } = await supabase
-        // CORRECCIÓN: Se elimina 'email' de la selección
         .from('profiles')
         .select('full_name') 
         .eq('id', professorId)
@@ -40,7 +54,7 @@ const fetchProfessorDashboardData = async (professorId) => {
     const { data: students, error: studentsError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('role', 'student') // Solo buscamos alumnos
+        .eq('role', 'student') 
         .order('full_name', { ascending: true });
     if (studentsError) throw studentsError;
 
@@ -77,18 +91,16 @@ const fetchProfessorDashboardData = async (professorId) => {
         .select('*');
     if (logsError) throw logsError;
     
-    // 9. Fetch de la lista de Chats (para ConversasTab) - Si esta es una RPC, ajuste el tipo de llamada.
+    // 9. Fetch de la lista de Chats (para ConversasTab)
     const { data: chatList, error: chatListError } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
-    if (chatListError && chatListError.code !== '42883') throw chatListError; // 42883 = función no existe
+    if (chatListError && chatListError.code !== '42883') throw chatListError; 
 
-    // Retorno del objeto de datos completo
     return {
         professorId,
         professorName: professorProfile?.full_name || 'Professor(a)',
-        email: professorProfile?.email || '', // Mantener la propiedad pero dejarla vacía, o usar el email del objeto 'user'
         scheduleRequests: scheduleRequests || [],
         nextClass: nextClass,
-        students: students || [], // Ya solo contiene estudiantes
+        students: students || [], 
         packages: packages || [],
         classSlots: classSlots || [],
         appointments: appointments || [],
@@ -99,8 +111,7 @@ const fetchProfessorDashboardData = async (professorId) => {
 };
 
 const ProfessorDashboardPage = () => {
-    // AÑADIDO: Acceder a user (del AuthContext) para obtener su email
-    const { user, profile, signOut } = useAuth(); 
+    const { user, profile, signOut } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
     
@@ -108,7 +119,7 @@ const ProfessorDashboardPage = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [dashboardData, setDashboardData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [hasError, setHasError] = useState(false); // Estado para erro
+    const [hasError, setHasError] = useState(false);
 
     const handleLogout = async () => {
         await signOut();
@@ -117,19 +128,19 @@ const ProfessorDashboardPage = () => {
 
     const fetchData = useCallback(async () => {
         const currentUserId = user?.id; 
-        if (!currentUserId) return;
+        if (!currentUserId) {
+            setIsLoading(true); 
+            return; 
+        }
 
         setIsLoading(true);
         setHasError(false);
         try {
             const data = await fetchProfessorDashboardData(currentUserId);
-            // CORRECCIÓN LÓGICA: Pasa el email del objeto 'user' al dashboardData 
-            // ya que no se puede consultar desde la tabla 'profiles'
             setDashboardData({
                 data: data, 
                 professorId: data.professorId,
                 professorName: data.professorName,
-                email: user?.email || data.email, // Usa el email del objeto user si está disponible
                 loading: false, 
                 onUpdate: fetchData 
             });
@@ -145,12 +156,13 @@ const ProfessorDashboardPage = () => {
         } finally {
             setIsLoading(false); 
         }
-    }, [user, toast]); 
+    }, [user?.id, toast]); 
 
+    // Solo se ejecuta una vez al tener el usuario autenticado
     useEffect(() => {
         if (user?.id) {
             fetchData();
-        } else if (!user) {
+        } else if (user === null) {
             navigate('/professor-login');
         }
     }, [user, navigate, fetchData]);
@@ -195,14 +207,13 @@ const ProfessorDashboardPage = () => {
                         value={item.id}
                         onClick={() => {
                             setActiveTab(item.id);
-                            setIsSidebarOpen(false); // Fecha a sidebar após selecionar em mobile
+                            setIsSidebarOpen(false); 
                         }}
                         className={`w-full justify-start text-lg px-4 py-3 rounded-xl transition-all duration-200 ${
                             activeTab === item.id
                                 ? 'bg-blue-600 text-white shadow-lg'
                                 : 'text-gray-300 hover:bg-gray-800'
                         }`}
-                        // DESABILITAR tabs enquanto carrega dados
                         disabled={isLoading}
                     >
                         <item.icon className="h-5 w-5 mr-3" />
@@ -220,8 +231,8 @@ const ProfessorDashboardPage = () => {
         </motion.div>
     );
 
-    // Renderizar tela de carregamento ou erro
-    if (isLoading) {
+    // FIX LÓGICO PRINCIPAL: Espera a que termine la carga Y el objeto de datos exista
+    if (isLoading || (user && !hasError && !dashboardData)) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <div className="flex flex-col items-center">
@@ -233,8 +244,6 @@ const ProfessorDashboardPage = () => {
     }
     
     if (hasError) {
-        // CORRECCIÓN LÓGICA: Ya no es posible que this.state.hasError sea true y isLoading sea true al mismo tiempo, 
-        // ya que el finally de fetchData establece isLoading en false. Se muestra el error.
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <div className="flex flex-col items-center p-8 bg-white rounded-lg shadow-xl">
@@ -249,8 +258,8 @@ const ProfessorDashboardPage = () => {
         );
     }
 
-    if (!user) {
-        // Fallback para caso o usuário não seja carregado após o loading (deve ser tratado pelo useAuth, mas é uma segurança)
+    // Se no hay usuario (lo cual ya se redirigió en useEffect, pero como última defensa)
+    if (!user || !dashboardData) {
         navigate('/professor-login');
         return null;
     }
@@ -261,7 +270,6 @@ const ProfessorDashboardPage = () => {
             {/* Sidebar para desktop e mobile (oculta/aberta) */}
             <Sidebar />
 
-            {/* Overlay para mobile quando sidebar está aberta */}
             {isSidebarOpen && (
                 <div 
                     className="fixed inset-0 z-30 bg-black opacity-50 lg:hidden" 
@@ -280,22 +288,21 @@ const ProfessorDashboardPage = () => {
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                                <Users className="h-5 w-5" /> {/* Ícone de perfil temporário */}
+                                <Users className="h-5 w-5" /> 
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className="w-56" align="end" forceMount>
                             <DropdownMenuLabel className="font-normal">
                                 <div className="flex flex-col space-y-1">
-                                    <p className="text-sm font-medium leading-none">{dashboardData?.professorName || 'Professor'}</p> 
+                                    <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
                                     <p className="text-xs leading-none text-muted-foreground">
-                                        {/* CORRECCIÓN: Usar directamente el email del objeto 'user' */}
-                                        {user?.email || 'email@escola.com'} 
+                                        {user.email || 'email@escola.com'} 
                                     </p>
                                 </div>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
-                                Preferencias
+                                Preferências
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={handleLogout}>
                                 Sair
@@ -309,8 +316,8 @@ const ProfessorDashboardPage = () => {
                         {/* Tabs Content */}
                         {navItems.map(item => (
                             <TabsContent key={item.id} value={item.id} className="mt-0">
-                                {/* Passa dashboardData se estiver disponível, senão passa um objeto vazio para segurança */}
-                                <item.component dashboardData={dashboardData || {}} onUpdate={fetchData} /> 
+                                {/* Se garantiza que dashboardData no es nulo aquí */}
+                                <item.component dashboardData={dashboardData} /> 
                             </TabsContent>
                         ))}
                     </Tabs>
