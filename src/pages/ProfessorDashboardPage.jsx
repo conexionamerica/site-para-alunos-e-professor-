@@ -1,4 +1,4 @@
-// Arquivo: src/pages/ProfessorDashboardPage.jsx
+// Archivo: src/pages/ProfessorDashboardPage.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -17,12 +17,20 @@ import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import { useToast } from '@/components/ui/use-toast'; // Importa useToast
 
-// CORREÇÃO: Função de busca de dados do dashboard REAL
+// CORRECCIÓN: Función de busca de datos del dashboard REAL
 const fetchProfessorDashboardData = async (professorId) => {
-    // Aqui está a lógica consolidada de busca de dados para todas as abas:
+    // Aquí está la lógica consolidada de busca de datos para todas las abas:
     const today = new Date().toISOString();
     
-    // 1. Fetch de Solicitacoes (para HomeTab)
+    // NUEVO: 1. Fetch del perfil del profesor (para nombre y email)
+    const { data: professorProfile, error: profProfileError } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', professorId)
+        .maybeSingle();
+    if (profProfileError) throw profProfileError;
+
+    // 2. Fetch de Solicitacoes (para HomeTab)
     const { data: scheduleRequests, error: reqError } = await supabase
       .from('solicitudes_clase')
       .select(`*, profile:profiles!alumno_id(*)`)
@@ -31,7 +39,7 @@ const fetchProfessorDashboardData = async (professorId) => {
       .order('created_at', { ascending: true });
     if (reqError) throw reqError;
     
-    // 2. Fetch de Próxima Aula (para HomeTab)
+    // 3. Fetch de Próxima Aula (para HomeTab)
     const { data: nextClass, error: nextClassError } = await supabase
       .from('appointments')
       .select(`*, student:profiles!student_id(full_name, spanish_level)`)
@@ -43,28 +51,28 @@ const fetchProfessorDashboardData = async (professorId) => {
       .maybeSingle();
     if (nextClassError && nextClassError.code !== 'PGRST116') throw nextClassError;
     
-    // 3. Fetch de Todos os Alunos (para AlunosTab, PreferenciasTab, AulasTab)
+    // 4. Fetch de Todos los Alumnos (para AlunosTab, PreferenciasTab, AulasTab)
     const { data: students, error: studentsError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('role', 'student')
+        .eq('role', 'student') // Solo buscamos alumnos
         .order('full_name', { ascending: true });
     if (studentsError) throw studentsError;
 
-    // 4. Fetch de Pacotes (para PreferenciasTab)
+    // 5. Fetch de Pacotes (para PreferenciasTab)
     const { data: packages, error: packagesError } = await supabase
         .from('packages')
         .select('*');
     if (packagesError) throw packagesError;
 
-    // 5. Fetch de Slots (para PreferenciasTab)
+    // 6. Fetch de Slots (para PreferenciasTab)
     const { data: classSlots, error: slotsError } = await supabase
         .from('class_slots')
         .select('*')
         .eq('professor_id', professorId);
     if (slotsError) throw slotsError;
 
-    // 6. Fetch de Todos os Agendamentos (para AulasTab, AlunosTab)
+    // 7. Fetch de Todos los Agendamentos (para AulasTab, AlunosTab)
     const { data: appointments, error: appointmentsError } = await supabase
         .from('appointments')
         .select(`*, student:profiles!student_id(full_name, spanish_level)`)
@@ -72,7 +80,7 @@ const fetchProfessorDashboardData = async (professorId) => {
         .order('class_datetime', { ascending: false });
     if (appointmentsError) throw appointmentsError;
 
-    // 7. Fetch de Faturas e Logs (para AlunosTab, PreferenciasTab)
+    // 8. Fetch de Faturas y Logs (para AlunosTab, PreferenciasTab)
     const { data: allBillings, error: billingsError } = await supabase
         .from('billing')
         .select('*, packages(name)')
@@ -84,21 +92,18 @@ const fetchProfessorDashboardData = async (professorId) => {
         .select('*');
     if (logsError) throw logsError;
     
-    // 8. Fetch da lista de Chats (para ConversasTab) - Se esta for uma RPC, ajuste o tipo de chamada.
+    // 9. Fetch de la lista de Chats (para ConversasTab) - Si esta es una RPC, ajuste el tipo de llamada.
     const { data: chatList, error: chatListError } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
-    if (chatListError && chatListError.code !== '42883') throw chatListError; // 42883 = função não existe
+    if (chatListError && chatListError.code !== '42883') throw chatListError; // 42883 = función no existe
 
-    // Encontra o perfil do professor logado na lista de alunos (profiles)
-    const professorProfile = students.find(p => p.id === professorId) || {};
-
-    // Retorno do objeto de dados completo
+    // Retorno del objeto de datos completo
     return {
         professorId,
-        professorName: professorProfile.full_name || 'Professor(a)',
-        email: professorProfile.email || '',
+        professorName: professorProfile?.full_name || 'Professor(a)',
+        email: professorProfile?.email || '',
         scheduleRequests: scheduleRequests || [],
         nextClass: nextClass,
-        students: students.filter(s => s.id !== professorId), // Filtra o próprio professor
+        students: students || [], // Ya solo contiene estudiantes
         packages: packages || [],
         classSlots: classSlots || [],
         appointments: appointments || [],
@@ -132,7 +137,7 @@ const ProfessorDashboardPage = () => {
         try {
             const data = await fetchProfessorDashboardData(profile.id);
             setDashboardData({
-                data: data, // Dados reais
+                data: data, // Datos reales
                 professorId: data.professorId,
                 professorName: data.professorName,
                 loading: false, 
@@ -313,7 +318,7 @@ const ProfessorDashboardPage = () => {
                         {navItems.map(item => (
                             <TabsContent key={item.id} value={item.id} className="mt-0">
                                 {/* Passa dashboardData se estiver disponível, senão passa um objeto vazio para segurança */}
-                                <item.component dashboardData={dashboardData || {}} /> 
+                                <item.component dashboardData={dashboardData || {}} onUpdate={fetchData} /> 
                             </TabsContent>
                         ))}
                     </Tabs>
