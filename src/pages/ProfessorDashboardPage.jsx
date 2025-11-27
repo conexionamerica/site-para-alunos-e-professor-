@@ -1,31 +1,16 @@
 // Archivo: src/pages/ProfessorDashboardPage.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { supabase } from '@/lib/customSupabaseClient'; // Importa o supabase real
-import HomeTab from '@/components/professor-dashboard/HomeTab';
-import AulasTab from '@/components/professor-dashboard/AulasTab';
-import AgendaTab from '@/components/professor-dashboard/AgendaTab';
-import AlunosTab from '@/components/professor-dashboard/AlunosTab';
-import ConversasTab from '@/components/professor-dashboard/ConversasTab';
-import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
-import { useToast } from '@/components/ui/use-toast'; // Importa useToast
+// Reemplazar la función fetchProfessorDashboardData por la siguiente:
 
-// CORRECCIÓN: Función de busca de datos del dashboard REAL
 const fetchProfessorDashboardData = async (professorId) => {
     // Aquí está la lógica consolidada de busca de datos para todas las abas:
     const today = new Date().toISOString();
     
     // 1. Fetch del perfil del profesor (para nombre y email)
     const { data: professorProfile, error: profProfileError } = await supabase
+        // CORRECCIÓN: Se elimina 'email' de la selección
         .from('profiles')
-        .select('full_name, email')
+        .select('full_name') 
         .eq('id', professorId)
         .maybeSingle();
     if (profProfileError) throw profProfileError;
@@ -100,7 +85,7 @@ const fetchProfessorDashboardData = async (professorId) => {
     return {
         professorId,
         professorName: professorProfile?.full_name || 'Professor(a)',
-        email: professorProfile?.email || '',
+        email: professorProfile?.email || '', // Mantener la propiedad pero dejarla vacía, o usar el email del objeto 'user'
         scheduleRequests: scheduleRequests || [],
         nextClass: nextClass,
         students: students || [], // Ya solo contiene estudiantes
@@ -114,14 +99,15 @@ const fetchProfessorDashboardData = async (professorId) => {
 };
 
 const ProfessorDashboardPage = () => {
-    const { user, profile, signOut } = useAuth(); // Accediendo a 'user'
+    // AÑADIDO: Acceder a user (del AuthContext) para obtener su email
+    const { user, profile, signOut } = useAuth(); 
     const { toast } = useToast();
     const navigate = useNavigate();
     
     const [activeTab, setActiveTab] = useState('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [dashboardData, setDashboardData] = useState(null);
-    const [isLoading, setIsLoading] = useState(true); // Se inicia en true
+    const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false); // Estado para erro
 
     const handleLogout = async () => {
@@ -129,21 +115,23 @@ const ProfessorDashboardPage = () => {
         navigate('/professor-login');
     };
 
-    // Función para buscar datos, dependiente del ID del usuario
     const fetchData = useCallback(async () => {
         const currentUserId = user?.id; 
-        if (!currentUserId) return; // Si no hay ID, simplemente sale y espera el próximo useEffect
+        if (!currentUserId) return;
 
         setIsLoading(true);
         setHasError(false);
         try {
             const data = await fetchProfessorDashboardData(currentUserId);
+            // CORRECCIÓN LÓGICA: Pasa el email del objeto 'user' al dashboardData 
+            // ya que no se puede consultar desde la tabla 'profiles'
             setDashboardData({
-                data: data, // Datos reales
+                data: data, 
                 professorId: data.professorId,
                 professorName: data.professorName,
+                email: user?.email || data.email, // Usa el email del objeto user si está disponible
                 loading: false, 
-                onUpdate: fetchData // Adiciona a função de recarga para uso nas abas
+                onUpdate: fetchData 
             });
         } catch (error) {
             console.error("Erro ao carregar dados do dashboard:", error);
@@ -153,23 +141,18 @@ const ProfessorDashboardPage = () => {
                 description: `Não foi possível carregar os dados do dashboard. ${error.message}` 
             });
             setHasError(true);
-            setDashboardData(null); // Limpa dados em caso de erro
+            setDashboardData(null); 
         } finally {
-            setIsLoading(false); // <--- ESTO DEBE EJECUTARSE SIEMPRE PARA TERMINAR LA PANTALLA DE CARGA
+            setIsLoading(false); 
         }
-    }, [user?.id, toast]); // Depende únicamente de user?.id para evitar re-renderizados innecesarios
+    }, [user, toast]); 
 
     useEffect(() => {
-        // Lógica de disparo de carga y redirección
         if (user?.id) {
             fetchData();
-        } else if (user === null) {
-             // Si el user es null, el AuthContext ya terminó de cargar la sesión 
-             // y no encontró un usuario logueado (sólo se llega aquí si App.jsx lo permite).
-             // Esto garantiza la redirección si el usuario no está autenticado.
+        } else if (!user) {
             navigate('/professor-login');
         }
-        // Se omite isLoading en la lista de dependencias para evitar lógica circular.
     }, [user, navigate, fetchData]);
 
     // Función para verificar el tamaño de la pantalla y cerrar la sidebar en pantallas mayores
@@ -250,6 +233,8 @@ const ProfessorDashboardPage = () => {
     }
     
     if (hasError) {
+        // CORRECCIÓN LÓGICA: Ya no es posible que this.state.hasError sea true y isLoading sea true al mismo tiempo, 
+        // ya que el finally de fetchData establece isLoading en false. Se muestra el error.
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <div className="flex flex-col items-center p-8 bg-white rounded-lg shadow-xl">
@@ -303,7 +288,8 @@ const ProfessorDashboardPage = () => {
                                 <div className="flex flex-col space-y-1">
                                     <p className="text-sm font-medium leading-none">{dashboardData?.professorName || 'Professor'}</p> 
                                     <p className="text-xs leading-none text-muted-foreground">
-                                        {profile?.email || 'email@escola.com'} 
+                                        {/* CORRECCIÓN: Usar directamente el email del objeto 'user' */}
+                                        {user?.email || 'email@escola.com'} 
                                     </p>
                                 </div>
                             </DropdownMenuLabel>
