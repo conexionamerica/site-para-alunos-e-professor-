@@ -17,11 +17,11 @@ import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import { useToast } from '@/components/ui/use-toast'; 
 
-// Función de búsqueda de datos (se mantiene la corrección de 'email')
+// Función de búsqueda de datos (ya corregida para evitar el error de profiles.email)
 const fetchProfessorDashboardData = async (professorId) => {
     const today = new Date().toISOString();
     
-    // 1. Fetch del perfil del profesor (solo nombre, el email viene del AuthContext)
+    // 1. Fetch del perfil del profesor (solo nombre)
     const { data: professorProfile, error: profProfileError } = await supabase
         .from('profiles')
         .select('full_name') 
@@ -146,15 +146,16 @@ const ProfessorDashboardPage = () => {
             });
         } catch (error) {
             console.error("Erro ao carregar dados do dashboard:", error);
+            // Si hay un error, se establece hasError en true y se limpia dashboardData
+            setHasError(true);
+            setDashboardData(null); 
             toast({ 
                 variant: 'destructive', 
                 title: 'Erro de Conexão', 
                 description: `Não foi possível carregar os dados do dashboard. ${error.message}` 
             });
-            setHasError(true);
-            setDashboardData(null); 
         } finally {
-            setIsLoading(false); 
+            setIsLoading(false); // Siempre termina el estado de carga para mostrar el contenido o el error.
         }
     }, [user?.id, toast]); 
 
@@ -162,7 +163,8 @@ const ProfessorDashboardPage = () => {
     useEffect(() => {
         if (user?.id) {
             fetchData();
-        } else if (user === null) {
+        } else if (user === null && !profile && !isLoading) {
+            // Caso de que la sesión haya terminado de cargar y no haya user. Redirecciona.
             navigate('/professor-login');
         }
     }, [user, navigate, fetchData]);
@@ -231,8 +233,8 @@ const ProfessorDashboardPage = () => {
         </motion.div>
     );
 
-    // FIX LÓGICO PRINCIPAL: Espera a que termine la carga Y el objeto de datos exista
-    if (isLoading || (user && !hasError && !dashboardData)) {
+    // FIX LÓGICO DE RENDERIZADO: Muestra la pantalla de carga si aún está cargando O si no hay datos y no hay error
+    if (isLoading || (!dashboardData && !hasError)) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <div className="flex flex-col items-center">
@@ -243,7 +245,7 @@ const ProfessorDashboardPage = () => {
         );
     }
     
-    if (hasError) {
+    if (hasError || !dashboardData) { // Si hasError es true O no hay datos cargados
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <div className="flex flex-col items-center p-8 bg-white rounded-lg shadow-xl">
@@ -257,14 +259,7 @@ const ProfessorDashboardPage = () => {
             </div>
         );
     }
-
-    // Se no hay usuario (lo cual ya se redirigió en useEffect, pero como última defensa)
-    if (!user || !dashboardData) {
-        navigate('/professor-login');
-        return null;
-    }
-
-
+    
     return (
         <div className="flex min-h-screen bg-gray-100">
             {/* Sidebar para desktop e mobile (oculta/aberta) */}
@@ -296,7 +291,7 @@ const ProfessorDashboardPage = () => {
                                 <div className="flex flex-col space-y-1">
                                     <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
                                     <p className="text-xs leading-none text-muted-foreground">
-                                        {user.email || 'email@escola.com'} 
+                                        {user?.email || 'email@escola.com'} 
                                     </p>
                                 </div>
                             </DropdownMenuLabel>
@@ -316,7 +311,7 @@ const ProfessorDashboardPage = () => {
                         {/* Tabs Content */}
                         {navItems.map(item => (
                             <TabsContent key={item.id} value={item.id} className="mt-0">
-                                {/* Se garantiza que dashboardData no es nulo aquí */}
+                                {/* Passa o objeto completo e já validado (dashboardData) */}
                                 <item.component dashboardData={dashboardData} /> 
                             </TabsContent>
                         ))}
