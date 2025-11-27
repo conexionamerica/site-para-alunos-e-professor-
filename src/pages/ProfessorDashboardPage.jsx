@@ -22,7 +22,7 @@ const fetchProfessorDashboardData = async (professorId) => {
     // Aquí está la lógica consolidada de busca de datos para todas las abas:
     const today = new Date().toISOString();
     
-    // NUEVO: 1. Fetch del perfil del profesor (para nombre y email)
+    // 1. Fetch del perfil del profesor (para nombre y email)
     const { data: professorProfile, error: profProfileError } = await supabase
         .from('profiles')
         .select('full_name, email')
@@ -114,15 +114,14 @@ const fetchProfessorDashboardData = async (professorId) => {
 };
 
 const ProfessorDashboardPage = () => {
-    // CORRECCIÓN 1: Acceder a 'user' para garantizar el ID de carga
-    const { user, profile, signOut } = useAuth();
+    const { user, profile, signOut } = useAuth(); // Accediendo a 'user'
     const { toast } = useToast();
     const navigate = useNavigate();
     
     const [activeTab, setActiveTab] = useState('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [dashboardData, setDashboardData] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(true); // Se inicia en true
     const [hasError, setHasError] = useState(false); // Estado para erro
 
     const handleLogout = async () => {
@@ -130,17 +129,17 @@ const ProfessorDashboardPage = () => {
         navigate('/professor-login');
     };
 
+    // Función para buscar datos, dependiente del ID del usuario
     const fetchData = useCallback(async () => {
-        // CORRECCIÓN 2: Usar user.id como fallback si profile aún no está disponible
-        const currentUserId = profile?.id || user?.id; 
-        if (!currentUserId) return;
+        const currentUserId = user?.id; 
+        if (!currentUserId) return; // Si no hay ID, simplemente sale y espera el próximo useEffect
 
         setIsLoading(true);
         setHasError(false);
         try {
             const data = await fetchProfessorDashboardData(currentUserId);
             setDashboardData({
-                data: data, // Dados reais
+                data: data, // Datos reales
                 professorId: data.professorId,
                 professorName: data.professorName,
                 loading: false, 
@@ -156,21 +155,24 @@ const ProfessorDashboardPage = () => {
             setHasError(true);
             setDashboardData(null); // Limpa dados em caso de erro
         } finally {
-            setIsLoading(false);
+            setIsLoading(false); // <--- ESTO DEBE EJECUTARSE SIEMPRE PARA TERMINAR LA PANTALLA DE CARGA
         }
-    }, [user?.id, profile?.id, toast]); // Depende de user/profile ID
+    }, [user?.id, toast]); // Depende únicamente de user?.id para evitar re-renderizados innecesarios
 
     useEffect(() => {
-        // CORRECCIÓN 3: Disparar fetchData en cuanto user.id esté disponible
+        // Lógica de disparo de carga y redirección
         if (user?.id) {
             fetchData();
-        } else if (!user && !isLoading) {
-            // Se o usuário não estiver logado e não estiver carregando, redireciona (Fallback)
+        } else if (user === null) {
+             // Si el user es null, el AuthContext ya terminó de cargar la sesión 
+             // y no encontró un usuario logueado (sólo se llega aquí si App.jsx lo permite).
+             // Esto garantiza la redirección si el usuario no está autenticado.
             navigate('/professor-login');
         }
-    }, [user, navigate, fetchData, isLoading]);
+        // Se omite isLoading en la lista de dependencias para evitar lógica circular.
+    }, [user, navigate, fetchData]);
 
-    // Função para verificar o tamanho da tela e fechar a sidebar em telas maiores
+    // Función para verificar el tamaño de la pantalla y cerrar la sidebar en pantallas mayores
     useEffect(() => {
         const handleResize = () => {
             if (window.innerWidth >= 1024) {
@@ -307,7 +309,7 @@ const ProfessorDashboardPage = () => {
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
-                                Preferências
+                                Preferencias
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={handleLogout}>
                                 Sair
