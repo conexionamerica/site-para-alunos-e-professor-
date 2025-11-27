@@ -1,4 +1,4 @@
-// Arquivo: src/components/professor-dashboard/AgendaTab.jsx
+// Archivo: src/components/professor-dashboard/AgendaTab.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -22,8 +22,7 @@ const daysOfWeekMap = {
     6: 'Sábado'
 };
 
-// CORREÇÃO: Recebe 'dashboardData' em vez de 'professorId' e extrai a ID.
-// Assume que o objeto completo do dashboard é passado para as abas.
+// CORRECCIÓN: Ahora solo recibe 'dashboardData'
 const AgendaTab = ({ dashboardData }) => {
     // Extrai professorId do objeto de dados
     const professorId = dashboardData?.professorId;
