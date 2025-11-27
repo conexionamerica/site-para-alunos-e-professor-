@@ -15,7 +15,7 @@ import { ChevronsUpDown, Check, History, Loader2, Calendar as CalendarIcon, Lock
 import { cn } from '@/lib/utils';
 import { format, parseISO, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
 
@@ -135,7 +135,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   );
 };
 
-// CORREÇÃO: Recebe 'dashboardData'
+// CORRECCIÓN PRINCIPAL: Agora só recebe 'dashboardData'
 const PreferenciasTab = ({ dashboardData }) => {
   const { toast } = useToast();
   const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -160,6 +160,7 @@ const PreferenciasTab = ({ dashboardData }) => {
   const [purchaseDate, setPurchaseDate] = useState(new Date());
   // NOVO: Estado para a Data de Fim/Validade
   const [endDate, setEndDate] = useState(addMonths(new Date(), 1));
+  const onUpdate = dashboardData?.onUpdate; // Para forçar a recarga no pai
 
   const selectedStudent = students.find(s => s.id === selectedStudentId); // Usa students extraído
   // CORREÇÃO: Verifica packages antes de tentar encontrar o pacote.
@@ -242,7 +243,8 @@ const PreferenciasTab = ({ dashboardData }) => {
       if (error) throw error;
       toast({ variant: 'default', title: 'Sucesso!', description: 'Suas preferências de horário foram salvas.' });
       
-      // Opcional: Forçar recarga dos dados do Dashboard pai se o prop onUpdate estiver disponível
+      // Chama onUpdate para recarregar os dados no Dashboard principal
+      if (onUpdate) onUpdate();
 
     } catch (error) {
       console.error("Error saving slots:", error);
@@ -361,7 +363,8 @@ const PreferenciasTab = ({ dashboardData }) => {
 
       toast({ variant: 'default', title: 'Pacote Cancelado!', description: message });
 
-      // REMOVIDO: A remoção final do registro do banco de dados (Passo 5) para que o histórico permaneça.
+      // Chama onUpdate para recarregar o histórico e a lista de alunos
+      if (onUpdate) onUpdate();
 
     } catch (error) {
       console.error("Error in handleDeleteLog:", error);
@@ -457,6 +460,7 @@ const PreferenciasTab = ({ dashboardData }) => {
       setObservation('');
       setPurchaseDate(new Date());
       setEndDate(addMonths(new Date(), 1)); // Resetar a data de fim para o padrão
+      if (onUpdate) onUpdate();
     }
     setIsSubmittingPackage(false);
   };
