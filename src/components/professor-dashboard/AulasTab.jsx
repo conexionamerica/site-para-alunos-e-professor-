@@ -435,7 +435,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
 };
 
 
-// CORREÇÃO PRINCIPAL: Apenas recebe 'dashboardData'
+// CORRECCIÓN PRINCIPAL: Ahora solo recibe 'dashboardData'
 const AulasTab = ({ dashboardData }) => {
   const { toast } = useToast();
   const [nameFilter, setNameFilter] = useState("");
@@ -444,8 +444,7 @@ const AulasTab = ({ dashboardData }) => {
   const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
   const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
   
-  // Extração segura das propriedades
-  // O onUpdate é obtido do objeto dashboardData
+  // Extração segura das propriedades a partir de dashboardData
   const data = dashboardData?.data || {}; 
   const loading = dashboardData?.loading || false; 
   const professorId = dashboardData?.professorId; 
