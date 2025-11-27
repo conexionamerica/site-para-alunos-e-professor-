@@ -130,7 +130,7 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
   );
 };
 
-// CORREÇÃO: Recebe 'dashboardData' em vez de 'professorId' e 'data'
+// CORRECCIÓN PRINCIPAL: Agora só recebe 'dashboardData'
 const ConversasTab = ({ dashboardData }) => {
   // Extração segura das propriedades
   const professorId = dashboardData?.professorId;
