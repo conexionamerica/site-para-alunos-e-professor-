@@ -1,4 +1,4 @@
-// Arquivo: src/components/professor-dashboard/AulasTab.jsx
+// Archivo: src/components/professor-dashboard/AulasTab.jsx
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { format, parseISO, parse, isValid, getDay } from 'date-fns';
@@ -435,8 +435,8 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
 };
 
 
-// CORREÇÃO PRINCIPAL: Recebe 'dashboardData' e 'onUpdate'
-const AulasTab = ({ dashboardData, onUpdate }) => {
+// CORREÇÃO PRINCIPAL: Apenas recebe 'dashboardData'
+const AulasTab = ({ dashboardData }) => {
   const { toast } = useToast();
   const [nameFilter, setNameFilter] = useState("");
   const [dateFilter, setDateFilter] = useState(null);
@@ -445,15 +445,18 @@ const AulasTab = ({ dashboardData, onUpdate }) => {
   const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
   
   // Extração segura das propriedades
-  // Assume que a estrutura de dados detalhada está em dashboardData.data
+  // O onUpdate é obtido do objeto dashboardData
   const data = dashboardData?.data || {}; 
   const loading = dashboardData?.loading || false; 
   const professorId = dashboardData?.professorId; 
+  const onUpdate = dashboardData?.onUpdate; // <-- CORREÇÃO: Obtém onUpdate do objeto
   const appointments = data.appointments || [];
   const packages = data.packages || [];
 
 
-  const handleUpdate = () => onUpdate();
+  const handleUpdate = () => {
+    if (onUpdate) onUpdate(); // Executa o onUpdate se existir
+  };
 
   // 1. OBTENÇÃO DO ID DO PACOTE 'PERSONALIZADO'
   const customPackageId = useMemo(() => {
