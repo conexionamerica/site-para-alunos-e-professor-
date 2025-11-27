@@ -1,4 +1,4 @@
-// Arquivo: src/components/professor-dashboard/AlunosTab.jsx
+// Archivo: src/components/professor-dashboard/AlunosTab.jsx
 
 import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, Package, Loader2 } from 'lucide-react';
 
-// CORREÇÃO: Agora recebe dashboardData
+// CORRECCIÓN: Ahora solo recibe dashboardData
 const AlunosTab = ({ dashboardData }) => {
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -18,7 +18,7 @@ const AlunosTab = ({ dashboardData }) => {
   // Asignaciones seguras, asumiendo que el componente padre proporciona estas colecciones:
   const students = data.students || [];
   const allBillings = data.allBillings || [];
-  const allAppointments = data.allAppointments || [];
+  const allAppointments = data.appointments || []; // CORREÇÃO: Usa 'appointments' do objeto data
   const assignedLogs = data.assignedLogs || []; // Logs de atribuição de pacotes
 
   const studentsWithAvailableClasses = useMemo(() => {
