@@ -29,7 +29,7 @@ const fetchProfessorDashboardData = async (professorId) => {
         .eq('id', professorId)
         .maybeSingle();
     if (profProfileError) throw profProfileError;
-
+    
     // 2. Fetch de Solicitacoes (para HomeTab)
     const { data: scheduleRequests, error: reqError } = await supabase
       .from('solicitudes_clase')
@@ -114,7 +114,8 @@ const fetchProfessorDashboardData = async (professorId) => {
 };
 
 const ProfessorDashboardPage = () => {
-    const { profile, signOut } = useAuth();
+    // CORRECCIÓN 1: Acceder a 'user' para garantizar el ID de carga
+    const { user, profile, signOut } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
     
@@ -130,14 +131,16 @@ const ProfessorDashboardPage = () => {
     };
 
     const fetchData = useCallback(async () => {
-        if (!profile?.id) return;
+        // CORRECCIÓN 2: Usar user.id como fallback si profile aún no está disponible
+        const currentUserId = profile?.id || user?.id; 
+        if (!currentUserId) return;
 
         setIsLoading(true);
         setHasError(false);
         try {
-            const data = await fetchProfessorDashboardData(profile.id);
+            const data = await fetchProfessorDashboardData(currentUserId);
             setDashboardData({
-                data: data, // Datos reales
+                data: data, // Dados reais
                 professorId: data.professorId,
                 professorName: data.professorName,
                 loading: false, 
@@ -155,16 +158,17 @@ const ProfessorDashboardPage = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [profile?.id, toast]);
+    }, [user?.id, profile?.id, toast]); // Depende de user/profile ID
 
     useEffect(() => {
-        if (profile?.id) {
+        // CORRECCIÓN 3: Disparar fetchData en cuanto user.id esté disponible
+        if (user?.id) {
             fetchData();
-        } else if (!profile && !isLoading) {
-            // Se não houver perfil e não estiver carregando, redirecionar
+        } else if (!user && !isLoading) {
+            // Se o usuário não estiver logado e não estiver carregando, redireciona (Fallback)
             navigate('/professor-login');
         }
-    }, [profile, navigate, fetchData, isLoading]);
+    }, [user, navigate, fetchData, isLoading]);
 
     // Função para verificar o tamanho da tela e fechar a sidebar em telas maiores
     useEffect(() => {
@@ -258,8 +262,8 @@ const ProfessorDashboardPage = () => {
         );
     }
 
-    if (!profile) {
-        // Fallback para caso o perfil não seja carregado após o loading (deve ser tratado pelo useAuth, mas é uma segurança)
+    if (!user) {
+        // Fallback para caso o usuário não seja carregado após o loading (deve ser tratado pelo useAuth, mas é uma segurança)
         navigate('/professor-login');
         return null;
     }
