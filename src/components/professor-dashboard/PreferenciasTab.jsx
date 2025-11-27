@@ -1,4 +1,4 @@
-// Arquivo: src/components/professor-dashboard/PreferenciasTab.jsx
+// Archivo: src/components/professor-dashboard/PreferenciasTab.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -15,7 +15,7 @@ import { ChevronsUpDown, Check, History, Loader2, Calendar as CalendarIcon, Lock
 import { cn } from '@/lib/utils';
 import { format, parseISO, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Input } from '@/components/ui/input";
+import { Input } from '@/components/ui/input'; // CORRECCIÓN DE SINTAXIS APLICADA AQUÍ
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
 
@@ -135,7 +135,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   );
 };
 
-// CORRECCIÓN PRINCIPAL: Agora só recebe 'dashboardData'
+// CORRECCIÓN PRINCIPAL: Ahora solo recibe 'dashboardData'
 const PreferenciasTab = ({ dashboardData }) => {
   const { toast } = useToast();
   const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -147,6 +147,7 @@ const PreferenciasTab = ({ dashboardData }) => {
   const students = data.students || [];
   const packages = data.packages || [];
   const classSlots = data.classSlots || [];
+  const onUpdate = dashboardData?.onUpdate; // Para forçar a recarga no pai
     
   const [slots, setSlots] = useState([]);
   const [isSavingSlots, setIsSavingSlots] = useState(false);
@@ -160,7 +161,6 @@ const PreferenciasTab = ({ dashboardData }) => {
   const [purchaseDate, setPurchaseDate] = useState(new Date());
   // NOVO: Estado para a Data de Fim/Validade
   const [endDate, setEndDate] = useState(addMonths(new Date(), 1));
-  const onUpdate = dashboardData?.onUpdate; // Para forçar a recarga no pai
 
   const selectedStudent = students.find(s => s.id === selectedStudentId); // Usa students extraído
   // CORREÇÃO: Verifica packages antes de tentar encontrar o pacote.
