@@ -1,22 +1,42 @@
-// Arquivo: src/components/professor-dashboard/HomeTab.jsx
+// Archivo: src/components/professor-dashboard/HomeTab.jsx
 
-// Dentro da função handleUpdateRequestStatus, na seção: 
-// if (newStatus === 'Aceita' && request.is_recurring) { ... }
+import React, { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/lib/customSupabaseClient';
+import { useToast } from '@/components/ui/use-toast';
+import { format, formatDistanceToNowStrict, parseISO, getDay, add, parse } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays } from 'lucide-react';
 
-// A linha que precisa ser ajustada é:
-// const { data: allSlots, error: slotsError } = await supabase.from('class_slots').select('id, day_of_week, start_time').eq('professor_id', professorId);
+const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
 
-// Deve ser substituída por:
-// Filtra apenas slots 'active' ou 'filled' (que é o que está no banco, mas aqui estamos verificando a lógica de agendamento)
+// CORRECCIÓN: O componente agora recebe props de dados agregados: 
+// professorId: ID do professor.
+// data: Objeto contendo coleções (scheduleRequests, nextClass).
+// loading: Status de carregamento.
+// onUpdate: Callback para forçar a atualização dos dados no pai.
+const HomeTab = ({ dashboardData }) => {
+  const { toast } = useToast();
+  const [updatingRequestId, setUpdatingRequestId] = useState(null);
+  const [solicitudes, setSolicitudes] = useState([]);
 
-const { data: allSlots, error: slotsError } = await supabase.from('class_slots').select('id, day_of_week, start_time, status').eq('professor_id', professorId); // Puxa o status
+  // CORRECCIÓN DE DESTRUCTURING
+  const professorId = dashboardData?.professorId;
+  const data = dashboardData?.data || {};
+  const loading = dashboardData?.loading || false;
+  // Se obtiene onUpdate directamente del objeto dashboardData
+  const onUpdate = dashboardData?.onUpdate; 
+  
+  // Extraer las colecciones de datos
+  const nextClass = data.nextClass; 
 
-// E a lógica para verificar se o slot pode ser reservado deve ser mais rigorosa.
-// No entanto, o código a seguir está mais correto do que o comentário anterior (a verificação do status é feita implicitamente dentro do loop).
-// Vamos nos focar apenas em garantir que a coluna 'status' esteja disponível na query, o que já foi adicionado acima.
+  useEffect(() => {
+    // CORREÇÃO: Usar o operador de encadeamento opcional para evitar erro se 'data' for nulo
+    setSolicitudes(data?.scheduleRequests || []);
+  }, [data?.scheduleRequests]); // Depende da propriedade do array de solicitações
 
-// Vamos garantir que a query seja mais clara para evitar conflitos:
-const newHandleUpdateRequestStatus = `const handleUpdateRequestStatus = async (solicitudId, newStatus) => {
+  const handleUpdateRequestStatus = async (solicitudId, newStatus) => {
     setUpdatingRequestId(solicitudId);
     const request = solicitudes.find(req => req.solicitud_id === solicitudId);
 
@@ -57,9 +77,7 @@ const newHandleUpdateRequestStatus = `const handleUpdateRequestStatus = async (s
         const classDuration = billingData.packages.class_duration_minutes;
         const slotsPerClass = Math.ceil(classDuration / 15);
         
-        // CORREÇÃO: Busca todos os slots, mas a lógica de verificação de 'active' ou 'filled'
-        // para AGENDAR deve ser feita dentro do loop. Apenas precisamos garantir que
-        // os slots buscados estejam disponíveis para uso (active).
+        // CORREÇÃO: Busca todos os slots, incluindo o status para a lógica de agendamento.
         const { data: allSlots, error: slotsError } = await supabase.from('class_slots').select('id, day_of_week, start_time, status').eq('professor_id', professorId);
         if (slotsError) throw slotsError;
         
@@ -81,19 +99,12 @@ const newHandleUpdateRequestStatus = `const handleUpdateRequestStatus = async (s
             // Verifica todos os slots de 15 minutos necessários para a duração total da aula.
             for (let i = 0; i < slotsPerClass; i++) {
               const slotTime = format(add(startTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
-              // CORREÇÃO LÓGICA: Verifica se o slot está 'active' e não 'filled'
-              const matchingSlot = allSlots.find(s => 
-                s.day_of_week === dayOfWeek 
-                && s.start_time === slotTime
-                && (s.status === 'active' || s.status === 'filled') // Deve estar ATIVO ou já PREENCHIDO (se for a mesma aula que estamos re-agendando/criando)
-              );
+              const matchingSlot = allSlots.find(s => s.day_of_week === dayOfWeek && s.start_time === slotTime);
               
+              // CORRECCIÓN LÓGICA: Se valida que el slot esté 'active' y NO 'filled' antes de intentar agendar.
               if (!matchingSlot || matchingSlot.status === 'filled') {
-                 // Permitimos o agendamento apenas se for 'active'
-                 if (!matchingSlot || matchingSlot.status === 'filled') {
-                    canBook = false; // Bloqueia se já estiver preenchido por outra aula
-                    break;
-                 }
+                canBook = false;
+                break;
               }
               requiredSlots.push(matchingSlot);
             }
@@ -123,21 +134,21 @@ const newHandleUpdateRequestStatus = `const handleUpdateRequestStatus = async (s
 
         if (appointmentInserts.length > 0) {
           const { error: insertError } = await supabase.from('appointments').insert(appointmentInserts, { onConflict: 'class_slot_id, class_datetime' });
-          if (insertError) throw new Error(\`Falha ao criar aulas: \${insertError.message}\`);
+          if (insertError) throw new Error(`Falha ao criar aulas: ${insertError.message}`);
 
           // Bloqueia TODOS os slots que fazem parte da duração da aula
           if (slotIdsToUpdate.size > 0) {
               const { error: updateSlotsError } = await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToUpdate));
-              if (updateSlotsError) throw new Error(\`Falha ao bloquear horários: \${updateSlotsError.message}\`);
+              if (updateSlotsError) throw new Error(`Falha ao bloquear horários: ${updateSlotsError.message}`);
           }
           
-          toast({ variant: 'default', title: 'Solicitação Aceita!', description: \`\${appointmentInserts.length} aulas agendadas e \${slotIdsToUpdate.size} horários bloqueados.\` });
+          toast({ variant: 'default', title: 'Solicitação Aceita!', description: `${appointmentInserts.length} aulas agendadas e ${slotIdsToUpdate.size} horários bloqueados.` });
         } else {
             toast({ variant: 'warning', title: 'Aulas não agendadas', description: 'Nenhum horário correspondente foi encontrado para criar as aulas.' });
         }
       } catch (e) {
         await supabase.from('solicitudes_clase').update({ status: 'Pendiente' }).eq('solicitud_id', solicitudId);
-        toast({ variant: 'destructive', title: \`Erro ao processar agendamento\`, description: e.message });
+        toast({ variant: 'destructive', title: `Erro ao processar agendamento`, description: e.message });
       }
     } else if (newStatus === 'Rejeitada') {
       toast({ variant: 'destructive', title: 'Solicitação Rejeitada' });
@@ -146,4 +157,98 @@ const newHandleUpdateRequestStatus = `const handleUpdateRequestStatus = async (s
     // 3. Chama o onUpdate do componente pai para recarregar os dados
     if (onUpdate) onUpdate(solicitudId);
     setUpdatingRequestId(null);
-  };`
+  };
+  
+  const renderHorarios = (horariosJson) => {
+    try {
+        if (!horariosJson || typeof horariosJson !== 'string') return null;
+        const schedule = JSON.parse(horariosJson);
+        if (!schedule.is_recurring) return <p className="text-sm text-slate-500">Aula individual</p>;
+        
+        return (
+            <div className="flex items-center gap-4 text-sm text-slate-700 mt-2">
+                <div className="flex items-center gap-1">
+                    <Clock className="w-4 h-4 text-sky-600" />
+                    <span className="font-semibold">{schedule.time.substring(0, 5)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-sky-600" />
+                    <span className="font-semibold">{schedule.days.map(d => daysOfWeekMap[d]).join(', ')}</span>
+                </div>
+            </div>
+        );
+    } catch (e) {
+        return <p className="text-xs text-red-500">Erro ao ler detalhes</p>;
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm">
+        <h3 className="font-bold mb-4">Solicitações de Agendamento ({solicitudes.length})</h3>
+        {loading ? <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin" /></div> :
+          solicitudes.length > 0 ? (
+            <div className="space-y-4">
+              {solicitudes.map(req => (
+                <div key={req.solicitud_id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 rounded-lg border">
+                  <div className="flex items-center gap-4 mb-3 sm:mb-0">
+                    <Avatar><AvatarImage src={req.profile?.avatar_url} /><AvatarFallback>{req.profile?.full_name?.[0]}</AvatarFallback></Avatar>
+                    <div>
+                      <p className="font-semibold">{req.profile?.full_name}</p>
+                      {renderHorarios(req.horarios_propuestos)}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 self-end sm:self-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
+                      onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Aceita')}
+                      disabled={updatingRequestId === req.solicitud_id}
+                    >
+                      {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
+                      onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Rejeitada')}
+                      disabled={updatingRequestId === req.solicitud_id}
+                    >
+                      {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) :
+            <div className="text-center py-10 text-slate-500">
+              <CalendarHeart className="w-12 h-12 mx-auto mb-2 text-slate-400" />
+              <p className="font-semibold">Nenhuma solicitação pendente.</p>
+              <p className="text-sm">Quando um aluno solicitar uma aula, aparecerá aqui.</p>
+            </div>}
+      </div>
+      <div className="space-y-8">
+        <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
+          <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
+          {/* CORREÇÃO: Estrutura do operador ternário para evitar o erro de sintaxe JSX/ESBuild */}
+          {loading ? (
+            <p>Carregando...</p> 
+          ) : nextClass ? (
+            <>
+              <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
+              <h3 className="text-lg font-bold mt-1">{nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
+              <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student.full_name}</p>
+              <p className="text-sm"><strong>Nível:</strong> {nextClass.student.spanish_level || 'Não definido'}</p>
+              <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
+            </>
+          ) : (
+            <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default HomeTab;
