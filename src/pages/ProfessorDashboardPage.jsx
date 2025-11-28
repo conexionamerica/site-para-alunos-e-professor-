@@ -1,7 +1,9 @@
+// Archivo: src/pages/ProfessorDashboardPage.jsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield } from 'lucide-react'; // Adicionado Shield
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -13,7 +15,7 @@ import AgendaTab from '@/components/professor-dashboard/AgendaTab';
 import AlunosTab from '@/components/professor-dashboard/AlunosTab';
 import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
-import AdmTab from '@/components/professor-dashboard/AdmTab'; // IMPORTADO AdmTab
+import AdmTab from '@/components/professor-dashboard/AdmTab'; // CORREÇÃO 1: Importação do AdmTab
 import { useToast } from '@/components/ui/use-toast'; 
 import { Link } from 'react-router-dom'; 
 
@@ -194,7 +196,6 @@ const ProfessorDashboardPage = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Adicionado "Adm" a navItems
     const navItems = [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
@@ -202,7 +203,7 @@ const ProfessorDashboardPage = () => {
         { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab }, 
         { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab }, 
         { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
-        { id: 'adm', icon: Shield, label: 'Adm', component: AdmTab }, // Novo: Aba Adm
+        { id: 'adm', icon: Shield, label: 'Adm', component: AdmTab }, // CORREÇÃO: Item Adm adicionado
     ];
 
     // Componente Sidebar (Layout Mobile/Toggle)
