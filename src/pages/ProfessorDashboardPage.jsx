@@ -112,11 +112,10 @@ const fetchProfessorDashboardData = async (professorId) => {
 };
 
 const Logo = () => (
-    // Removido padding interno, alinhamento forçado ao extremo esquerdo
     <Link to="/" className="text-left flex items-center">
         <div className="text-xl font-bold">
-            <span className="text-white">Conexion</span>
-            <span className="text-slate-100"> America</span>
+            <span className="text-sky-600">Conexion</span>
+            <span className="text-slate-800"> America</span>
         </div>
     </Link>
 );
@@ -269,7 +268,7 @@ const ProfessorDashboardPage = () => {
                 <div className="flex flex-col items-center p-8 bg-white rounded-lg shadow-xl">
                     <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
                     <h2 className="text-2xl font-bold text-gray-800">Erro ao Carregar Dados</h2>
-                    <p className="mt-2 text-gray-600 text-center">Não foi possível carregar as informações do dashboard. Verifique sua conexão ou tente novamente.</p>
+                    <p className="mt-2 text-gray-600 text-center">No se pudo cargar la información del dashboard. Verifique su conexión o intente nuevamente.</p>
                     <Button onClick={fetchData} className="mt-4 bg-sky-600 hover:bg-sky-700">
                         Tentar Novamente
                     </Button>
@@ -293,58 +292,62 @@ const ProfessorDashboardPage = () => {
             {/* Conteúdo Principal do Dashboard */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header/Navegação Desktop (Topo) */}
-                <header className="flex flex-col bg-sky-600 shadow-md">
-                    {/* Linha superior: Logo e Dropdown - CORREÇÃO 1: Mantemos o padding apenas aqui. */}
-                    <div className="w-full flex justify-between items-center h-16 px-4 lg:px-8">
-                        <Logo /> 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="relative h-8 w-8 rounded-full text-white hover:bg-sky-500">
-                                    <Users className="h-5 w-5" /> 
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-56" align="end" forceMount>
-                                <DropdownMenuLabel className="font-normal">
-                                    <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-medium leading-none text-slate-800">{dashboardData.professorName || 'Professor'}</p> 
-                                        <p className="text-xs leading-none text-muted-foreground">
-                                            {user?.email || 'email@escola.com'} 
-                                        </p>
-                                    </div>
-                                </DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
-                                    Preferências
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleLogout}>
-                                    Sair
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                <header className="flex flex-col bg-white shadow-md">
+                    {/* Linha superior: Logo e Dropdown - w-full e container para alinhamento */}
+                    <div className="w-full flex justify-center items-center h-16 bg-white border-b border-slate-200">
+                        <div className="w-full max-w-7xl px-4 lg:px-8 flex justify-between items-center">
+                            <Logo /> 
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="relative h-8 w-8 rounded-full text-slate-800 hover:bg-slate-100">
+                                        <Users className="h-5 w-5" /> 
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="w-56" align="end" forceMount>
+                                    <DropdownMenuLabel className="font-normal">
+                                        <div className="flex flex-col space-y-1">
+                                            <p className="text-sm font-medium leading-none text-slate-800">{dashboardData.professorName || 'Professor'}</p> 
+                                            <p className="text-xs leading-none text-muted-foreground">
+                                                {user?.email || 'email@escola.com'} 
+                                            </p>
+                                        </div>
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
+                                        Preferências
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={handleLogout}>
+                                        Sair
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
 
-                    {/* Linha inferior: TabsList para Navegação Desktop - CORREÇÃO 2: Fundo Branco com padding para o conteúdo. */}
+                    {/* Linha inferior: TabsList para Navegação Desktop - Fundo Branco e Alinhamento */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
-                        <div className="w-full px-4 lg:px-8">
-                            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-                                <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
-                                    {navItems.map(item => (
-                                        <TabsTrigger
-                                            key={item.id}
-                                            value={item.id}
-                                            onClick={() => setActiveTab(item.id)}
-                                            className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-none transition-all duration-200 border-b-2 border-transparent 
-                                                ${activeTab === item.id
-                                                    ? 'text-sky-600 border-sky-600 font-semibold' 
-                                                    : 'text-gray-600 hover:text-gray-800'
-                                                }`}
-                                        >
-                                            <item.icon className="h-5 w-5 mr-2" />
-                                            {item.label}
-                                        </TabsTrigger>
-                                    ))}
-                                </TabsList>
-                            </Tabs>
+                        <div className="w-full flex justify-center">
+                            <div className="w-full max-w-7xl px-4 lg:px-8">
+                                <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+                                    <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
+                                        {navItems.map(item => (
+                                            <TabsTrigger
+                                                key={item.id}
+                                                value={item.id}
+                                                onClick={() => setActiveTab(item.id)}
+                                                className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-none transition-all duration-200 border-b-2 border-transparent 
+                                                    ${activeTab === item.id
+                                                        ? 'text-sky-600 border-sky-600 font-semibold' 
+                                                        : 'text-gray-600 hover:text-gray-800'
+                                                    }`}
+                                            >
+                                                <item.icon className="h-5 w-5 mr-2" />
+                                                {item.label}
+                                            </TabsTrigger>
+                                        ))}
+                                    </TabsList>
+                                </Tabs>
+                            </div>
                         </div>
                     </div>
                      {/* Header Mobile */}
@@ -381,10 +384,9 @@ const ProfessorDashboardPage = () => {
 
                 </header>
                 
-                {/* Conteúdo da main - w-full e px-4 lg:px-8 para as TabsContent */}
-                <main className="flex-1 overflow-x-hidden overflow-y-auto">
-                    {/* APLICADO PADDING SOMENTE AO CONTEÚDO AQUI (O QUE ESTÁ FORA DA FAIXA BRANCA/AZUL) */}
-                    <div className="w-full px-4 lg:px-8 py-4 lg:py-8 h-full"> 
+                {/* Conteúdo da main - Utilizamos um wrapper centralizado para o conteúdo das abas */}
+                <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center">
+                    <div className="w-full max-w-7xl px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
                             {navItems.map(item => (
