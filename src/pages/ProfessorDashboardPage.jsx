@@ -112,11 +112,11 @@ const fetchProfessorDashboardData = async (professorId) => {
 };
 
 const Logo = () => (
-    // Removendo flex e h-16 daqui, pois o parent já define a altura e o alinhamento
     <Link to="/" className="text-left flex items-center">
         <div className="text-xl font-bold">
-            <span className="text-sky-600">Conexion</span>
-            <span className="text-slate-800"> America</span>
+            {/* CORREÇÃO: Mudar a cor do texto para branco para o fundo azul */}
+            <span className="text-white">Conexion</span>
+            <span className="text-slate-100"> America</span>
         </div>
     </Link>
 );
@@ -293,20 +293,21 @@ const ProfessorDashboardPage = () => {
             {/* Conteúdo Principal do Dashboard */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header/Navegação Desktop (Topo) */}
-                <header className="flex flex-col bg-white shadow-md">
-                    {/* Linha superior: Logo e Dropdown - w-full e px-4 lg:px-8 */}
+                {/* CORREÇÃO 1: Fundo Azul Céu (bg-sky-600) e largura total */}
+                <header className="flex flex-col bg-sky-600 shadow-md">
+                    {/* Linha superior: Logo e Dropdown - Ajustado para texto branco */}
                     <div className="w-full flex justify-between items-center h-16 px-4 lg:px-8">
                         <Logo /> 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                                <Button variant="ghost" className="relative h-8 w-8 rounded-full text-white hover:bg-sky-500">
                                     <Users className="h-5 w-5" /> 
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent className="w-56" align="end" forceMount>
                                 <DropdownMenuLabel className="font-normal">
                                     <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
+                                        <p className="text-sm font-medium leading-none text-slate-800">{dashboardData.professorName || 'Professor'}</p> 
                                         <p className="text-xs leading-none text-muted-foreground">
                                             {user?.email || 'email@escola.com'} 
                                         </p>
@@ -323,7 +324,7 @@ const ProfessorDashboardPage = () => {
                         </DropdownMenu>
                     </div>
 
-                    {/* Linha inferior: TabsList para Navegação Desktop - w-full e px-4 lg:px-8 */}
+                    {/* Linha inferior: TabsList para Navegação Desktop - Fundo Branco com borda */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
                         <div className="w-full px-4 lg:px-8">
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
@@ -335,8 +336,8 @@ const ProfessorDashboardPage = () => {
                                             onClick={() => setActiveTab(item.id)}
                                             className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-none transition-all duration-200 border-b-2 border-transparent 
                                                 ${activeTab === item.id
-                                                    ? 'text-sky-600 border-sky-600 font-semibold' 
-                                                    : 'text-gray-600 hover:text-gray-800'
+                                                    ? 'text-sky-600 border-sky-600 font-semibold' // Aba ativa: cor do texto azul, borda azul
+                                                    : 'text-gray-600 hover:text-gray-800' // Aba inativa: texto cinza
                                                 }`}
                                         >
                                             <item.icon className="h-5 w-5 mr-2" />
@@ -347,7 +348,7 @@ const ProfessorDashboardPage = () => {
                             </Tabs>
                         </div>
                     </div>
-                     {/* Header Mobile */}
+                     {/* Header Mobile - Mantido em branco para contraste */}
                     <header className="flex items-center justify-between p-4 bg-white shadow-md lg:hidden">
                         <Button variant="ghost" onClick={() => setIsSidebarOpen(true)}>
                             <Menu className="h-6 w-6 text-gray-800" />
