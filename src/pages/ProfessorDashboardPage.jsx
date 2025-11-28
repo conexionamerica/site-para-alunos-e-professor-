@@ -1,9 +1,7 @@
-// Archivo: src/pages/ProfessorDashboardPage.jsx
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle } from 'lucide-react';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield } from 'lucide-react'; // Adicionado Shield
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -15,6 +13,7 @@ import AgendaTab from '@/components/professor-dashboard/AgendaTab';
 import AlunosTab from '@/components/professor-dashboard/AlunosTab';
 import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
+import AdmTab from '@/components/professor-dashboard/AdmTab'; // IMPORTADO AdmTab
 import { useToast } from '@/components/ui/use-toast'; 
 import { Link } from 'react-router-dom'; 
 
@@ -51,14 +50,17 @@ const fetchProfessorDashboardData = async (professorId) => {
       .maybeSingle();
     if (nextClassError && nextClassError.code !== 'PGRST116') throw nextClassError;
     
-    // 4. Fetch de Todos los Alumnos (para AlunosTab, PreferenciasTab, AulasTab)
-    const { data: students, error: studentsError } = await supabase
+    // 4. Fetch de TODOS los Perfiles (para AdmTab y AlunosTab)
+    const { data: allProfiles, error: allProfilesError } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('role', 'student') 
-        .order('full_name', { ascending: true });
-    if (studentsError) throw studentsError;
+        .select('*, created_at')
+        .order('role', { ascending: true })
+        .order('full_name', { ascending: true }); 
+    if (allProfilesError) throw allProfilesError;
 
+    // Filter students from all profiles
+    const students = allProfiles.filter(p => p.role === 'student'); 
+    
     // 5. Fetch de Pacotes (para PreferenciasTab)
     const { data: packages, error: packagesError } = await supabase
         .from('packages')
@@ -102,6 +104,7 @@ const fetchProfessorDashboardData = async (professorId) => {
         scheduleRequests: scheduleRequests || [],
         nextClass: nextClass,
         students: students || [], 
+        allProfiles: allProfiles || [], // Novo: Todos os perfis
         packages: packages || [],
         classSlots: classSlots || [],
         appointments: appointments || [],
@@ -191,6 +194,7 @@ const ProfessorDashboardPage = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // Adicionado "Adm" a navItems
     const navItems = [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
@@ -198,6 +202,7 @@ const ProfessorDashboardPage = () => {
         { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab }, 
         { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab }, 
         { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
+        { id: 'adm', icon: Shield, label: 'Adm', component: AdmTab }, // Novo: Aba Adm
     ];
 
     // Componente Sidebar (Layout Mobile/Toggle)
@@ -216,7 +221,7 @@ const ProfessorDashboardPage = () => {
             </div>
             
             {/* TabsList para navegação Mobile (dentro da Sidebar) */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical" className="h-full">
+            <Tabs value={activeTab} onOpenChange={setActiveTab} orientation="vertical" className="h-full">
                 <TabsList className="flex flex-col h-full bg-transparent space-y-2">
                     {navItems.map(item => (
                         <TabsTrigger
@@ -323,9 +328,6 @@ const ProfessorDashboardPage = () => {
                                     </DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     
-                                    {/* CORREÇÃO: Removido Preferências daqui */}
-                                    {/* O único item de ação de menu é o Sair */}
-                                    
                                     {/* Botão Sair com LogOut Icone */}
                                     <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-700">
                                         <LogOut className="mr-2 h-4 w-4" />
@@ -340,7 +342,7 @@ const ProfessorDashboardPage = () => {
                     <div className="hidden lg:block bg-white border-b border-slate-200">
                         <div className="w-full flex justify-center">
                             <div className="w-full max-w-7xl px-4 lg:px-8">
-                                <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+                                <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
                                     <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
                                         {navItems.map(item => (
                                             <TabsTrigger
@@ -399,7 +401,7 @@ const ProfessorDashboardPage = () => {
                 {/* Conteúdo da main - Utilizamos um wrapper centralizado com limite de largura */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center">
                     <div className="w-full max-w-7xl px-4 lg:px-8 py-4 lg:py-8 h-full"> 
-                        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+                        <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
                             {navItems.map(item => (
                                 <TabsContent key={item.id} value={item.id} className="mt-0">
@@ -411,7 +413,7 @@ const ProfessorDashboardPage = () => {
                 </main>
             </div>
 
-            {/* BOTÓN FLOTANTE DE WHATSAPP: Removido. */}
+            {/* BOTÓN FLOTANTE DE WHATSAPP: Removido */}
         </div>
     );
 };
