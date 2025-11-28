@@ -35,7 +35,8 @@ const fetchProfessorDashboardData = async (professorId) => {
       .select(`*, profile:profiles!alumno_id(*)`)
       .eq('profesor_id', professorId)
       .eq('status', 'Pendiente')
-      .order('created_at', { ascending: true });
+      // CORREÇÃO AQUI: Mudando de 'created_at' (coluna que o Supabase diz não existir) para 'solicitud_id' (a PK, que é segura para ordenação)
+      .order('solicitud_id', { ascending: true });
     if (reqError) throw reqError;
     
     // 3. Fetch de Próxima Aula (para HomeTab)
@@ -146,7 +147,6 @@ const ProfessorDashboardPage = () => {
             });
         } catch (error) {
             console.error("Erro ao carregar dados do dashboard:", error);
-            // CORREÇÃO: Mostra o erro do backend (403/422) no toast para ajudar no debug do RLS/Auth.
             const errorMessage = error.message || 'Erro desconhecido ao conectar ao Supabase.';
             setHasError(true);
             setDashboardData(null); 
@@ -156,7 +156,7 @@ const ProfessorDashboardPage = () => {
                 description: `Não foi possível carregar os dados do dashboard. Detalhes: ${errorMessage}` 
             });
         } finally {
-            setIsLoading(false); // Sempre termina o estado de carga para mostrar o conteúdo ou o erro.
+            setIsLoading(false); 
         }
     }, [user?.id, toast]); 
 
@@ -165,7 +165,7 @@ const ProfessorDashboardPage = () => {
         if (user?.id) {
             fetchData();
         } else if (user === null && !profile && !isLoading) {
-            // Caso de que la sessão haya terminado de cargar y no haya user. Redirecciona.
+            // Caso de que la sesión haya terminado de cargar y no haya user. Redirecciona.
             navigate('/professor-login');
         }
     }, [user, navigate, fetchData]);
