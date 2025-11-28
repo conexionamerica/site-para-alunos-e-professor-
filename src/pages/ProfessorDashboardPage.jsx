@@ -294,7 +294,8 @@ const ProfessorDashboardPage = () => {
                 {/* Header/Navegação Desktop (Topo) */}
                 <header className="flex flex-col bg-white shadow-md">
                     {/* Linha superior: Logo e Dropdown */}
-                    <div className="container mx-auto px-4 lg:px-8 flex justify-between items-center h-16">
+                    {/* REMOVIDO: container mx-auto aqui. O container será aplicado na navegação e na main */}
+                    <div className="w-full flex justify-between items-center h-16 px-4 lg:px-8">
                         <Logo /> 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -324,6 +325,7 @@ const ProfessorDashboardPage = () => {
 
                     {/* Linha inferior: TabsList para Navegação Desktop */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
+                        {/* Adicionado container aqui para alinhar a navegação com o topo */}
                         <div className="container mx-auto px-4 lg:px-8">
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                                 <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
@@ -380,9 +382,9 @@ const ProfessorDashboardPage = () => {
 
                 </header>
                 
-                {/* Conteúdo da main com container para alinhamento */}
+                {/* Conteúdo da main - Agora com margens consistentes com a navegação */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto">
-                    {/* Aplica o container com padding/centralização para o conteúdo */}
+                    {/* Aplicando o container para alinhamento e centralização */}
                     <div className="container mx-auto px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
