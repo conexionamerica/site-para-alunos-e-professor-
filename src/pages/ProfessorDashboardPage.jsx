@@ -180,12 +180,13 @@ const ProfessorDashboardPage = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // CORREÇÃO: Nomes e Ícones das Abas
     const navItems = [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab },
-        { id: 'aulas', icon: BookOpen, label: 'Minhas Aulas', component: AulasTab },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
-        { id: 'alunos', icon: Users, label: 'Meus Alunos', component: AlunosTab },
         { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab },
+        { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab }, // Nome ajustado para "Alunos"
+        { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab }, // Nome ajustado para "Aulas"
         { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
     ];
 
@@ -239,7 +240,7 @@ const ProfessorDashboardPage = () => {
         </motion.div>
     );
 
-    // FIX LÓGICO DE RENDERIZADO: Muestra la pantalla de carga si aún está cargando O si no hay datos y no hay error
+    // FIX LÓGICO DE RENDERIZADO
     if (isLoading || (!dashboardData && !hasError)) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
@@ -251,7 +252,7 @@ const ProfessorDashboardPage = () => {
         );
     }
     
-    if (hasError || !dashboardData) { // Si hasError es true O no hay datos cargados
+    if (hasError || !dashboardData) { 
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <div className="flex flex-col items-center p-8 bg-white rounded-lg shadow-xl">
@@ -280,7 +281,7 @@ const ProfessorDashboardPage = () => {
 
             {/* Conteúdo Principal do Dashboard */}
             <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Header (Topo) */}
+                {/* Header (Topo) - MANTIDO INALTERADO PARA MOBILE */}
                 <header className="flex items-center justify-between p-4 bg-white shadow-md lg:hidden">
                     <Button variant="ghost" onClick={() => setIsSidebarOpen(true)}>
                         <Menu className="h-6 w-6 text-gray-800" />
@@ -316,18 +317,19 @@ const ProfessorDashboardPage = () => {
                     {/* Tabs.Root para todo o conteúdo da main */}
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                         
-                        {/* TabsList para Navegação Desktop (Visível apenas em lg:flex) */}
-                        <TabsList className="hidden lg:flex w-full justify-start mb-6 h-auto p-0 bg-transparent border-b rounded-none">
+                        {/* CORREÇÃO: TabsList para Navegação Desktop (Visível apenas em lg:flex) */}
+                        <TabsList className="hidden lg:flex w-full justify-start mb-6 h-auto p-0 bg-transparent border-b border-slate-200 rounded-none">
                             {navItems.map(item => (
                                 <TabsTrigger
                                     key={item.id}
                                     value={item.id}
                                     onClick={() => setActiveTab(item.id)}
-                                    className={`relative text-lg px-4 py-2 rounded-none transition-all duration-200 border-b-2 border-transparent ${
-                                        activeTab === item.id
-                                            ? 'text-sky-600 border-sky-600 font-semibold'
-                                            : 'text-gray-500 hover:text-gray-800'
-                                    }`}
+                                    // Aumentando o padding e ajustando o estilo do active state para corresponder ao visual desejado
+                                    className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-t-lg transition-all duration-200 border-b-2 border-transparent 
+                                        ${activeTab === item.id
+                                            ? 'text-sky-600 border-sky-600 font-semibold bg-white shadow-sm' // Aba ativa
+                                            : 'text-gray-600 hover:text-gray-800 hover:bg-slate-50' // Aba inativa
+                                        }`}
                                 >
                                     <item.icon className="h-5 w-5 mr-2" />
                                     {item.label}
