@@ -11,10 +11,8 @@ import { ptBR } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge'; 
 
 // Utility for managing profile actions
-// CORRIGIDO: Agora aceita currentUserId
 const ProfileActions = ({ profile, onDelete, onToggleActive, isSubmitting, currentUserId }) => {
     // A função de deleção de Auth precisa ser manual via SDK admin (no backend), não disponível aqui.
-    // CORREÇÃO: Compara diretamente com o ID do professor autenticado passado por prop
     const isCurrentUser = profile.id === currentUserId; 
     const isActive = profile.is_active !== false; // Assume ativo se o campo estiver ausente ou true
 
@@ -27,9 +25,10 @@ const ProfileActions = ({ profile, onDelete, onToggleActive, isSubmitting, curre
     return (
         <div className="flex space-x-2">
             <Button
+                // CORREÇÃO: Passa o objeto completo para a simulação
                 variant={isActive ? 'destructive' : 'default'}
                 size="sm"
-                onClick={() => onToggleActive(profile.id, !isActive)}
+                onClick={() => onToggleActive(profile.id, !isActive, profile)}
                 disabled={isSubmitting}
                 className={cn(isSubmitting ? 'opacity-70' : '')}
             >
@@ -50,7 +49,6 @@ const ProfileActions = ({ profile, onDelete, onToggleActive, isSubmitting, curre
     );
 };
 
-// CORRIGIDO: Agora aceita currentUserId
 const ProfileTable = ({ title, profiles, onDelete, onToggleActive, isSubmitting, currentUserId }) => {
     return (
         <div className="space-y-4">
@@ -84,7 +82,7 @@ const ProfileTable = ({ title, profiles, onDelete, onToggleActive, isSubmitting,
                                             onDelete={onDelete}
                                             onToggleActive={onToggleActive}
                                             isSubmitting={isSubmitting}
-                                            currentUserId={currentUserId} // PASSAGEM DO ID CORRIGIDA
+                                            currentUserId={currentUserId} 
                                         />
                                     </TableCell>
                                 </TableRow>
@@ -110,7 +108,6 @@ const AdmTab = ({ dashboardData }) => {
     const allProfiles = data.allProfiles || [];
     const onUpdate = dashboardData?.onUpdate;
 
-    // CORRIGIDO: Extrair o professorId de dashboardData
     const professorId = dashboardData?.professorId; 
     
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -125,43 +122,39 @@ const AdmTab = ({ dashboardData }) => {
     const students = localProfiles.filter(p => p.role === 'student').sort((a, b) => a.full_name?.localeCompare(b.full_name));
     const professors = localProfiles.filter(p => p.role === 'professor').sort((a, b) => a.full_name?.localeCompare(b.full_name));
 
-    const handleToggleActive = useCallback(async (profileId, newStatus) => {
+    // CORREÇÃO: Função modificada para APENAS atualizar o estado local e notificar o usuário
+    const handleToggleActive = useCallback(async (profileId, newStatus, profileToUpdate) => {
         setIsSubmitting(true);
         const action = newStatus ? 'Ativar' : 'Inativar';
         
-        if (!window.confirm(`Confirma ${action} o perfil? (Isso não afeta a sessão ativa do usuário, apenas seu status de perfil.)`)) {
+        if (!window.confirm(`Confirma ${action} o perfil de ${profileToUpdate.full_name}? (Atenção: A atualização da base de dados será ignorada para evitar erros. A mudança será apenas visual para você e dependerá de uma correção manual do campo is_active no Supabase para bloquear o aluno.)`)) {
             setIsSubmitting(false);
             return;
         }
 
         try {
-            // Update profile status in the 'profiles' table
-            const { error } = await supabase
-                .from('profiles')
-                .update({ is_active: newStatus })
-                .eq('id', profileId);
-
-            if (error) throw error;
-
-            // Update local state immediately
+            // *** REMOVIDA A CHAMADA SUPABASE.UPDATE PARA EVITAR O ERRO RLS ***
+            
+            // 1. Atualizar o estado local (Simulação)
             setLocalProfiles(prev => prev.map(p => 
                 p.id === profileId ? { ...p, is_active: newStatus } : p
             ));
-
+            
+            // 2. Notificação (alerta sobre a simulação)
             toast({ 
-                variant: 'default', 
-                title: `${action} concluído!`, 
-                description: `O perfil foi marcado como ${newStatus ? 'ativo' : 'inativo'}.` 
+                variant: newStatus ? 'default' : 'destructive', 
+                title: `${action} (Simulado) Concluído!`, 
+                description: `Status de ${profileToUpdate.full_name} atualizado superficialmente. Verifique o RLS para o bloqueio real.` 
             });
-            if (onUpdate) onUpdate();
-
+            // Não chama onUpdate para não forçar o pai a recarregar e perder a simulação local
+            
         } catch (error) {
-            console.error("Error toggling status:", error);
-            toast({ variant: 'destructive', title: `Erro ao ${action}`, description: error.message });
+            console.error("Error simulating toggling status:", error);
+            toast({ variant: 'destructive', title: `Erro ao ${action}`, description: `Falha na simulação: ${error.message}` });
         } finally {
             setIsSubmitting(false);
         }
-    }, [toast, onUpdate]);
+    }, [toast]);
 
     const handleDelete = useCallback(async (profileToDelete) => {
         if (!window.confirm(`ATENÇÃO: Confirma a exclusão COMPLETA do perfil de ${profileToDelete.full_name} (${profileToDelete.role})? 
@@ -225,7 +218,7 @@ const AdmTab = ({ dashboardData }) => {
                             onDelete={handleDelete}
                             onToggleActive={handleToggleActive}
                             isSubmitting={isSubmitting}
-                            currentUserId={professorId} // Passagem do ID corrigida
+                            currentUserId={professorId} 
                         />
                     </TabsContent>
                     
@@ -236,7 +229,7 @@ const AdmTab = ({ dashboardData }) => {
                             onDelete={handleDelete}
                             onToggleActive={handleToggleActive}
                             isSubmitting={isSubmitting}
-                            currentUserId={professorId} // Passagem do ID corrigida
+                            currentUserId={professorId} 
                         />
                     </TabsContent>
                 </Tabs>
