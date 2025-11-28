@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'framer-motion';
+import { Label } from '@/components/ui/label'; 
 
 
 const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
@@ -28,7 +29,6 @@ const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
 });
 
-// A função foi atualizada para buscar os dados de Billing e fazer o merge no frontend.
 const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +63,6 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
         
     if (billingError) {
       console.error("Error fetching billings:", billingError);
-      // Continua mesmo se falhar na busca de billing, mas as datas serão N/A
     }
 
     // 3. Merge Logs com Datas de Billing
@@ -162,7 +161,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
             ) : history.length > 0 ? (
               history.map(log => (
                 <TableRow key={log.id} className={log.status === 'Cancelado' ? 'opacity-60 bg-slate-50' : ''}>
-                  <TableCell>{log.student?.full_name || 'N/A'}</TableCell>
+                  <TableCell>{log.student?.full_name || 'Aluno não encontrado'}</TableCell>
                   <TableCell>{log.package?.name || 'Pacote não encontrado'}</TableCell>
                   
                   {/* DADOS NOVOS */}
@@ -230,7 +229,8 @@ const PreferenciasTab = ({ dashboardData }) => {
   const [pckPersonalData, setPckPersonalData] = useState({
     totalClasses: '',
     duration: '30', // Default duration
-    time: ALL_TIMES[0], // Default time
+    // CORREÇÃO DE INICIALIZAÇÃO: Usar o formato HH:mm para maior estabilidade do Select
+    time: ALL_TIMES[0].substring(0, 5), 
     days: [],
     price: '',
     endDate: addMonths(new Date(), 1), // Default validity
@@ -581,8 +581,10 @@ const PreferenciasTab = ({ dashboardData }) => {
                 const dayOfWeek = getDay(currentDate);
 
                 if (days.includes(dayOfWeek)) {
+                    // CORREÇÃO: Usar o formato HH:mm para parsing
                     const startTime = time; 
-                    const startTimeObj = parse(startTime, 'HH:mm:ss', currentDate);
+                    const startTimeFull = `${startTime}:00`; 
+                    const startTimeObj = parse(startTimeFull, 'HH:mm:ss', currentDate);
 
                     const requiredSlots = [];
                     let canBook = true;
@@ -663,7 +665,7 @@ const PreferenciasTab = ({ dashboardData }) => {
       setObservation('');
       setPurchaseDate(new Date());
       setEndDate(addMonths(new Date(), 1));
-      setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0], days: [], price: '', endDate: addMonths(new Date(), 1) });
+      setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0].substring(0, 5), days: [], price: '', endDate: addMonths(new Date(), 1) });
       
       if (onUpdate) onUpdate();
     }
@@ -856,7 +858,7 @@ const PreferenciasTab = ({ dashboardData }) => {
                               </SelectTrigger>
                               <SelectContent>
                                   {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
-                                      <SelectItem key={t} value={t}>{t.substring(0, 5)}</SelectItem>
+                                      <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
                                   ))}
                               </SelectContent>
                           </Select>
