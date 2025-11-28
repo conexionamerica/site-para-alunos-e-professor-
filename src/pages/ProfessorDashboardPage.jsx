@@ -1,4 +1,4 @@
-// Archivo: src/pages/ProfessorDashboardPage.jsx
+// Arquivo: src/pages/ProfessorDashboardPage.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -17,7 +17,7 @@ import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import { useToast } from '@/components/ui/use-toast'; 
 
-// Función de búsqueda de datos (ya corregida para evitar el error de profiles.email)
+// Función de búsqueda de datos
 const fetchProfessorDashboardData = async (professorId) => {
     const today = new Date().toISOString();
     
@@ -35,8 +35,7 @@ const fetchProfessorDashboardData = async (professorId) => {
       .select(`*, profile:profiles!alumno_id(*)`)
       .eq('profesor_id', professorId)
       .eq('status', 'Pendiente')
-      // CORREÇÃO AQUI: Mudando de 'created_at' (coluna que o Supabase diz não existir) para 'solicitud_id' (a PK, que é segura para ordenação)
-      .order('solicitud_id', { ascending: true });
+      .order('solicitud_id', { ascending: true }); // Usando solicitud_id (chave segura)
     if (reqError) throw reqError;
     
     // 3. Fetch de Próxima Aula (para HomeTab)
@@ -165,7 +164,7 @@ const ProfessorDashboardPage = () => {
         if (user?.id) {
             fetchData();
         } else if (user === null && !profile && !isLoading) {
-            // Caso de que la sesión haya terminado de cargar y no haya user. Redirecciona.
+            // Caso de que la sessão haya terminado de cargar y no haya user. Redirecciona.
             navigate('/professor-login');
         }
     }, [user, navigate, fetchData]);
@@ -190,7 +189,8 @@ const ProfessorDashboardPage = () => {
         { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
     ];
 
-    const Sidebar = () => (
+    // Componente Sidebar ajustado para ser um wrapper de layout
+    const Sidebar = ({ children }) => (
         <motion.div
             initial={{ x: '-100%' }}
             animate={{ x: isSidebarOpen ? '0%' : '-100%' }}
@@ -203,34 +203,14 @@ const ProfessorDashboardPage = () => {
                     <Menu className="h-6 w-6" />
                 </Button>
             </div>
-            <TabsList className="flex flex-col h-full bg-transparent space-y-2">
-                {navItems.map(item => (
-                    <TabsTrigger
-                        key={item.id}
-                        value={item.id}
-                        onClick={() => {
-                            setActiveTab(item.id);
-                            setIsSidebarOpen(false); 
-                        }}
-                        className={`w-full justify-start text-lg px-4 py-3 rounded-xl transition-all duration-200 ${
-                            activeTab === item.id
-                                ? 'bg-blue-600 text-white shadow-lg'
-                                : 'text-gray-300 hover:bg-gray-800'
-                        }`}
-                        disabled={isLoading}
-                    >
-                        <item.icon className="h-5 w-5 mr-3" />
-                        {item.label}
-                    </TabsTrigger>
-                ))}
-                <Button 
-                    onClick={handleLogout} 
-                    className="w-full justify-start text-lg px-4 py-3 rounded-xl mt-auto bg-transparent border border-red-500 text-red-400 hover:bg-red-900 hover:text-white"
-                >
-                    <LogOut className="h-5 w-5 mr-3" />
-                    Sair
-                </Button>
-            </TabsList>
+            {children}
+            <Button 
+                onClick={handleLogout} 
+                className="w-full justify-start text-lg px-4 py-3 rounded-xl mt-auto bg-transparent border border-red-500 text-red-400 hover:bg-red-900 hover:text-white"
+            >
+                <LogOut className="h-5 w-5 mr-3" />
+                Sair
+            </Button>
         </motion.div>
     );
 
@@ -264,7 +244,35 @@ const ProfessorDashboardPage = () => {
     return (
         <div className="flex min-h-screen bg-gray-100">
             {/* Sidebar para desktop e mobile (oculta/aberta) */}
-            <Sidebar />
+            <Sidebar>
+                {/* O conteúdo da sidebar agora PRECISA estar dentro de TabsList, que por sua vez, está dentro de Tabs */}
+                <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical" className="h-full">
+                    <TabsList className="flex flex-col h-full bg-transparent space-y-2">
+                        {navItems.map(item => (
+                            <TabsTrigger
+                                key={item.id}
+                                value={item.id}
+                                onClick={() => {
+                                    setActiveTab(item.id);
+                                    setIsSidebarOpen(false); 
+                                }}
+                                className={`w-full justify-start text-lg px-4 py-3 rounded-xl transition-all duration-200 ${
+                                    activeTab === item.id
+                                        ? 'bg-blue-600 text-white shadow-lg'
+                                        : 'text-gray-300 hover:bg-gray-800'
+                                }`}
+                                disabled={isLoading}
+                            >
+                                <item.icon className="h-5 w-5 mr-3" />
+                                {item.label}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                    {/* Movemos o TabsContent para o main para ter a estrutura correta,
+                        mas precisamos manter o Tabs.Root no escopo que engloba o TabsList. */}
+                {/* Fechamos o Tabs.Root aqui, mas o TabsList e TabsContent agora estão em locais diferentes */}
+                </Tabs>
+            </Sidebar>
 
             {isSidebarOpen && (
                 <div 
@@ -308,7 +316,9 @@ const ProfessorDashboardPage = () => {
                 </header>
 
                 <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 lg:p-8">
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+                    {/* Reabrindo Tabs.Root aqui para conter o TabsContent */}
+                    <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical" className="h-full">
+                         {/* TabsList foi movido para o Sidebar */}
                         {/* Tabs Content */}
                         {navItems.map(item => (
                             <TabsContent key={item.id} value={item.id} className="mt-0">
