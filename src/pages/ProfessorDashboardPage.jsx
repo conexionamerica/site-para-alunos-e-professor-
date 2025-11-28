@@ -293,8 +293,7 @@ const ProfessorDashboardPage = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header/Navegação Desktop (Topo) */}
                 <header className="flex flex-col bg-white shadow-md">
-                    {/* Linha superior: Logo e Dropdown */}
-                    {/* AQUI REMOVEMOS O CONTAINER E APLICAMOS O PADDING DIRETO PARA A LARGURA TOTAL DA TELA */}
+                    {/* Linha superior: Logo e Dropdown - REMOVEMOS MARGENS EXTRAS */}
                     <div className="w-full flex justify-between items-center h-16 px-4 lg:px-8">
                         <Logo /> 
                         <DropdownMenu>
@@ -325,8 +324,8 @@ const ProfessorDashboardPage = () => {
 
                     {/* Linha inferior: TabsList para Navegação Desktop */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
-                        {/* Aplicamos o container aqui, sem px-4 lg:px-8, pois o div pai já o tem. */}
-                        <div className="container mx-auto px-4 lg:px-8">
+                        {/* APLICAMOS W-FULL E REMOVEMOS CONTAINER MX-AUTO PARA O LAYOUT SER FLUIDO/FULL-WIDTH */}
+                        <div className="w-full px-4 lg:px-8">
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                                 <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
                                     {navItems.map(item => (
@@ -382,10 +381,10 @@ const ProfessorDashboardPage = () => {
 
                 </header>
                 
-                {/* Conteúdo da main - APLICAMOS CONTAINER MX-AUTO PARA CENTRALIZAR O CONTEÚDO */}
+                {/* Conteúdo da main - AGORA USAMOS W-FULL + PADDING PARA LAYOUT FLUIDO */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto">
-                    {/* Aplicamos o container com padding/centralização para o conteúdo */}
-                    <div className="container mx-auto px-4 lg:px-8 py-4 lg:py-8 h-full"> 
+                    {/* Aplicamos W-FULL + padding para que o conteúdo se estique e respeite as margens laterais */}
+                    <div className="w-full px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
                             {navItems.map(item => (
