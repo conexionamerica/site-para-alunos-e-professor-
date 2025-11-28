@@ -415,7 +415,7 @@ const ProfessorDashboardPage = () => {
                 </main>
             </div>
 
-            {/* BOTÓN FLOTANTE DE WHATSAPP - ELIMINADO SEGÚN SOLICITUD PREVIA */}
+            {/* BOTÓN FLOTANTE DE WHATSAPP: El bloque ha sido removido. */}
         </div>
     );
 };
