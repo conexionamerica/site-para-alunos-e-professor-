@@ -112,7 +112,8 @@ const fetchProfessorDashboardData = async (professorId) => {
 };
 
 const Logo = () => (
-    <Link to="/" className="text-left flex items-center h-16">
+    // Removendo flex e h-16 daqui, pois o parent já define a altura e o alinhamento
+    <Link to="/" className="text-left flex items-center">
         <div className="text-xl font-bold">
             <span className="text-sky-600">Conexion</span>
             <span className="text-slate-800"> America</span>
@@ -414,4 +415,3 @@ const ProfessorDashboardPage = () => {
 };
 
 export default ProfessorDashboardPage;
-```http://googleusercontent.com/image_generation_content/0
