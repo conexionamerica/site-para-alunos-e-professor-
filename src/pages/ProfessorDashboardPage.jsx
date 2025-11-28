@@ -16,6 +16,7 @@ import AlunosTab from '@/components/professor-dashboard/AlunosTab';
 import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import { useToast } from '@/components/ui/use-toast'; 
+import { Link } from 'react-router-dom'; // Importado Link para o logo
 
 // Función de búsqueda de datos
 const fetchProfessorDashboardData = async (professorId) => {
@@ -109,6 +110,16 @@ const fetchProfessorDashboardData = async (professorId) => {
         chatList: chatList || [],
     };
 };
+
+const Logo = () => (
+    <Link to="/" className="text-left flex items-center h-16">
+        <div className="text-xl font-bold">
+            <span className="text-sky-600">Conexion</span>
+            <span className="text-slate-800"> America</span>
+        </div>
+    </Link>
+);
+
 
 const ProfessorDashboardPage = () => {
     const { user, profile, signOut } = useAuth();
@@ -280,65 +291,72 @@ const ProfessorDashboardPage = () => {
 
             {/* Conteúdo Principal do Dashboard */}
             <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Header (Topo) - MANTIDO INALTERADO PARA MOBILE */}
-                <header className="flex items-center justify-between p-4 bg-white shadow-md lg:hidden">
-                    <Button variant="ghost" onClick={() => setIsSidebarOpen(true)}>
-                        <Menu className="h-6 w-6 text-gray-800" />
-                    </Button>
-                    <h1 className="text-xl font-bold text-gray-800">Dashboard</h1>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                                <Users className="h-5 w-5" /> 
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent className="w-56" align="end" forceMount>
-                            <DropdownMenuLabel className="font-normal">
-                                <div className="flex flex-col space-y-1">
-                                    <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
-                                    <p className="text-xs leading-none text-muted-foreground">
-                                        {user?.email || 'email@escola.com'} 
-                                    </p>
-                                </div>
-                            </DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
-                                Preferências
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleLogout}>
-                                Sair
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                {/* Header/Navegação Desktop (Topo) */}
+                <header className="flex flex-col bg-white shadow-md">
+                    <div className="container mx-auto px-4 lg:px-8 flex justify-between items-center h-16">
+                        <Logo /> {/* Adicionado o logo para desktop */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                                    <Users className="h-5 w-5" /> 
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-56" align="end" forceMount>
+                                <DropdownMenuLabel className="font-normal">
+                                    <div className="flex flex-col space-y-1">
+                                        <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
+                                        <p className="text-xs leading-none text-muted-foreground">
+                                            {user?.email || 'email@escola.com'} 
+                                        </p>
+                                    </div>
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
+                                    Preferências
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleLogout}>
+                                    Sair
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+
+                    {/* TabsList para Navegação Desktop */}
+                    <div className="hidden lg:block bg-white border-b border-slate-200">
+                        <div className="container mx-auto px-4 lg:px-8">
+                            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+                                <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
+                                    {navItems.map(item => (
+                                        <TabsTrigger
+                                            key={item.id}
+                                            value={item.id}
+                                            onClick={() => setActiveTab(item.id)}
+                                            className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-none transition-all duration-200 border-b-2 border-transparent 
+                                                ${activeTab === item.id
+                                                    ? 'text-sky-600 border-sky-600 font-semibold' 
+                                                    : 'text-gray-600 hover:text-gray-800'
+                                                }`}
+                                        >
+                                            <item.icon className="h-5 w-5 mr-2" />
+                                            {item.label}
+                                        </TabsTrigger>
+                                    ))}
+                                </TabsList>
+                            </Tabs>
+                        </div>
+                    </div>
+
                 </header>
 
-                {/* CORREÇÃO: Aplicando classes de centralização e limite de largura na main */}
+                {/* CORREÇÃO: Removida a limitação de largura e o container da main */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 lg:p-8">
-                    <div className="container mx-auto max-w-7xl">
+                    {/* Container de conteúdo que preenche o espaço */}
+                    <div className="w-full h-full"> 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-                            
-                            {/* TabsList para Navegação Desktop */}
-                            <TabsList className="hidden lg:flex w-full justify-start mb-6 h-auto p-0 bg-transparent border-b border-slate-200 rounded-none">
-                                {navItems.map(item => (
-                                    <TabsTrigger
-                                        key={item.id}
-                                        value={item.id}
-                                        onClick={() => setActiveTab(item.id)}
-                                        className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-t-lg transition-all duration-200 border-b-2 border-transparent 
-                                            ${activeTab === item.id
-                                                ? 'text-sky-600 border-sky-600 font-semibold bg-white shadow-sm' // Aba ativa
-                                                : 'text-gray-600 hover:text-gray-800 hover:bg-slate-50' // Aba inativa
-                                            }`}
-                                    >
-                                        <item.icon className="h-5 w-5 mr-2" />
-                                        {item.label}
-                                    </TabsTrigger>
-                                ))}
-                            </TabsList>
-                            
                             {/* Tabs Content */}
                             {navItems.map(item => (
                                 <TabsContent key={item.id} value={item.id} className="mt-0">
+                                    {/* Componentes de conteúdo já têm padding interno e ocuparão a largura total */}
                                     <item.component dashboardData={dashboardData} /> 
                                 </TabsContent>
                             ))}
