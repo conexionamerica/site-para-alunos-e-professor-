@@ -89,55 +89,11 @@ export const AuthProvider = ({ children }) => {
     }
     setLoading(false);
   }, [fetchProfile]);
-
-  const createProfessorUser = useCallback(async () => {
-    const professorEmail = 'tamayominael@gmail.com';
-    const professorPassword = 'AlyRoberto2025*';
-
-    const { data: { user: existingUser } } = await supabase.auth.getUser();
-    if (existingUser?.email === professorEmail) {
-      return;
-    }
-
-    // Check if professor already exists in profiles
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('role', 'professor')
-      .maybeSingle();
-
-    if (existingProfile) {
-      console.log('Professor profile already exists');
-      return;
-    }
-
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email: professorEmail,
-      password: professorPassword,
-      options: {
-        data: {
-          full_name: 'Professor Admin',
-          username: 'admin.professor',
-          role: 'professor'
-        },
-        emailRedirectTo: undefined
-      }
-    });
-
-    if (signUpError) {
-      if (signUpError.message.includes('User already registered') || signUpError.message.includes('already been registered')) {
-        console.log('Professor user already exists in auth.');
-      } else {
-        console.error('Error during professor signup:', signUpError.message);
-      }
-    } else if (authData.user) {
-      console.log('Professor user created successfully:', authData.user.email);
-      await supabase.auth.signOut();
-    }
-  }, []);
+  
+  // A função createProfessorUser foi removida deste arquivo.
 
   useEffect(() => {
-    createProfessorUser();
+    // createProfessorUser(); // Esta chamada foi removida.
 
     const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -169,7 +125,7 @@ export const AuthProvider = ({ children }) => {
     );
 
     return () => subscription.unsubscribe();
-  }, [handleSession, fetchProfile, navigate, toast, createProfessorUser]);
+  }, [handleSession, fetchProfile, navigate, toast]); // createProfessorUser removido
 
   const signUp = useCallback(async (email, password, options) => {
     const { data, error } = await supabase.auth.signUp({
