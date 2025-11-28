@@ -54,11 +54,12 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
       return;
     }
     
-    // 2. Fetch Billing (para Datas)
+    // 2. Fetch Billing (para Datas e Preço Pago)
     const studentIds = [...new Set(logs.map(log => log.student_id))];
     const { data: billings, error: billingError } = await supabase
         .from('billing')
-        .select(`id, user_id, package_id, purchase_date, end_date`)
+        // CORREÇÃO: Incluído amount_paid na busca
+        .select(`id, user_id, package_id, purchase_date, end_date, amount_paid`) 
         .in('user_id', studentIds);
         
     if (billingError) {
@@ -81,6 +82,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
             start_date: matchingBilling?.purchase_date || null,
             end_date: matchingBilling?.end_date || null,
             total_classes_sent: log.assigned_classes, 
+            amount_paid: matchingBilling?.amount_paid || 0, // Incluído o preço pago
         };
     });
 
@@ -131,9 +133,13 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
         </Badge>
     );
   };
+  
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
     
   return (
-    <DialogContent className="max-w-4xl"> {/* Aumentado o max-w para caber as novas colunas */}
+    <DialogContent className="max-w-5xl"> {/* Aumentado o max-w para caber as novas colunas */}
       <DialogHeader>
         <DialogTitle>Histórico de Pacotes Incluídos</DialogTitle>
       </DialogHeader>
@@ -143,9 +149,10 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
             <TableRow>
               <TableHead>Aluno</TableHead>
               <TableHead>Pacote</TableHead>
-              <TableHead>Aulas Total</TableHead> {/* NOVA COLUNA */}
-              <TableHead>Data Início</TableHead>  {/* NOVA COLUNA */}
-              <TableHead>Data Fim</TableHead>     {/* NOVA COLUNA */}
+              <TableHead>Aulas Total</TableHead>
+              <TableHead>Preço Pago</TableHead> {/* NOVA COLUNA */}
+              <TableHead>Data Início</TableHead>
+              <TableHead>Data Fim</TableHead>
               <TableHead>Data Atribuição</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Ações</TableHead>
@@ -154,18 +161,21 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan="8" className="text-center">
+                <TableCell colSpan="9" className="text-center">
                   <Loader2 className="mx-auto my-4 h-6 w-6 animate-spin" />
                 </TableCell>
               </TableRow>
             ) : history.length > 0 ? (
               history.map(log => (
                 <TableRow key={log.id} className={log.status === 'Cancelado' ? 'opacity-60 bg-slate-50' : ''}>
-                  <TableCell>{log.student?.full_name || 'Aluno não encontrado'}</TableCell>
+                  <TableCell>{log.student?.full_name || 'N/A'}</TableCell>
                   <TableCell>{log.package?.name || 'Pacote não encontrado'}</TableCell>
                   
-                  {/* DADOS NOVOS */}
+                  {/* DADOS DE AULAS/PREÇO */}
                   <TableCell>{log.total_classes_sent || 'N/A'}</TableCell>
+                  <TableCell>{formatCurrency(log.amount_paid)}</TableCell> {/* EXIBIÇÃO DO PREÇO */}
+
+                  {/* DADOS DE DATAS */}
                   <TableCell>{log.start_date ? format(parseISO(log.start_date), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                   <TableCell>{log.end_date ? format(parseISO(log.end_date), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                   
@@ -188,7 +198,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan="8" className="text-center py-8 text-slate-500">
+                <TableCell colSpan="9" className="text-center py-8 text-slate-500">
                   Nenhum registro encontrado.
                 </TableCell>
               </TableRow>
@@ -229,7 +239,6 @@ const PreferenciasTab = ({ dashboardData }) => {
   const [pckPersonalData, setPckPersonalData] = useState({
     totalClasses: '',
     duration: '30', // Default duration
-    // CORREÇÃO DE INICIALIZAÇÃO: Usar o formato HH:mm para maior estabilidade do Select
     time: ALL_TIMES[0].substring(0, 5), 
     days: [],
     price: '',
