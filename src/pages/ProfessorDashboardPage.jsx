@@ -180,13 +180,12 @@ const ProfessorDashboardPage = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // CORREÇÃO: Nomes e Ícones das Abas
     const navItems = [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
         { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab },
-        { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab }, // Nome ajustado para "Alunos"
-        { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab }, // Nome ajustado para "Aulas"
+        { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab }, 
+        { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab }, 
         { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
     ];
 
@@ -313,37 +312,38 @@ const ProfessorDashboardPage = () => {
                     </DropdownMenu>
                 </header>
 
+                {/* CORREÇÃO: Aplicando classes de centralização e limite de largura na main */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 lg:p-8">
-                    {/* Tabs.Root para todo o conteúdo da main */}
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-                        
-                        {/* CORREÇÃO: TabsList para Navegação Desktop (Visível apenas em lg:flex) */}
-                        <TabsList className="hidden lg:flex w-full justify-start mb-6 h-auto p-0 bg-transparent border-b border-slate-200 rounded-none">
+                    <div className="container mx-auto max-w-7xl">
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+                            
+                            {/* TabsList para Navegação Desktop */}
+                            <TabsList className="hidden lg:flex w-full justify-start mb-6 h-auto p-0 bg-transparent border-b border-slate-200 rounded-none">
+                                {navItems.map(item => (
+                                    <TabsTrigger
+                                        key={item.id}
+                                        value={item.id}
+                                        onClick={() => setActiveTab(item.id)}
+                                        className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-t-lg transition-all duration-200 border-b-2 border-transparent 
+                                            ${activeTab === item.id
+                                                ? 'text-sky-600 border-sky-600 font-semibold bg-white shadow-sm' // Aba ativa
+                                                : 'text-gray-600 hover:text-gray-800 hover:bg-slate-50' // Aba inativa
+                                            }`}
+                                    >
+                                        <item.icon className="h-5 w-5 mr-2" />
+                                        {item.label}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                            
+                            {/* Tabs Content */}
                             {navItems.map(item => (
-                                <TabsTrigger
-                                    key={item.id}
-                                    value={item.id}
-                                    onClick={() => setActiveTab(item.id)}
-                                    // Aumentando o padding e ajustando o estilo do active state para corresponder ao visual desejado
-                                    className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-t-lg transition-all duration-200 border-b-2 border-transparent 
-                                        ${activeTab === item.id
-                                            ? 'text-sky-600 border-sky-600 font-semibold bg-white shadow-sm' // Aba ativa
-                                            : 'text-gray-600 hover:text-gray-800 hover:bg-slate-50' // Aba inativa
-                                        }`}
-                                >
-                                    <item.icon className="h-5 w-5 mr-2" />
-                                    {item.label}
-                                </TabsTrigger>
+                                <TabsContent key={item.id} value={item.id} className="mt-0">
+                                    <item.component dashboardData={dashboardData} /> 
+                                </TabsContent>
                             ))}
-                        </TabsList>
-                        
-                        {/* Tabs Content */}
-                        {navItems.map(item => (
-                            <TabsContent key={item.id} value={item.id} className="mt-0">
-                                <item.component dashboardData={dashboardData} /> 
-                            </TabsContent>
-                        ))}
-                    </Tabs>
+                        </Tabs>
+                    </div>
                 </main>
             </div>
 
