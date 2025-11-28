@@ -300,31 +300,37 @@ const ProfessorDashboardPage = () => {
                             <Logo /> 
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    {/* Exibir nome e e-mail no Trigger quando a sessão estiver ativa (desktop) */}
+                                    {/* Trigger com nome e e-mail no desktop */}
                                     <Button variant="ghost" className="relative h-8 w-auto pr-3 rounded-full text-slate-800 hover:bg-slate-100">
                                          <div className="flex flex-col items-end mr-2">
                                             <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
                                             <p className="text-xs leading-none text-muted-foreground">{user?.email || 'email@escola.com'}</p>
                                         </div>
-                                        <Users className="h-5 w-5" /> 
+                                        {/* Avatar Placeholder */}
+                                        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-lg font-bold text-sky-600">
+                                            {(user?.email?.[0] || 'P').toUpperCase()}
+                                        </div>
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="w-56" align="end" forceMount>
                                     <DropdownMenuLabel className="font-normal">
                                         <div className="flex flex-col space-y-1">
-                                            <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
+                                            <p className="text-sm font-medium leading-none text-slate-800">{dashboardData.professorName || 'Professor'}</p> 
                                             <p className="text-xs leading-none text-muted-foreground">
                                                 {user?.email || 'email@escola.com'} 
                                             </p>
                                         </div>
                                     </DropdownMenuLabel>
                                     <DropdownMenuSeparator />
+                                    
+                                    {/* RESTAURADO: Opção Preferências */}
                                     <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
                                         <Settings className="mr-2 h-4 w-4" />
                                         Preferências
                                     </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
                                     
-                                    {/* CORREÇÃO FINAL: Botão Sair com LogOut Icone */}
+                                    {/* CORREÇÃO: Botão Sair com LogOut Icone */}
                                     <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-700">
                                         <LogOut className="mr-2 h-4 w-4" />
                                         Sair
@@ -409,19 +415,7 @@ const ProfessorDashboardPage = () => {
                 </main>
             </div>
 
-            {/* BOTÃO FLUTUANTE DE WHATSAPP */}
-            <a
-                href="https://wa.me/555198541835?text=Olá! Preciso de ajuda no painel de aluno."
-                target="_blank"
-                rel="noopener noreferrer"
-                className="fixed bottom-6 right-6 z-50 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-lg transition-transform hover:scale-110"
-                aria-label="Fale conosco pelo WhatsApp"
-            >
-                {/* Ícone de WhatsApp (SVG simplificado) */}
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12.0003 2C6.48667 2 2.00033 6.48667 2.00033 12.0003C2.00033 13.9877 2.56967 15.866 3.63033 17.4417L2.41733 21.5833L6.68733 20.3703C8.167 21.242 9.94067 21.725 12.0003 21.725C17.514 21.725 22.0003 17.2387 22.0003 12.0003C22.0003 6.48667 17.514 2 12.0003 2ZM17.1523 15.429C16.929 15.8343 16.2907 16.0377 15.8973 16.141C15.539 16.234 15.1763 16.2857 14.8103 16.2857C13.881 16.2857 12.571 15.9397 11.261 15.584C9.57767 15.127 8.35633 13.9057 7.90067 12.2223C7.54467 10.9123 7.19867 9.60233 7.19867 8.673C7.19867 8.307 7.24967 7.94433 7.34267 7.58633C7.44567 7.19333 7.64933 6.55467 8.05433 6.33167C8.423 6.13633 8.79067 6.13833 9.12467 6.14167C9.336 6.14367 9.53167 6.17633 9.68967 6.52933C10.025 7.28433 10.3603 8.03967 10.6953 8.79467C10.825 9.079 10.8407 9.42067 10.655 9.71833C10.5147 9.944 10.3347 10.0983 10.1547 10.2526C9.923 10.4503 9.771 10.686 9.67333 10.9577C9.64167 11.0443 9.64167 11.135 9.67333 11.2216C10.052 12.1896 10.817 13.0643 11.785 13.4433C11.8716 13.475 11.9623 13.475 12.049 13.4433C12.3207 13.3457 12.5563 13.1937 12.754 12.962C12.9083 12.782 13.0626 12.602 13.288 12.4613C13.5857 12.2757 13.9273 12.2913 14.2117 12.421C14.9667 12.756 15.722 13.0913 16.477 13.4267C16.83 13.5847 16.8627 13.7803 16.8647 13.9917C16.868 14.3257 16.87 14.6933 16.6743 15.062C16.4513 15.467 16.2163 15.619 15.823 15.8423L16.2163 15.8423Z" />
-                </svg>
-            </a>
+            {/* BOTÓN FLOTANTE DE WHATSAPP - ELIMINADO SEGÚN SOLICITUD PREVIA */}
         </div>
     );
 };
