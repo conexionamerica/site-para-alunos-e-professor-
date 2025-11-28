@@ -293,7 +293,7 @@ const ProfessorDashboardPage = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header/Navegação Desktop (Topo) */}
                 <header className="flex flex-col bg-white shadow-md">
-                    {/* Linha superior: Logo e Dropdown - REMOVEMOS MARGENS EXTRAS */}
+                    {/* Linha superior: Logo e Dropdown - CORREÇÃO 1: Usamos w-full e px-4/8 para preenchimento. */}
                     <div className="w-full flex justify-between items-center h-16 px-4 lg:px-8">
                         <Logo /> 
                         <DropdownMenu>
@@ -324,7 +324,7 @@ const ProfessorDashboardPage = () => {
 
                     {/* Linha inferior: TabsList para Navegação Desktop */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
-                        {/* APLICAMOS W-FULL E REMOVEMOS CONTAINER MX-AUTO PARA O LAYOUT SER FLUIDO/FULL-WIDTH */}
+                        {/* CORREÇÃO 2: Aplicamos w-full para se esticar e px-4/8 para padding consistente */}
                         <div className="w-full px-4 lg:px-8">
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                                 <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
@@ -381,9 +381,9 @@ const ProfessorDashboardPage = () => {
 
                 </header>
                 
-                {/* Conteúdo da main - AGORA USAMOS W-FULL + PADDING PARA LAYOUT FLUIDO */}
+                {/* Conteúdo da main - CORREÇÃO 3: Removido 'container mx-auto' e usado w-full + padding */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto">
-                    {/* Aplicamos W-FULL + padding para que o conteúdo se estique e respeite as margens laterais */}
+                    {/* Este wrapper garante que o conteúdo use a largura total e aplique o padding lateral/vertical */}
                     <div className="w-full px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
