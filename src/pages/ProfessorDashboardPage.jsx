@@ -240,6 +240,7 @@ const ProfessorDashboardPage = () => {
                 </TabsList>
             </Tabs>
             
+            {/* Botão Sair - MANTIDO para a Sidebar Mobile */}
             <Button 
                 onClick={handleLogout} 
                 className="w-full justify-start text-lg px-4 py-3 rounded-xl mt-auto bg-transparent border border-red-500 text-red-400 hover:bg-red-900 hover:text-white"
@@ -293,20 +294,25 @@ const ProfessorDashboardPage = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header/Navegação Desktop (Topo) */}
                 <header className="flex flex-col bg-white shadow-md">
-                    {/* Linha superior: Logo e Dropdown - w-full e container para alinhamento */}
+                    {/* Linha superior: Logo e Dropdown - Fundo Branco e Conteúdo Centralizado */}
                     <div className="w-full flex justify-center items-center h-16 bg-white border-b border-slate-200">
                         <div className="w-full max-w-7xl px-4 lg:px-8 flex justify-between items-center">
                             <Logo /> 
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" className="relative h-8 w-8 rounded-full text-slate-800 hover:bg-slate-100">
+                                    {/* Exibir nome e e-mail no Trigger quando a sessão estiver ativa (desktop) */}
+                                    <Button variant="ghost" className="relative h-8 w-auto pr-3 rounded-full text-slate-800 hover:bg-slate-100">
+                                         <div className="flex flex-col items-end mr-2">
+                                            <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
+                                            <p className="text-xs leading-none text-muted-foreground">{user?.email || 'email@escola.com'}</p>
+                                        </div>
                                         <Users className="h-5 w-5" /> 
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="w-56" align="end" forceMount>
                                     <DropdownMenuLabel className="font-normal">
                                         <div className="flex flex-col space-y-1">
-                                            <p className="text-sm font-medium leading-none text-slate-800">{dashboardData.professorName || 'Professor'}</p> 
+                                            <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
                                             <p className="text-xs leading-none text-muted-foreground">
                                                 {user?.email || 'email@escola.com'} 
                                             </p>
@@ -314,9 +320,13 @@ const ProfessorDashboardPage = () => {
                                     </DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
+                                        <Settings className="mr-2 h-4 w-4" />
                                         Preferências
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={handleLogout}>
+                                    
+                                    {/* CORREÇÃO FINAL: Botão Sair com LogOut Icone */}
+                                    <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-700">
+                                        <LogOut className="mr-2 h-4 w-4" />
                                         Sair
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
@@ -384,7 +394,7 @@ const ProfessorDashboardPage = () => {
 
                 </header>
                 
-                {/* Conteúdo da main - Utilizamos um wrapper centralizado para o conteúdo das abas */}
+                {/* Conteúdo da main - Utilizamos um wrapper centralizado com limite de largura */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center">
                     <div className="w-full max-w-7xl px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
