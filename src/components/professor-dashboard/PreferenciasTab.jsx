@@ -266,7 +266,6 @@ const PreferenciasTab = ({ dashboardData }) => {
   // FIM DOS NOVOS ESTADOS
 
   const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
-  // Removendo a variável purchaseDate padrão para dar lugar ao pckStartDate (Data de Início) ou à data padrão para outros pacotes
   const [purchaseDate, setPurchaseDate] = useState(new Date());
   // Estado para a Data de Fim/Validade (Usado por pacotes padrão e Personalizado)
   const [endDate, setEndDate] = useState(addMonths(new Date(), 1));
@@ -507,6 +506,7 @@ const PreferenciasTab = ({ dashboardData }) => {
     
     // --- VALIDAÇÃO PCKPERSONAL (AGORA USADO POR 'PERSONALIZADO') ---
     if (isAutomaticScheduling) {
+        // CORREÇÃO: Adicionada validação para pckStartDate
         if (!totalClasses || !duration || !time || days.length === 0 || !price || !pckEndDate || !pckStartDate) {
             toast({ variant: 'destructive', title: 'Campos do Pacote Personalizado obrigatórios', description: 'Por favor, preencha todos os detalhes do agendamento (aulas, duração, horário, dias, preço, data de início e validade).' });
             setIsSubmittingPackage(false);
@@ -592,6 +592,9 @@ const PreferenciasTab = ({ dashboardData }) => {
             const appointmentInserts = [];
             const slotIdsToFill = new Set();
             let currentDate = new Date(finalPurchaseDate); 
+
+            // Se a data de início for hoje, a primeira aula será agendada para hoje.
+            // Se for no passado, começamos a agendar a partir da próxima ocorrência do dia da semana.
             let classesScheduled = 0;
 
             while (classesScheduled < totalClassesToSchedule && currentDate <= finalEndDate) {
