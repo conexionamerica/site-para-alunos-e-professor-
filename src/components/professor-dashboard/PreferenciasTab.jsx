@@ -19,8 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'framer-motion';
-// CORREÇÃO CRÍTICA: Importar o componente Label para resolver o ReferenceError
-import { Label } from '@/components/ui/label'; 
 
 
 const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
@@ -30,6 +28,7 @@ const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
 });
 
+// A função foi atualizada para buscar os dados de Billing e fazer o merge no frontend.
 const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,8 +36,9 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   const fetchHistory = useCallback(async () => {
     if (!professorId) return;
     setLoading(true);
-    // Selecionamos todos os campos necessários, incluindo status
-    const { data, error } = await supabase
+
+    // 1. Fetch Logs (Atribuições de Pacotes)
+    const { data: logs, error: logError } = await supabase
       .from('assigned_packages_log')
       .select(`
         id, student_id, package_id, observation, assigned_classes, assigned_at, status, 
@@ -48,11 +48,44 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
       .eq('professor_id', professorId)
       .order('assigned_at', { ascending: false });
 
-    if (error) {
-      console.error("Error fetching history:", error);
-    } else {
-      setHistory(data || []);
+    if (logError) {
+      console.error("Error fetching logs:", logError);
+      setLoading(false);
+      return;
     }
+    
+    // 2. Fetch Billing (para Datas)
+    const studentIds = [...new Set(logs.map(log => log.student_id))];
+    const { data: billings, error: billingError } = await supabase
+        .from('billing')
+        .select(`id, user_id, package_id, purchase_date, end_date`)
+        .in('user_id', studentIds);
+        
+    if (billingError) {
+      console.error("Error fetching billings:", billingError);
+      // Continua mesmo se falhar na busca de billing, mas as datas serão N/A
+    }
+
+    // 3. Merge Logs com Datas de Billing
+    const mergedHistory = logs.map(log => {
+        const matchingBilling = (billings || [])
+            .filter(b => 
+                b.user_id === log.student_id && 
+                b.package_id === log.package_id && 
+                // A fatura deve ter sido comprada antes ou no momento da atribuição
+                (new Date(b.purchase_date) <= new Date(log.assigned_at)) 
+            )
+            .sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date))[0]; // Pega a mais recente
+        
+        return {
+            ...log,
+            start_date: matchingBilling?.purchase_date || null,
+            end_date: matchingBilling?.end_date || null,
+            total_classes_sent: log.assigned_classes, 
+        };
+    });
+
+    setHistory(mergedHistory || []);
     setLoading(false);
   }, [professorId]);
 
@@ -101,7 +134,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   };
     
   return (
-    <DialogContent className="max-w-3xl">
+    <DialogContent className="max-w-4xl"> {/* Aumentado o max-w para caber as novas colunas */}
       <DialogHeader>
         <DialogTitle>Histórico de Pacotes Incluídos</DialogTitle>
       </DialogHeader>
@@ -111,8 +144,10 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
             <TableRow>
               <TableHead>Aluno</TableHead>
               <TableHead>Pacote</TableHead>
-              <TableHead>Aulas</TableHead>
-              <TableHead>Data</TableHead>
+              <TableHead>Aulas Total</TableHead> {/* NOVA COLUNA */}
+              <TableHead>Data Início</TableHead>  {/* NOVA COLUNA */}
+              <TableHead>Data Fim</TableHead>     {/* NOVA COLUNA */}
+              <TableHead>Data Atribuição</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Ações</TableHead>
             </TableRow>
@@ -120,29 +155,31 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan="6" className="text-center">
+                <TableCell colSpan="8" className="text-center">
                   <Loader2 className="mx-auto my-4 h-6 w-6 animate-spin" />
                 </TableCell>
               </TableRow>
             ) : history.length > 0 ? (
               history.map(log => (
-                // Adiciona a classe de opacidade para o status Desfeito
                 <TableRow key={log.id} className={log.status === 'Cancelado' ? 'opacity-60 bg-slate-50' : ''}>
-                  <TableCell>{log.student?.full_name || 'Aluno não encontrado'}</TableCell>
+                  <TableCell>{log.student?.full_name || 'N/A'}</TableCell>
                   <TableCell>{log.package?.name || 'Pacote não encontrado'}</TableCell>
-                  <TableCell>{log.assigned_classes}</TableCell>
+                  
+                  {/* DADOS NOVOS */}
+                  <TableCell>{log.total_classes_sent || 'N/A'}</TableCell>
+                  <TableCell>{log.start_date ? format(parseISO(log.start_date), 'dd/MM/yyyy') : 'N/A'}</TableCell>
+                  <TableCell>{log.end_date ? format(parseISO(log.end_date), 'dd/MM/yyyy') : 'N/A'}</TableCell>
+                  
                   <TableCell>{format(parseISO(log.assigned_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>
                   <TableCell>
                     <StatusBadge status={log.status} />
                   </TableCell>
                   <TableCell>
-                    {/* Renderizar o botão 'Desfazer' APENAS se o status for 'Ativo' ou similar */}
                     {log.status === 'Ativo' || log.status === 'rescheduled_credit' ? (
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteWrapper(log)}>
                         Desfazer
                       </Button>
                     ) : (
-                      // CORREÇÃO VISUAL: Renderiza o status permanente como um Badge
                       <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
                         DESFEITO
                       </Badge>
@@ -152,7 +189,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan="6" className="text-center py-8 text-slate-500">
+                <TableCell colSpan="8" className="text-center py-8 text-slate-500">
                   Nenhum registro encontrado.
                 </TableCell>
               </TableRow>
