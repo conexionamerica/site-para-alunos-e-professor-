@@ -18,6 +18,8 @@ import { ptBR } from 'date-fns/locale';
 import { Input } from '@/components/ui/input'; 
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
+import { motion } from 'framer-motion';
+
 
 const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
   const totalMinutes = 7 * 60 + i * 15;
@@ -181,11 +183,11 @@ const PreferenciasTab = ({ dashboardData }) => {
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [selectedPackage, setSelectedPackage] = useState(null);
   
-  // ESTADOS PARA O PACOTE PADRÃO 'PERSONALIZADO'
+  // ESTADOS PARA O PACOTE PADRÃO 'PERSONALIZADO' (agora usado para a nova função)
   const [customClassCount, setCustomClassCount] = useState('');
   const [observation, setObservation] = useState('');
   
-  // NOVOS ESTADOS PARA O PACOTE 'PCKPERSONAL'
+  // NOVOS ESTADOS PARA DETALHES DO AGENDAMENTO (usaremos para 'Personalizado')
   const [pckPersonalData, setPckPersonalData] = useState({
     totalClasses: '',
     duration: '30', // Default duration
@@ -194,7 +196,10 @@ const PreferenciasTab = ({ dashboardData }) => {
     price: '',
     endDate: addMonths(new Date(), 1), // Default validity
   });
+  // Usamos 'custom' para compatibilidade com o fluxo original que só precisava de customClassCount.
+  // Agora, usaremos pckPersonalData para a maioria dos inputs.
   const { totalClasses, duration, time, days, price, endDate: pckEndDate } = pckPersonalData;
+  
   const handlePckPersonalChange = (field, value) => {
     setPckPersonalData(prev => ({ ...prev, [field]: value }));
   };
@@ -216,8 +221,12 @@ const PreferenciasTab = ({ dashboardData }) => {
   
   // Determina o pacote selecionado e se é customizado/pckpersonal
   const selectedPackageData = packages.find(p => p.id === parseInt(selectedPackage));
-  const isCustomPackageSelected = selectedPackageData?.name === 'Personalizado';
-  const isPCKPERSONALSelected = selectedPackageData?.name === 'PCKPERSONAL';
+  
+  // CORREÇÃO: Usar isCustomPackageSelected (o nome 'Personalizado') para mostrar o bloco de agendamento flexível
+  const isCustomPackageSelected = selectedPackageData?.name === 'Personalizado'; 
+  
+  // A lógica do agendamento automático será ativada se for o pacote 'Personalizado'
+  const isAutomaticScheduling = isCustomPackageSelected; 
   
 
 
@@ -269,7 +278,7 @@ const PreferenciasTab = ({ dashboardData }) => {
   const handleDayToggle = (dayIndex, shouldBeActive) => {
     setSlots(currentSlots =>
       currentSlots.map(slot => {
-        if (slot.day_of-week === dayIndex && slot.status !== 'filled') {
+        if (slot.day_of_week === dayIndex && slot.status !== 'filled') {
           return { ...slot, status: shouldBeActive ? 'active' : 'inactive' };
         }
         return slot;
@@ -442,18 +451,11 @@ const PreferenciasTab = ({ dashboardData }) => {
       return;
     }
     
-    // --- VALIDAÇÃO PCKPERSONAL ---
-    if (isPCKPERSONALSelected) {
+    // --- VALIDAÇÃO PCKPERSONAL (AGORA USADO POR 'PERSONALIZADO') ---
+    if (isAutomaticScheduling) {
         if (!totalClasses || !duration || !time || days.length === 0 || !price || !pckEndDate) {
-            toast({ variant: 'destructive', title: 'Campos PCKPERSONAL obrigatórios', description: 'Por favor, preencha todos os detalhes do agendamento (aulas, duração, horário, dias, preço e validade).' });
+            toast({ variant: 'destructive', title: 'Campos do Pacote Personalizado obrigatórios', description: 'Por favor, preencha todos os detalhes do agendamento (aulas, duração, horário, dias, preço e validade).' });
             setIsSubmittingPackage(false);
-            return;
-        }
-    }
-    // --- VALIDAÇÃO 'PERSONALIZADO' ---
-    else if (isCustomPackageSelected) {
-        if (!customClassCount || parseInt(customClassCount) <= 0 || !endDate) {
-            toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Insira a quantidade de aulas e a data de validade.' });
             return;
         }
     }
@@ -482,13 +484,10 @@ const PreferenciasTab = ({ dashboardData }) => {
     let classesToRegister = 0;
     let finalEndDate = endDate;
 
-    if (isPCKPERSONALSelected) {
+    if (isAutomaticScheduling) {
         priceToRegister = parseFloat(price);
         classesToRegister = parseInt(totalClasses, 10);
         finalEndDate = pckEndDate;
-    } else if (isCustomPackageSelected) {
-        priceToRegister = 0;
-        classesToRegister = parseInt(customClassCount, 10);
     } else {
         classesToRegister = selectedPackageData.number_of_classes;
         priceToRegister = selectedPackageData.price;
@@ -519,15 +518,14 @@ const PreferenciasTab = ({ dashboardData }) => {
       status: 'Ativo'
     });
     
-    // --- 3. AGENDAMENTO AUTOMÁTICO (PCKPERSONAL APENAS) ---
-    if (isPCKPERSONALSelected && !billingError) {
+    // --- 3. AGENDAMENTO AUTOMÁTICO (SE FOR PACOTE DE AGENDAMENTO AUTOMÁTICO) ---
+    if (isAutomaticScheduling && !billingError) {
         try {
             const totalClassesToSchedule = classesToRegister;
             const classDurationMinutes = parseInt(duration, 10);
             const slotsPerClass = Math.ceil(classDurationMinutes / 15);
             const studentId = selectedStudentId;
 
-            // 1. Fetch all currently available/filled slots for recurrence check
             const { data: allSlots, error: slotsError } = await supabase
                 .from('class_slots')
                 .select('id, day_of_week, start_time, status')
@@ -595,7 +593,7 @@ const PreferenciasTab = ({ dashboardData }) => {
                 
                 toast({ variant: 'info', title: 'Agendamento Automático!', description: `${classesScheduled} aulas foram agendadas e os horários bloqueados.` });
             } else {
-                 toast({ variant: 'warning', title: 'Agendamento Falhou', description: 'Nenhum horário disponível encontrado dentro do período para o PCKPERSONAL.' });
+                 toast({ variant: 'warning', title: 'Agendamento Falhou', description: 'Nenhum horário disponível encontrado dentro do período para este pacote.' });
             }
 
         } catch (e) {
@@ -635,11 +633,11 @@ const PreferenciasTab = ({ dashboardData }) => {
   
   // Atualiza a data de fim ao alterar a data de início (padrão de 1 mês)
   useEffect(() => {
-    // Apenas para pacotes não PCKPERSONAL, onde o endDate não é definido no bloco customizado
-    if (!isPCKPERSONALSelected) {
+    // Apenas para pacotes que NÃO usam agendamento automático
+    if (!isAutomaticScheduling) {
         setEndDate(addMonths(purchaseDate, 1));
     }
-  }, [purchaseDate, isPCKPERSONALSelected]);
+  }, [purchaseDate, isAutomaticScheduling]);
 
 
   return (
@@ -726,8 +724,8 @@ const PreferenciasTab = ({ dashboardData }) => {
               </PopoverContent>
             </Popover>
             
-            {/* Data de Fim (End Date) - OCULTA se PCKPERSONAL for selecionado */}
-            {!isPCKPERSONALSelected && (
+            {/* Data de Fim (End Date) - OCULTA se for Pacote Personalizado */}
+            {!isAutomaticScheduling && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -755,10 +753,15 @@ const PreferenciasTab = ({ dashboardData }) => {
             
           </div>
           
-          {/* --- NOVO BLOCO PCKPERSONAL --- */}
-          {isPCKPERSONALSelected && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50">
-                  <h4 className="text-lg font-semibold text-sky-800">Detalhes do Agendamento Personalizado (PCKPERSONAL)</h4>
+          {/* --- NOVO BLOCO PCKPERSONAL (AGORA 'PERSONALIZADO') --- */}
+          {(isAutomaticScheduling || isCustomPackageSelected) && (
+              <motion.div 
+                  initial={{ opacity: 0, height: 0 }} 
+                  animate={{ opacity: 1, height: 'auto' }} 
+                  transition={{ duration: 0.3 }}
+                  className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50"
+              >
+                  <h4 className="text-lg font-semibold text-sky-800">Detalhes do Pacote Personalizado</h4>
 
                   <div className="grid grid-cols-2 gap-4">
                       {/* Preço Pago */}
@@ -770,7 +773,7 @@ const PreferenciasTab = ({ dashboardData }) => {
                               placeholder="Ex: 500.00"
                               value={price}
                               onChange={(e) => handlePckPersonalChange('price', e.target.value)}
-                              required
+                              required={isAutomaticScheduling}
                               min="0"
                           />
                       </div>
@@ -783,103 +786,95 @@ const PreferenciasTab = ({ dashboardData }) => {
                               placeholder="Ex: 12"
                               value={totalClasses}
                               onChange={(e) => handlePckPersonalChange('totalClasses', e.target.value)}
-                              required
+                              required={isAutomaticScheduling}
                               min="1"
                           />
                       </div>
                   </div>
+                  
+                  {isAutomaticScheduling && (
+                      <>
+                          <div className="grid grid-cols-2 gap-4">
+                              {/* Duração da Aula */}
+                              <div className="space-y-2">
+                                  <Label htmlFor="pck-duration">Duração (Minutos)</Label>
+                                  <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
+                                      <SelectTrigger id="pck-duration">
+                                          <SelectValue placeholder="Duração" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                          <SelectItem value="30">30 Minutos</SelectItem>
+                                          <SelectItem value="45">45 Minutos</SelectItem>
+                                          <SelectItem value="60">60 Minutos</SelectItem>
+                                      </SelectContent>
+                                  </Select>
+                              </div>
+                              {/* Horário de Início */}
+                              <div className="space-y-2">
+                                  <Label htmlFor="pck-time">Horário de Início Fixo</Label>
+                                  <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
+                                      <SelectTrigger id="pck-time">
+                                          <SelectValue placeholder="Horário (Ex: 10:00)" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                          {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
+                                              <SelectItem key={t} value={t}>{t.substring(0, 5)}</SelectItem>
+                                          ))}
+                                      </SelectContent>
+                                  </Select>
+                              </div>
+                          </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                      {/* Duração da Aula */}
-                      <div className="space-y-2">
-                          <Label htmlFor="pck-duration">Duração (Minutos)</Label>
-                          <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration}>
-                              <SelectTrigger id="pck-duration">
-                                  <SelectValue placeholder="Duração" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  <SelectItem value="30">30 Minutos</SelectItem>
-                                  <SelectItem value="45">45 Minutos</SelectItem>
-                                  <SelectItem value="60">60 Minutos</SelectItem>
-                              </SelectContent>
-                          </Select>
-                      </div>
-                      {/* Horário de Início */}
-                      <div className="space-y-2">
-                          <Label htmlFor="pck-time">Horário de Início Fixo</Label>
-                          <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time}>
-                              <SelectTrigger id="pck-time">
-                                  <SelectValue placeholder="Horário (Ex: 10:00)" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
-                                      <SelectItem key={t} value={t}>{t.substring(0, 5)}</SelectItem>
+                          <div className="space-y-2">
+                              <Label>Dias da Semana Fixos</Label>
+                              <div className="flex flex-wrap gap-2">
+                                  {daysOfWeek.map((day, index) => (
+                                      <Button
+                                          key={index}
+                                          type="button"
+                                          variant={days.includes(index) ? 'default' : 'outline'}
+                                          size="sm"
+                                          onClick={() => handleDayTogglePckPersonal(index)}
+                                      >
+                                          {day.substring(0, 3)}
+                                      </Button>
                                   ))}
-                              </SelectContent>
-                          </Select>
-                      </div>
-                  </div>
+                              </div>
+                              {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
+                          </div>
 
-                  <div className="space-y-2">
-                      <Label>Dias da Semana Fixos</Label>
-                      <div className="flex flex-wrap gap-2">
-                          {daysOfWeek.map((day, index) => (
-                              <Button
-                                  key={index}
-                                  type="button"
-                                  variant={days.includes(index) ? 'default' : 'outline'}
-                                  size="sm"
-                                  onClick={() => handleDayTogglePckPersonal(index)}
-                              >
-                                  {day.substring(0, 3)}
-                              </Button>
-                          ))}
-                      </div>
-                  </div>
-
-                  {/* Validade do Pacote */}
-                  <div className="space-y-2">
-                      <Label>Validade (Término)</Label>
-                      <Popover>
-                          <PopoverTrigger asChild>
-                              <Button
-                                  variant={"outline"}
-                                  className={cn(
-                                      "w-full justify-start text-left font-normal",
-                                  )}
-                              >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {format(pckEndDate, "PPP", { locale: ptBR })}
-                              </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                  mode="single"
-                                  selected={pckEndDate}
-                                  onSelect={(date) => handlePckPersonalChange('endDate', date)}
-                                  initialFocus
-                                  locale={ptBR}
-                              />
-                          </PopoverContent>
-                      </Popover>
-                  </div>
+                          {/* Validade do Pacote */}
+                          <div className="space-y-2">
+                              <Label>Validade (Término)</Label>
+                              <Popover>
+                                  <PopoverTrigger asChild>
+                                      <Button
+                                          variant={"outline"}
+                                          className={cn(
+                                              "w-full justify-start text-left font-normal",
+                                          )}
+                                      >
+                                          <CalendarIcon className="mr-2 h-4 w-4" />
+                                          {format(pckEndDate, "PPP", { locale: ptBR })}
+                                      </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0">
+                                      <Calendar
+                                          mode="single"
+                                          selected={pckEndDate}
+                                          onSelect={(date) => handlePckPersonalChange('endDate', date)}
+                                          initialFocus
+                                          locale={ptBR}
+                                      />
+                                  </PopoverContent>
+                              </Popover>
+                          </div>
+                      </>
+                  )}
               </motion.div>
           )}
           {/* --- FIM DO NOVO BLOCO PCKPERSONAL --- */}
-
-
-          {isCustomPackageSelected && (
-            <Input
-              type="number"
-              placeholder="Insira a quantidade de aulas (Ex: 10)"
-              value={customClassCount}
-              onChange={(e) => setCustomClassCount(e.target.value)}
-              required
-              min="1"
-              className="mt-2"
-            />
-          )}
-
+          
           <Textarea placeholder="Observação (motivo da inclusão)" value={observation} onChange={(e) => setObservation(e.target.value)} />
 
           <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700" disabled={isSubmittingPackage}>
