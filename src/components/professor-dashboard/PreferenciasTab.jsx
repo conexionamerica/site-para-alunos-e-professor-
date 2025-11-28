@@ -1,4 +1,4 @@
-// Archivo: src/components/professor-dashboard/PreferenciasTab.jsx
+// Arquivo: src/components/professor-dashboard/PreferenciasTab.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -30,9 +30,11 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // CORREÇÃO: Mudar a função fetchHistory para ser assíncrona, se ainda não estiver (ela já está).
   const fetchHistory = useCallback(async () => {
     if (!professorId) return;
     setLoading(true);
+    // Selecionamos todos os campos necessários, incluindo status
     const { data, error } = await supabase
       .from('assigned_packages_log')
       .select(`
@@ -53,9 +55,10 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
 
   useEffect(() => {
     fetchHistory();
-    // Adiciona um listener de realtime para atualizar a lista se houver novas atribuições/cancelamentos
+    // Realtime listener
     const channel = supabase.channel('assigned-packages-history')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
+      // CORREÇÃO: O evento 'UPDATE' é o que dispara a mudança de status
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
       .subscribe();
       
@@ -63,14 +66,25 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   }, [fetchHistory, professorId]);
 
   const handleDeleteWrapper = async (log) => {
-    // Ação principal de exclusão no Supabase (no componente pai)
+    // Ação principal de exclusão/cancelamento no Supabase é delegada ao componente pai (onDelete)
     await onDelete(log);
     
-    // CORREÇÃO: Após a operação (que deve ter atualizado o banco de dados), 
-    // força a recarga do histórico para refletir o status 'Cancelado'.
-    fetchHistory();
+    // CORREÇÃO ESSENCIAL: Força a recarga dos dados locais APÓS a operação do pai ser concluída
+    // O evento UPDATE deveria acionar o listener (useEffect), mas recarregamos manualmente
+    // como fallback imediato para garantir que o status no modal mude instantaneamente.
+    await fetchHistory(); 
   };
 
+  const StatusBadge = ({ status }) => {
+    // Usa 'Cancelado' no código, mas exibe 'Desfeito' para o usuário
+    const isCanceled = status === 'Cancelado'; 
+    return (
+        <Badge variant={isCanceled ? 'destructive' : 'default'}>
+            {isCanceled ? 'Desfeito' : 'Ativo'}
+        </Badge>
+    );
+  };
+    
   return (
     <DialogContent className="max-w-3xl">
       <DialogHeader>
@@ -97,32 +111,30 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
               </TableRow>
             ) : history.length > 0 ? (
               history.map(log => (
-                <TableRow key={log.id} className={cn(log.status === 'Cancelado' && 'opacity-60 bg-slate-50')}>
+                <TableRow key={log.id} className={log.status === 'Cancelado' ? 'opacity-60 bg-slate-50' : ''}>
                   <TableCell>{log.student?.full_name || 'Aluno não encontrado'}</TableCell>
                   <TableCell>{log.package?.name || 'Pacote não encontrado'}</TableCell>
                   <TableCell>{log.assigned_classes}</TableCell>
                   <TableCell>{format(parseISO(log.assigned_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>
                   <TableCell>
-                    {/* CORREÇÃO: Exibir o status correto com Badge */}
-                    <Badge variant={log.status === 'Cancelado' ? 'destructive' : 'default'}>
-                      {log.status === 'Cancelado' ? 'Cancelado' : 'Ativo'}
-                    </Badge>
+                    <StatusBadge status={log.status} />
                   </TableCell>
                   <TableCell>
-                    {/* CORREÇÃO: Renderizar o botão 'Desfazer' APENAS se o status for 'Ativo' */}
-                    {log.status === 'Ativo' ? (
+                    {/* Renderizar o botão 'Desfazer' APENAS se o status for 'Ativo' */}
+                    {log.status !== 'Cancelado' ? (
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteWrapper(log)}>
                         Desfazer
                       </Button>
                     ) : (
-                      <span className="text-sm text-red-500 font-medium">Desfeito</span>
+                      // Quando está 'Cancelado', exibe apenas o status estático
+                      <span className="text-sm text-red-600 font-medium">Desfeito</span>
                     )}
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan="6" className="text-center py-8">
+                <TableCell colSpan="6" className="text-center py-8 text-slate-500">
                   Nenhum registro encontrado.
                 </TableCell>
               </TableRow>
@@ -134,7 +146,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   );
 };
 
-// CORREÇÃO PRINCIPAL: Agora só recebe 'dashboardData'
+
 const PreferenciasTab = ({ dashboardData }) => {
   const { toast } = useToast();
   const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -253,7 +265,7 @@ const PreferenciasTab = ({ dashboardData }) => {
     }
   };
 
-  // Funções de exclusão e reversão (mantidas, mas usando professorId extraído)
+  // Funções de exclusão e reversão (esta função DEVE fazer o update no banco de dados)
   const handleDeleteLog = useCallback(async (log) => {
     const { id: logId, student_id: studentId, package_id: packageId } = log;
     
@@ -265,11 +277,12 @@ const PreferenciasTab = ({ dashboardData }) => {
       // Step 1: Mark as Cancelado
       const { error: updateError } = await supabase
         .from('assigned_packages_log')
-        // CORREÇÃO LÓGICA: O status deve ser 'Cancelado'
         .update({ status: 'Cancelado' }) 
         .eq('id', logId);
       
       if (updateError) throw updateError;
+      
+      // ... Resto da lógica de exclusão no Supabase (omitida para brevidade, mas está no arquivo original) ...
 
       let billingRemoved = false;
       let slotsReverted = false;
@@ -327,7 +340,7 @@ const PreferenciasTab = ({ dashboardData }) => {
               .from('class_slots')
               .select('id')
               .eq('professor_id', professorId) // Usa professorId extraído
-              .in('day_of-week', horarios.days)
+              .in('day_of_week', horarios.days)
               .gte('start_time', horarios.time)
               .eq('status', 'filled');
             
@@ -361,6 +374,7 @@ const PreferenciasTab = ({ dashboardData }) => {
       if (deletedAptsCount > 0) message += ` ${deletedAptsCount} aulas futuras foram excluídas.`;
       if (slotsReverted) message += ' Os horários recorrentes foram liberados.';
 
+
       toast({ variant: 'default', title: 'Pacote Cancelado!', description: message });
 
       // Chama onUpdate para recarregar o histórico e a lista de alunos
@@ -374,7 +388,7 @@ const PreferenciasTab = ({ dashboardData }) => {
         description: `Ocorreu um erro: ${error.message}` 
       });
     }
-  }, [professorId, toast, onUpdate]); // Adicionado onUpdate para atualizar o estado do pai
+  }, [professorId, toast, onUpdate]);
 
   const handleAssignPackage = async (e) => {
     e.preventDefault();
@@ -480,7 +494,7 @@ const PreferenciasTab = ({ dashboardData }) => {
             <DialogTrigger asChild>
               <Button variant="outline"><History className="mr-2 h-4 w-4" /> Ver Histórico</Button>
             </DialogTrigger>
-            {/* CORREÇÃO: Passa professorId extraído */}
+            {/* Passa a função onDelete que será responsável por fazer a atualização no Supabase */}
             <AssignedPackagesHistory professorId={professorId} onDelete={handleDeleteLog} />
           </Dialog>
         </div>
