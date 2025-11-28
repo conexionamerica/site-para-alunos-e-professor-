@@ -30,7 +30,6 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // CORREÇÃO: Mudar a função fetchHistory para ser assíncrona, se ainda não estiver (ela já está).
   const fetchHistory = useCallback(async () => {
     if (!professorId) return;
     setLoading(true);
@@ -58,7 +57,6 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
     // Realtime listener
     const channel = supabase.channel('assigned-packages-history')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
-      // CORREÇÃO: O evento 'UPDATE' é o que dispara a mudança de status
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
       .subscribe();
       
@@ -67,20 +65,31 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
 
   const handleDeleteWrapper = async (log) => {
     // Ação principal de exclusão/cancelamento no Supabase é delegada ao componente pai (onDelete)
+    // A função onDelete (handleDeleteLog) irá atualizar o status no DB
     await onDelete(log);
     
-    // CORREÇÃO ESSENCIAL: Força a recarga dos dados locais APÓS a operação do pai ser concluída
-    // O evento UPDATE deveria acionar o listener (useEffect), mas recarregamos manualmente
-    // como fallback imediato para garantir que o status no modal mude instantaneamente.
+    // CORREÇÃO: Força a recarga dos dados locais APÓS a operação do pai para garantir que o status 'Cancelado' seja exibido.
     await fetchHistory(); 
   };
 
   const StatusBadge = ({ status }) => {
     // Usa 'Cancelado' no código, mas exibe 'Desfeito' para o usuário
     const isCanceled = status === 'Cancelado'; 
+    // Usa 'missed' e 'completed' para evitar que sejam marcados como 'Ativo' se o status for outro.
+    const isSpecial = status === 'missed' || status === 'completed';
+    
+    let variant = 'default';
+    if (isCanceled) variant = 'destructive';
+    if (isSpecial) variant = 'secondary';
+    
+    let label = status;
+    if (isCanceled) label = 'Desfeito';
+    if (status === 'missed') label = 'Falta';
+    if (status === 'completed') label = 'Concluído';
+
     return (
-        <Badge variant={isCanceled ? 'destructive' : 'default'}>
-            {isCanceled ? 'Desfeito' : 'Ativo'}
+        <Badge variant={variant}>
+            {label}
         </Badge>
     );
   };
@@ -111,6 +120,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
               </TableRow>
             ) : history.length > 0 ? (
               history.map(log => (
+                // Adiciona a classe de opacidade para o status Desfeito
                 <TableRow key={log.id} className={log.status === 'Cancelado' ? 'opacity-60 bg-slate-50' : ''}>
                   <TableCell>{log.student?.full_name || 'Aluno não encontrado'}</TableCell>
                   <TableCell>{log.package?.name || 'Pacote não encontrado'}</TableCell>
@@ -120,14 +130,14 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
                     <StatusBadge status={log.status} />
                   </TableCell>
                   <TableCell>
-                    {/* Renderizar o botão 'Desfazer' APENAS se o status for 'Ativo' */}
-                    {log.status !== 'Cancelado' ? (
+                    {/* Renderizar o botão 'Desfazer' APENAS se o status for 'Ativo' ou similar */}
+                    {log.status === 'Ativo' || log.status === 'rescheduled_credit' ? (
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteWrapper(log)}>
                         Desfazer
                       </Button>
                     ) : (
-                      // Quando está 'Cancelado', exibe apenas o status estático
-                      <span className="text-sm text-red-600 font-medium">Desfeito</span>
+                      // Quando não é Ativo/Crédito, exibe apenas o status estático
+                      <span className="text-sm text-red-600 font-medium">{log.status === 'Cancelado' ? 'Desfeito' : 'N/A'}</span>
                     )}
                   </TableCell>
                 </TableRow>
