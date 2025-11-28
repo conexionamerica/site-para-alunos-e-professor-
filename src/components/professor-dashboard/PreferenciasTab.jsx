@@ -1,4 +1,4 @@
-// Arquivo: src/components/professor-dashboard/PreferenciasTab.jsx
+// Archivo: src/components/professor-dashboard/PreferenciasTab.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -754,10 +754,12 @@ const PreferenciasTab = ({ dashboardData }) => {
           </div>
           
           {/* --- NOVO BLOCO PCKPERSONAL (AGORA 'PERSONALIZADO') --- */}
-          {(isAutomaticScheduling || isCustomPackageSelected) && (
+          {isAutomaticScheduling ? (
               <motion.div 
+                  key="pck-personal-details" // Key is crucial for motion.div to work on unmount/mount
                   initial={{ opacity: 0, height: 0 }} 
                   animate={{ opacity: 1, height: 'auto' }} 
+                  exit={{ opacity: 0, height: 0 }} 
                   transition={{ duration: 0.3 }}
                   className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50"
               >
@@ -771,9 +773,9 @@ const PreferenciasTab = ({ dashboardData }) => {
                               id="pck-price"
                               type="number"
                               placeholder="Ex: 500.00"
-                              value={price}
+                              value={price || ''} // CORREÇÃO: Fallback para ''
                               onChange={(e) => handlePckPersonalChange('price', e.target.value)}
-                              required={isAutomaticScheduling}
+                              required
                               min="0"
                           />
                       </div>
@@ -784,95 +786,89 @@ const PreferenciasTab = ({ dashboardData }) => {
                               id="pck-total-classes"
                               type="number"
                               placeholder="Ex: 12"
-                              value={totalClasses}
+                              value={totalClasses || ''} // CORREÇÃO: Fallback para ''
                               onChange={(e) => handlePckPersonalChange('totalClasses', e.target.value)}
-                              required={isAutomaticScheduling}
+                              required
                               min="1"
                           />
                       </div>
                   </div>
                   
-                  {isAutomaticScheduling && (
-                      <>
-                          <div className="grid grid-cols-2 gap-4">
-                              {/* Duração da Aula */}
-                              <div className="space-y-2">
-                                  <Label htmlFor="pck-duration">Duração (Minutos)</Label>
-                                  <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
-                                      <SelectTrigger id="pck-duration">
-                                          <SelectValue placeholder="Duração" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                          <SelectItem value="30">30 Minutos</SelectItem>
-                                          <SelectItem value="45">45 Minutos</SelectItem>
-                                          <SelectItem value="60">60 Minutos</SelectItem>
-                                      </SelectContent>
-                                  </Select>
-                              </div>
-                              {/* Horário de Início */}
-                              <div className="space-y-2">
-                                  <Label htmlFor="pck-time">Horário de Início Fixo</Label>
-                                  <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
-                                      <SelectTrigger id="pck-time">
-                                          <SelectValue placeholder="Horário (Ex: 10:00)" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                          {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
-                                              <SelectItem key={t} value={t}>{t.substring(0, 5)}</SelectItem>
-                                          ))}
-                                      </SelectContent>
-                                  </Select>
-                              </div>
-                          </div>
-
-                          <div className="space-y-2">
-                              <Label>Dias da Semana Fixos</Label>
-                              <div className="flex flex-wrap gap-2">
-                                  {daysOfWeek.map((day, index) => (
-                                      <Button
-                                          key={index}
-                                          type="button"
-                                          variant={days.includes(index) ? 'default' : 'outline'}
-                                          size="sm"
-                                          onClick={() => handleDayTogglePckPersonal(index)}
-                                      >
-                                          {day.substring(0, 3)}
-                                      </Button>
+                  {/* Duração e Horário */}
+                  <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                          <Label htmlFor="pck-duration">Duração (Minutos)</Label>
+                          <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
+                              <SelectTrigger id="pck-duration">
+                                  <SelectValue placeholder="Duração" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="30">30 Minutos</SelectItem>
+                                  <SelectItem value="45">45 Minutos</SelectItem>
+                                  <SelectItem value="60">60 Minutos</SelectItem>
+                              </SelectContent>
+                          </Select>
+                      </div>
+                      <div className="space-y-2">
+                          <Label htmlFor="pck-time">Horário de Início Fixo</Label>
+                          <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
+                              <SelectTrigger id="pck-time">
+                                  <SelectValue placeholder="Horário (Ex: 10:00)" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
+                                      <SelectItem key={t} value={t}>{t.substring(0, 5)}</SelectItem>
                                   ))}
-                              </div>
-                              {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
-                          </div>
+                              </SelectContent>
+                          </Select>
+                      </div>
+                  </div>
 
-                          {/* Validade do Pacote */}
-                          <div className="space-y-2">
-                              <Label>Validade (Término)</Label>
-                              <Popover>
-                                  <PopoverTrigger asChild>
-                                      <Button
-                                          variant={"outline"}
-                                          className={cn(
-                                              "w-full justify-start text-left font-normal",
-                                          )}
-                                      >
-                                          <CalendarIcon className="mr-2 h-4 w-4" />
-                                          {format(pckEndDate, "PPP", { locale: ptBR })}
-                                      </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0">
-                                      <Calendar
-                                          mode="single"
-                                          selected={pckEndDate}
-                                          onSelect={(date) => handlePckPersonalChange('endDate', date)}
-                                          initialFocus
-                                          locale={ptBR}
-                                      />
-                                  </PopoverContent>
-                              </Popover>
-                          </div>
-                      </>
-                  )}
+                  {/* Dias da Semana */}
+                  <div className="space-y-2">
+                      <Label>Dias da Semana Fixos</Label>
+                      <div className="flex flex-wrap gap-2">
+                          {daysOfWeek.map((day, index) => (
+                              <Button
+                                  key={index}
+                                  type="button"
+                                  variant={days.includes(index) ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => handleDayTogglePckPersonal(index)}
+                              >
+                                  {day.substring(0, 3)}
+                              </Button>
+                          ))}
+                      </div>
+                      {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
+                  </div>
+
+                  {/* Validade do Pacote */}
+                  <div className="space-y-2">
+                      <Label>Validade (Término)</Label>
+                      <Popover>
+                          <PopoverTrigger asChild>
+                              <Button
+                                  variant={"outline"}
+                                  className={cn("w-full justify-start text-left font-normal")}
+                              >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {format(pckEndDate, "PPP", { locale: ptBR })}
+                              </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                  mode="single"
+                                  selected={pckEndDate}
+                                  onSelect={(date) => handlePckPersonalChange('endDate', date)}
+                                  initialFocus
+                                  locale={ptBR}
+                              />
+                          </PopoverContent>
+                      </Popover>
+                  </div>
               </motion.div>
-          )}
+          ) : null}
           {/* --- FIM DO NOVO BLOCO PCKPERSONAL --- */}
           
           <Textarea placeholder="Observação (motivo da inclusão)" value={observation} onChange={(e) => setObservation(e.target.value)} />
