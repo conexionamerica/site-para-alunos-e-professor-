@@ -1,4 +1,4 @@
-// Archivo: src/components/professor-dashboard/PreferenciasTab.jsx
+// Arquivo: src/components/professor-dashboard/PreferenciasTab.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -19,6 +19,8 @@ import { Input } from '@/components/ui/input';
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'framer-motion';
+// CORREÇÃO CRÍTICA: Importar o componente Label para resolver o ReferenceError
+import { Label } from '@/components/ui/label'; 
 
 
 const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
@@ -773,7 +775,7 @@ const PreferenciasTab = ({ dashboardData }) => {
                               id="pck-price"
                               type="number"
                               placeholder="Ex: 500.00"
-                              value={price || ''} // CORREÇÃO: Fallback para ''
+                              value={price || ''} 
                               onChange={(e) => handlePckPersonalChange('price', e.target.value)}
                               required
                               min="0"
@@ -786,7 +788,7 @@ const PreferenciasTab = ({ dashboardData }) => {
                               id="pck-total-classes"
                               type="number"
                               placeholder="Ex: 12"
-                              value={totalClasses || ''} // CORREÇÃO: Fallback para ''
+                              value={totalClasses || ''} 
                               onChange={(e) => handlePckPersonalChange('totalClasses', e.target.value)}
                               required
                               min="1"
