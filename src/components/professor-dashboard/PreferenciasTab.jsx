@@ -15,7 +15,7 @@ import { ChevronsUpDown, Check, History, Loader2, Calendar as CalendarIcon, Lock
 import { cn } from '@/lib/utils';
 import { format, parseISO, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Input } from '@/components/ui/input'; // CORRECCIÓN DE SINTAXIS APLICADA AQUÍ
+import { Input } from '@/components/ui/input'; 
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
 
@@ -63,15 +63,12 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   }, [fetchHistory, professorId]);
 
   const handleDeleteWrapper = async (log) => {
-    // 1. Atualiza o status localmente para 'Cancelado'
-    setHistory(prevHistory => prevHistory.map(item => 
-        item.id === log.id ? { ...item, status: 'Cancelado' } : item
-    ));
-    
-    // 2. Dispara a função de exclusão no pai (PreferenciasTab)
+    // Ação principal de exclusão no Supabase (no componente pai)
     await onDelete(log);
     
-    // O registro deve permanecer na lista, marcado como Cancelado.
+    // CORREÇÃO: Após a operação (que deve ter atualizado o banco de dados), 
+    // força a recarga do histórico para refletir o status 'Cancelado'.
+    fetchHistory();
   };
 
   return (
@@ -106,17 +103,19 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
                   <TableCell>{log.assigned_classes}</TableCell>
                   <TableCell>{format(parseISO(log.assigned_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>
                   <TableCell>
-                    <Badge variant={log.status === 'Cancelado' ? 'warning' : 'default'}>
+                    {/* CORREÇÃO: Exibir o status correto com Badge */}
+                    <Badge variant={log.status === 'Cancelado' ? 'destructive' : 'default'}>
                       {log.status === 'Cancelado' ? 'Cancelado' : 'Ativo'}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {log.status !== 'Cancelado' ? (
+                    {/* CORREÇÃO: Renderizar o botão 'Desfazer' APENAS se o status for 'Ativo' */}
+                    {log.status === 'Ativo' ? (
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteWrapper(log)}>
                         Desfazer
                       </Button>
                     ) : (
-                      <span className="text-sm text-slate-500">Desfeito</span>
+                      <span className="text-sm text-red-500 font-medium">Desfeito</span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -135,7 +134,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   );
 };
 
-// CORRECCIÓN PRINCIPAL: Ahora solo recibe 'dashboardData'
+// CORREÇÃO PRINCIPAL: Agora só recebe 'dashboardData'
 const PreferenciasTab = ({ dashboardData }) => {
   const { toast } = useToast();
   const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -266,7 +265,8 @@ const PreferenciasTab = ({ dashboardData }) => {
       // Step 1: Mark as Cancelado
       const { error: updateError } = await supabase
         .from('assigned_packages_log')
-        .update({ status: 'Cancelado' })
+        // CORREÇÃO LÓGICA: O status deve ser 'Cancelado'
+        .update({ status: 'Cancelado' }) 
         .eq('id', logId);
       
       if (updateError) throw updateError;
@@ -327,7 +327,7 @@ const PreferenciasTab = ({ dashboardData }) => {
               .from('class_slots')
               .select('id')
               .eq('professor_id', professorId) // Usa professorId extraído
-              .in('day_of_week', horarios.days)
+              .in('day_of-week', horarios.days)
               .gte('start_time', horarios.time)
               .eq('status', 'filled');
             
@@ -374,7 +374,7 @@ const PreferenciasTab = ({ dashboardData }) => {
         description: `Ocorreu um erro: ${error.message}` 
       });
     }
-  }, [professorId, toast]); // Depende de professorId
+  }, [professorId, toast, onUpdate]); // Adicionado onUpdate para atualizar o estado do pai
 
   const handleAssignPackage = async (e) => {
     e.preventDefault();
