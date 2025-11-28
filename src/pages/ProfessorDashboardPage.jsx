@@ -293,7 +293,7 @@ const ProfessorDashboardPage = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header/Navegação Desktop (Topo) */}
                 <header className="flex flex-col bg-white shadow-md">
-                    {/* Linha superior: Logo e Dropdown - CORREÇÃO 1: Usamos w-full e px-4/8 para preenchimento. */}
+                    {/* Linha superior: Logo e Dropdown - w-full e px-4 lg:px-8 */}
                     <div className="w-full flex justify-between items-center h-16 px-4 lg:px-8">
                         <Logo /> 
                         <DropdownMenu>
@@ -322,9 +322,8 @@ const ProfessorDashboardPage = () => {
                         </DropdownMenu>
                     </div>
 
-                    {/* Linha inferior: TabsList para Navegação Desktop */}
+                    {/* Linha inferior: TabsList para Navegação Desktop - w-full e px-4 lg:px-8 */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
-                        {/* CORREÇÃO 2: Aplicamos w-full para se esticar e px-4/8 para padding consistente */}
                         <div className="w-full px-4 lg:px-8">
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                                 <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
@@ -381,9 +380,9 @@ const ProfessorDashboardPage = () => {
 
                 </header>
                 
-                {/* Conteúdo da main - CORREÇÃO 3: Removido 'container mx-auto' e usado w-full + padding */}
+                {/* Conteúdo da main - w-full e px-4 lg:px-8 para as TabsContent */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto">
-                    {/* Este wrapper garante que o conteúdo use a largura total e aplique o padding lateral/vertical */}
+                    {/* Este div garante que o conteúdo use a largura total e aplique o padding lateral/vertical */}
                     <div className="w-full px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
@@ -415,3 +414,4 @@ const ProfessorDashboardPage = () => {
 };
 
 export default ProfessorDashboardPage;
+```http://googleusercontent.com/image_generation_content/0
