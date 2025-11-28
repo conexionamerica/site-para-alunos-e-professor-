@@ -11,9 +11,11 @@ import { ptBR } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge'; 
 
 // Utility for managing profile actions
-const ProfileActions = ({ profile, onDelete, onToggleActive, isSubmitting }) => {
+// CORRIGIDO: Agora aceita currentUserId
+const ProfileActions = ({ profile, onDelete, onToggleActive, isSubmitting, currentUserId }) => {
     // A função de deleção de Auth precisa ser manual via SDK admin (no backend), não disponível aqui.
-    const isCurrentUser = profile.id === supabase.auth.user()?.id;
+    // CORREÇÃO: Compara diretamente com o ID do professor autenticado passado por prop
+    const isCurrentUser = profile.id === currentUserId; 
     const isActive = profile.is_active !== false; // Assume ativo se o campo estiver ausente ou true
 
     if (isCurrentUser) {
@@ -48,7 +50,8 @@ const ProfileActions = ({ profile, onDelete, onToggleActive, isSubmitting }) => 
     );
 };
 
-const ProfileTable = ({ title, profiles, onDelete, onToggleActive, isSubmitting }) => {
+// CORRIGIDO: Agora aceita currentUserId
+const ProfileTable = ({ title, profiles, onDelete, onToggleActive, isSubmitting, currentUserId }) => {
     return (
         <div className="space-y-4">
             <h4 className="text-xl font-semibold mb-3">{title} ({profiles.length})</h4>
@@ -81,6 +84,7 @@ const ProfileTable = ({ title, profiles, onDelete, onToggleActive, isSubmitting 
                                             onDelete={onDelete}
                                             onToggleActive={onToggleActive}
                                             isSubmitting={isSubmitting}
+                                            currentUserId={currentUserId} // PASSAGEM DO ID CORRIGIDA
                                         />
                                     </TableCell>
                                 </TableRow>
@@ -103,10 +107,12 @@ const AdmTab = ({ dashboardData }) => {
     const { toast } = useToast();
     const data = dashboardData?.data || {};
     const loading = dashboardData?.loading || false;
-    // O fetch do dashboardData deve trazer allProfiles
-    const allProfiles = data.allProfiles || []; 
+    const allProfiles = data.allProfiles || [];
     const onUpdate = dashboardData?.onUpdate;
 
+    // CORRIGIDO: Extrair o professorId de dashboardData
+    const professorId = dashboardData?.professorId; 
+    
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [localProfiles, setLocalProfiles] = useState(allProfiles);
 
@@ -219,6 +225,7 @@ const AdmTab = ({ dashboardData }) => {
                             onDelete={handleDelete}
                             onToggleActive={handleToggleActive}
                             isSubmitting={isSubmitting}
+                            currentUserId={professorId} // Passagem do ID corrigida
                         />
                     </TabsContent>
                     
@@ -229,6 +236,7 @@ const AdmTab = ({ dashboardData }) => {
                             onDelete={handleDelete}
                             onToggleActive={handleToggleActive}
                             isSubmitting={isSubmitting}
+                            currentUserId={professorId} // Passagem do ID corrigida
                         />
                     </TabsContent>
                 </Tabs>
