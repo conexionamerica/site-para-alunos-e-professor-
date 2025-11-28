@@ -112,9 +112,9 @@ const fetchProfessorDashboardData = async (professorId) => {
 };
 
 const Logo = () => (
+    // Removido padding interno, alinhamento forçado ao extremo esquerdo
     <Link to="/" className="text-left flex items-center">
         <div className="text-xl font-bold">
-            {/* CORREÇÃO: Mudar a cor do texto para branco para o fundo azul */}
             <span className="text-white">Conexion</span>
             <span className="text-slate-100"> America</span>
         </div>
@@ -293,9 +293,8 @@ const ProfessorDashboardPage = () => {
             {/* Conteúdo Principal do Dashboard */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header/Navegação Desktop (Topo) */}
-                {/* CORREÇÃO 1: Fundo Azul Céu (bg-sky-600) e largura total */}
                 <header className="flex flex-col bg-sky-600 shadow-md">
-                    {/* Linha superior: Logo e Dropdown - Ajustado para texto branco */}
+                    {/* Linha superior: Logo e Dropdown - CORREÇÃO 1: Mantemos o padding apenas aqui. */}
                     <div className="w-full flex justify-between items-center h-16 px-4 lg:px-8">
                         <Logo /> 
                         <DropdownMenu>
@@ -324,7 +323,7 @@ const ProfessorDashboardPage = () => {
                         </DropdownMenu>
                     </div>
 
-                    {/* Linha inferior: TabsList para Navegação Desktop - Fundo Branco com borda */}
+                    {/* Linha inferior: TabsList para Navegação Desktop - CORREÇÃO 2: Fundo Branco com padding para o conteúdo. */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
                         <div className="w-full px-4 lg:px-8">
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
@@ -336,8 +335,8 @@ const ProfessorDashboardPage = () => {
                                             onClick={() => setActiveTab(item.id)}
                                             className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-none transition-all duration-200 border-b-2 border-transparent 
                                                 ${activeTab === item.id
-                                                    ? 'text-sky-600 border-sky-600 font-semibold' // Aba ativa: cor do texto azul, borda azul
-                                                    : 'text-gray-600 hover:text-gray-800' // Aba inativa: texto cinza
+                                                    ? 'text-sky-600 border-sky-600 font-semibold' 
+                                                    : 'text-gray-600 hover:text-gray-800'
                                                 }`}
                                         >
                                             <item.icon className="h-5 w-5 mr-2" />
@@ -348,7 +347,7 @@ const ProfessorDashboardPage = () => {
                             </Tabs>
                         </div>
                     </div>
-                     {/* Header Mobile - Mantido em branco para contraste */}
+                     {/* Header Mobile */}
                     <header className="flex items-center justify-between p-4 bg-white shadow-md lg:hidden">
                         <Button variant="ghost" onClick={() => setIsSidebarOpen(true)}>
                             <Menu className="h-6 w-6 text-gray-800" />
@@ -363,7 +362,7 @@ const ProfessorDashboardPage = () => {
                             <DropdownMenuContent className="w-56" align="end" forceMount>
                                 <DropdownMenuLabel className="font-normal">
                                     <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p> 
+                                        <p className="text-sm font-medium leading-none text-slate-800">{dashboardData.professorName || 'Professor'}</p> 
                                         <p className="text-xs leading-none text-muted-foreground">
                                             {user?.email || 'email@escola.com'} 
                                         </p>
@@ -384,7 +383,7 @@ const ProfessorDashboardPage = () => {
                 
                 {/* Conteúdo da main - w-full e px-4 lg:px-8 para as TabsContent */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto">
-                    {/* Este div garante que o conteúdo use a largura total e aplique o padding lateral/vertical */}
+                    {/* APLICADO PADDING SOMENTE AO CONTEÚDO AQUI (O QUE ESTÁ FORA DA FAIXA BRANCA/AZUL) */}
                     <div className="w-full px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
