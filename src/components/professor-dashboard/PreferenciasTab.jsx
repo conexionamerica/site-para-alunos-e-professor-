@@ -76,9 +76,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   };
 
   const StatusBadge = ({ status }) => {
-    // Usa 'Cancelado' no código, mas exibe 'Desfeito' para o usuário
     const isCanceled = status === 'Cancelado'; 
-    // Usa 'missed' e 'completed' para evitar que sejam marcados como 'Ativo' se o status for outro.
     const isSpecial = status === 'missed' || status === 'completed' || status === 'rescheduled_credit';
     
     let variant = 'default';
@@ -134,15 +132,15 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
                     <StatusBadge status={log.status} />
                   </TableCell>
                   <TableCell>
-                    {/* Renderizar o botão 'Desfazer' APENAS se o status for 'Ativo' ou similar */}
+                    {/* Renderiza o botão 'Desfazer' APENAS se o status for 'Ativo' ou 'rescheduled_credit' */}
                     {log.status === 'Ativo' || log.status === 'rescheduled_credit' ? (
                       <Button variant="destructive" size="sm" onClick={() => handleDeleteWrapper(log)}>
                         Desfazer
                       </Button>
                     ) : (
-                      // CORREÇÃO VISUAL: Renderiza o status permanente como um Badge
+                      // CORREÇÃO: Para qualquer outro status (incluindo o recém-definido 'Cancelado' e outros como 'completed'), mostra a permanência
                       <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
-                        DESFEITO
+                        {log.status === 'Cancelado' ? 'DESFEITO' : 'N/A'}
                       </Badge>
                     )}
                   </TableCell>
