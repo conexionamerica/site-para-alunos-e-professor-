@@ -1,5 +1,3 @@
-// Arquivo: src/components/professor-dashboard/PreferenciasTab.jsx
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
@@ -64,12 +62,18 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   }, [fetchHistory, professorId]);
 
   const handleDeleteWrapper = async (log) => {
-    // Ação principal de exclusão/cancelamento no Supabase é delegada ao componente pai (onDelete)
+    // 1. Ação principal de exclusão/cancelamento no Supabase é delegada ao componente pai (onDelete)
     // A função onDelete (handleDeleteLog) irá atualizar o status no DB
     await onDelete(log);
     
-    // CORREÇÃO: Força a recarga dos dados locais APÓS a operação do pai para garantir que o status 'Cancelado' seja exibido.
-    await fetchHistory(); 
+    // CORREÇÃO: Implementa a atualização de estado local otimista para feedback visual imediato
+    setHistory(prevHistory => prevHistory.map(item => 
+        item.id === log.id 
+            ? { ...item, status: 'Cancelado' } // Atualiza localmente o status
+            : item
+    ));
+    
+    // REMOVIDO: A chamada redundante e potencialmente lenta a await fetchHistory()
   };
 
   const StatusBadge = ({ status }) => {
