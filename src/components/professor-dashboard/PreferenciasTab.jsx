@@ -1,3 +1,5 @@
+// Archivo: src/components/professor-dashboard/PreferenciasTab.jsx
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
@@ -62,25 +64,22 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   }, [fetchHistory, professorId]);
 
   const handleDeleteWrapper = async (log) => {
-    // 1. Ação principal de exclusão/cancelamento no Supabase é delegada ao componente pai (onDelete)
-    // A função onDelete (handleDeleteLog) irá atualizar o status no DB
-    await onDelete(log);
-    
-    // CORREÇÃO: Implementa a atualização de estado local otimista para feedback visual imediato
+    // 1. Otimização: Atualizar o estado local imediatamente
     setHistory(prevHistory => prevHistory.map(item => 
         item.id === log.id 
-            ? { ...item, status: 'Cancelado' } // Atualiza localmente o status
+            ? { ...item, status: 'Cancelado' } // <--- Esta linha atualiza o estado
             : item
     ));
-    
-    // REMOVIDO: A chamada redundante e potencialmente lenta a await fetchHistory()
+
+    // 2. Chama a ação principal no pai (que atualiza o DB e o Dashboard principal)
+    await onDelete(log);
   };
 
   const StatusBadge = ({ status }) => {
     // Usa 'Cancelado' no código, mas exibe 'Desfeito' para o usuário
     const isCanceled = status === 'Cancelado'; 
     // Usa 'missed' e 'completed' para evitar que sejam marcados como 'Ativo' se o status for outro.
-    const isSpecial = status === 'missed' || status === 'completed';
+    const isSpecial = status === 'missed' || status === 'completed' || status === 'rescheduled_credit';
     
     let variant = 'default';
     if (isCanceled) variant = 'destructive';
@@ -90,6 +89,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
     if (isCanceled) label = 'Desfeito';
     if (status === 'missed') label = 'Falta';
     if (status === 'completed') label = 'Concluído';
+    if (status === 'rescheduled_credit') label = 'Crédito Ativo';
 
     return (
         <Badge variant={variant}>
@@ -140,8 +140,10 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
                         Desfazer
                       </Button>
                     ) : (
-                      // Quando não é Ativo/Crédito, exibe apenas o status estático
-                      <span className="text-sm text-red-600 font-medium">{log.status === 'Cancelado' ? 'Desfeito' : 'N/A'}</span>
+                      // CORREÇÃO VISUAL: Renderiza o status permanente como um Badge
+                      <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-100 cursor-default">
+                        DESFEITO
+                      </Badge>
                     )}
                   </TableCell>
                 </TableRow>
