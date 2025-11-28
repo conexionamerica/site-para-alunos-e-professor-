@@ -1,4 +1,4 @@
-// Arquivo: src/pages/ProfessorDashboardPage.jsx
+// Archivo: src/pages/ProfessorDashboardPage.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -35,7 +35,7 @@ const fetchProfessorDashboardData = async (professorId) => {
       .select(`*, profile:profiles!alumno_id(*)`)
       .eq('profesor_id', professorId)
       .eq('status', 'Pendiente')
-      .order('solicitud_id', { ascending: true }); // Usando solicitud_id (chave segura)
+      .order('solicitud_id', { ascending: true }); 
     if (reqError) throw reqError;
     
     // 3. Fetch de Próxima Aula (para HomeTab)
@@ -189,8 +189,8 @@ const ProfessorDashboardPage = () => {
         { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
     ];
 
-    // Componente Sidebar ajustado para ser um wrapper de layout
-    const Sidebar = ({ children }) => (
+    // Componente Sidebar (Layout Mobile/Toggle)
+    const Sidebar = () => (
         <motion.div
             initial={{ x: '-100%' }}
             animate={{ x: isSidebarOpen ? '0%' : '-100%' }}
@@ -203,7 +203,32 @@ const ProfessorDashboardPage = () => {
                     <Menu className="h-6 w-6" />
                 </Button>
             </div>
-            {children}
+            
+            {/* TabsList para navegação Mobile (dentro da Sidebar) */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical" className="h-full">
+                <TabsList className="flex flex-col h-full bg-transparent space-y-2">
+                    {navItems.map(item => (
+                        <TabsTrigger
+                            key={item.id}
+                            value={item.id}
+                            onClick={() => {
+                                setActiveTab(item.id);
+                                setIsSidebarOpen(false); 
+                            }}
+                            className={`w-full justify-start text-lg px-4 py-3 rounded-xl transition-all duration-200 ${
+                                activeTab === item.id
+                                    ? 'bg-blue-600 text-white shadow-lg'
+                                    : 'text-gray-300 hover:bg-gray-800'
+                            }`}
+                            disabled={isLoading}
+                        >
+                            <item.icon className="h-5 w-5 mr-3" />
+                            {item.label}
+                        </TabsTrigger>
+                    ))}
+                </TabsList>
+            </Tabs>
+            
             <Button 
                 onClick={handleLogout} 
                 className="w-full justify-start text-lg px-4 py-3 rounded-xl mt-auto bg-transparent border border-red-500 text-red-400 hover:bg-red-900 hover:text-white"
@@ -243,36 +268,8 @@ const ProfessorDashboardPage = () => {
     
     return (
         <div className="flex min-h-screen bg-gray-100">
-            {/* Sidebar para desktop e mobile (oculta/aberta) */}
-            <Sidebar>
-                {/* O conteúdo da sidebar agora PRECISA estar dentro de TabsList, que por sua vez, está dentro de Tabs */}
-                <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical" className="h-full">
-                    <TabsList className="flex flex-col h-full bg-transparent space-y-2">
-                        {navItems.map(item => (
-                            <TabsTrigger
-                                key={item.id}
-                                value={item.id}
-                                onClick={() => {
-                                    setActiveTab(item.id);
-                                    setIsSidebarOpen(false); 
-                                }}
-                                className={`w-full justify-start text-lg px-4 py-3 rounded-xl transition-all duration-200 ${
-                                    activeTab === item.id
-                                        ? 'bg-blue-600 text-white shadow-lg'
-                                        : 'text-gray-300 hover:bg-gray-800'
-                                }`}
-                                disabled={isLoading}
-                            >
-                                <item.icon className="h-5 w-5 mr-3" />
-                                {item.label}
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
-                    {/* Movemos o TabsContent para o main para ter a estrutura correta,
-                        mas precisamos manter o Tabs.Root no escopo que engloba o TabsList. */}
-                {/* Fechamos o Tabs.Root aqui, mas o TabsList e TabsContent agora estão em locais diferentes */}
-                </Tabs>
-            </Sidebar>
+            {/* Sidebar (Navegação mobile) */}
+            <Sidebar />
 
             {isSidebarOpen && (
                 <div 
@@ -316,13 +313,31 @@ const ProfessorDashboardPage = () => {
                 </header>
 
                 <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 lg:p-8">
-                    {/* Reabrindo Tabs.Root aqui para conter o TabsContent */}
-                    <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical" className="h-full">
-                         {/* TabsList foi movido para o Sidebar */}
+                    {/* Tabs.Root para todo o conteúdo da main */}
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+                        
+                        {/* TabsList para Navegação Desktop (Visível apenas em lg:flex) */}
+                        <TabsList className="hidden lg:flex w-full justify-start mb-6 h-auto p-0 bg-transparent border-b rounded-none">
+                            {navItems.map(item => (
+                                <TabsTrigger
+                                    key={item.id}
+                                    value={item.id}
+                                    onClick={() => setActiveTab(item.id)}
+                                    className={`relative text-lg px-4 py-2 rounded-none transition-all duration-200 border-b-2 border-transparent ${
+                                        activeTab === item.id
+                                            ? 'text-sky-600 border-sky-600 font-semibold'
+                                            : 'text-gray-500 hover:text-gray-800'
+                                    }`}
+                                >
+                                    <item.icon className="h-5 w-5 mr-2" />
+                                    {item.label}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                        
                         {/* Tabs Content */}
                         {navItems.map(item => (
                             <TabsContent key={item.id} value={item.id} className="mt-0">
-                                {/* Passa o objeto completo e já validado (dashboardData) */}
                                 <item.component dashboardData={dashboardData} /> 
                             </TabsContent>
                         ))}
@@ -330,7 +345,7 @@ const ProfessorDashboardPage = () => {
                 </main>
             </div>
 
-            {/* BOTÃO FLUTUANTE DE WHATSAPP (Adicionado aqui para aparecer em todas as abas) */}
+            {/* BOTÃO FLUTUANTE DE WHATSAPP */}
             <a
                 href="https://wa.me/555198541835?text=Olá! Preciso de ajuda no painel de aluno."
                 target="_blank"
