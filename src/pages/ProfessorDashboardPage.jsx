@@ -323,14 +323,10 @@ const ProfessorDashboardPage = () => {
                                     </DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     
-                                    {/* RESTAURADO: Opção Preferências */}
-                                    <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
-                                        <Settings className="mr-2 h-4 w-4" />
-                                        Preferências
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
+                                    {/* CORREÇÃO: Removido Preferências daqui */}
+                                    {/* O único item de ação de menu é o Sair */}
                                     
-                                    {/* CORREÇÃO: Botão Sair com LogOut Icone */}
+                                    {/* Botão Sair com LogOut Icone */}
                                     <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-700">
                                         <LogOut className="mr-2 h-4 w-4" />
                                         Sair
@@ -415,7 +411,7 @@ const ProfessorDashboardPage = () => {
                 </main>
             </div>
 
-            {/* BOTÓN FLOTANTE DE WHATSAPP: El bloque ha sido removido. */}
+            {/* BOTÓN FLOTANTE DE WHATSAPP: Removido. */}
         </div>
     );
 };
