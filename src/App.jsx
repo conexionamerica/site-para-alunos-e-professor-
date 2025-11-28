@@ -13,9 +13,34 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { AnimatePresence } from 'framer-motion';
 import ChatWidget from '@/components/ChatWidget';
 import PostRegistrationForm from '@/components/PostRegistrationForm';
+// IMPORTAÇÕES ADICIONADAS PARA O CARTEL DE BLOQUEIO
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; 
 import { MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+
+// NOVO COMPONENTE: Tela de Acesso Bloqueado
+const SuspendedScreen = () => (
+  <div className="flex items-center justify-center min-h-[80vh]">
+    <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-lg border-l-4 border-red-500">
+      <Alert variant="destructive">
+        <AlertTitle className="text-xl font-bold">Acesso Bloqueado</AlertTitle>
+        <AlertDescription className="mt-2 text-slate-700">
+          Sua conta foi marcada como **inativa**. Para reativá-la e continuar suas aulas, por favor, entre em contato com o suporte da escola.
+        </AlertDescription>
+      </Alert>
+      
+      {/* Botão WhatsApp para o Suporte */}
+      <a href="https://wa.me/555198541835" target="_blank" rel="noopener noreferrer">
+        <Button className="w-full bg-green-500 hover:bg-green-600 text-white shadow-lg">
+          <MessageSquare className="mr-2 h-5 w-5" />
+          Falar com o Suporte (WhatsApp)
+        </Button>
+      </a>
+    </div>
+  </div>
+);
+
 
 const HelpWidget = () => (
   <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
@@ -42,6 +67,25 @@ function App() {
   const showHeaderFooter = !['/professor-login', '/professor-dashboard'].includes(location.pathname);
   const needsPostRegistration = user && profile && !profile.age;
   const isStudent = user && profile?.role === 'student';
+  
+  // *** NOVA LÓGICA DE BLOQUEIO: Se for aluno E o campo is_active for explicitamente false ***
+  const isProfileInactive = isStudent && profile && profile.is_active === false; 
+  // ******************************
+
+  // Se o perfil do aluno estiver inativo, renderiza a tela de suspensão e impede o acesso a rotas
+  if (isProfileInactive) {
+      return (
+          <div className="flex flex-col min-h-screen bg-[#F0F8FF]">
+              {/* O Header/Footer aparecem se não estivermos nas rotas de login/dashboard do professor */}
+              {showHeaderFooter && <Header />}
+              <main className="flex-grow container mx-auto px-4 py-8">
+                  <SuspendedScreen /> 
+              </main>
+              {showHeaderFooter && <Footer />}
+          </div>
+      );
+  }
+
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F0F8FF]">
