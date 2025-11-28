@@ -75,7 +75,8 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
                 // A fatura deve ter sido comprada antes ou no momento da atribuição
                 (new Date(b.purchase_date) <= new Date(log.assigned_at)) 
             )
-            .sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date))[0]; // Pega a mais recente
+            // Ordem decrescente de purchase_date para pegar a fatura mais relevante/recente
+            .sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date))[0]; 
         
         return {
             ...log,
@@ -135,7 +136,9 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   };
   
   const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+    // Garante que valores nulos ou indefinidos sejam tratados como zero
+    const numericValue = value || 0; 
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numericValue);
   };
     
   return (
@@ -176,6 +179,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
                   <TableCell>{formatCurrency(log.amount_paid)}</TableCell> {/* EXIBIÇÃO DO PREÇO */}
 
                   {/* DADOS DE DATAS */}
+                  {/* Verifica se as datas existem antes de formatar. */}
                   <TableCell>{log.start_date ? format(parseISO(log.start_date), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                   <TableCell>{log.end_date ? format(parseISO(log.end_date), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                   
@@ -242,11 +246,12 @@ const PreferenciasTab = ({ dashboardData }) => {
     time: ALL_TIMES[0].substring(0, 5), 
     days: [],
     price: '',
+    startDate: new Date(), // NOVA: Data de Início do Customizado
     endDate: addMonths(new Date(), 1), // Default validity
   });
   // Usamos 'custom' para compatibilidade com o fluxo original que só precisava de customClassCount.
   // Agora, usaremos pckPersonalData para a maioria dos inputs.
-  const { totalClasses, duration, time, days, price, endDate: pckEndDate } = pckPersonalData;
+  const { totalClasses, duration, time, days, price, endDate: pckEndDate, startDate: pckStartDate } = pckPersonalData;
   
   const handlePckPersonalChange = (field, value) => {
     setPckPersonalData(prev => ({ ...prev, [field]: value }));
@@ -261,6 +266,7 @@ const PreferenciasTab = ({ dashboardData }) => {
   // FIM DOS NOVOS ESTADOS
 
   const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
+  // Removendo a variável purchaseDate padrão para dar lugar ao pckStartDate (Data de Início) ou à data padrão para outros pacotes
   const [purchaseDate, setPurchaseDate] = useState(new Date());
   // Estado para a Data de Fim/Validade (Usado por pacotes padrão e Personalizado)
   const [endDate, setEndDate] = useState(addMonths(new Date(), 1));
@@ -494,22 +500,22 @@ const PreferenciasTab = ({ dashboardData }) => {
     e.preventDefault();
     
     // --- VARIÁVEIS COMUNS ---
-    if (!selectedStudentId || !selectedPackage || !purchaseDate) {
-      toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione aluno, pacote e data de início.' });
+    if (!selectedStudentId || !selectedPackage) {
+      toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione aluno e pacote.' });
       return;
     }
     
     // --- VALIDAÇÃO PCKPERSONAL (AGORA USADO POR 'PERSONALIZADO') ---
     if (isAutomaticScheduling) {
-        if (!totalClasses || !duration || !time || days.length === 0 || !price || !pckEndDate) {
-            toast({ variant: 'destructive', title: 'Campos do Pacote Personalizado obrigatórios', description: 'Por favor, preencha todos os detalhes do agendamento (aulas, duração, horário, dias, preço e validade).' });
+        if (!totalClasses || !duration || !time || days.length === 0 || !price || !pckEndDate || !pckStartDate) {
+            toast({ variant: 'destructive', title: 'Campos do Pacote Personalizado obrigatórios', description: 'Por favor, preencha todos os detalhes do agendamento (aulas, duração, horário, dias, preço, data de início e validade).' });
             setIsSubmittingPackage(false);
             return;
         }
     }
     // --- VALIDAÇÃO GERAL ---
-    else if (!endDate) {
-        toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione a data de validade.' });
+    else if (!endDate || !purchaseDate) {
+        toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione a data de início e de validade.' });
         return;
     }
 
@@ -531,11 +537,13 @@ const PreferenciasTab = ({ dashboardData }) => {
     let priceToRegister = 0;
     let classesToRegister = 0;
     let finalEndDate = endDate;
+    let finalPurchaseDate = purchaseDate; // Usado para data_início/purchase_date
 
     if (isAutomaticScheduling) {
         priceToRegister = parseFloat(price);
         classesToRegister = parseInt(totalClasses, 10);
         finalEndDate = pckEndDate;
+        finalPurchaseDate = pckStartDate; // Usa a data de início do bloco personalizado
     } else {
         classesToRegister = selectedPackageData.number_of_classes;
         priceToRegister = selectedPackageData.price;
@@ -546,7 +554,7 @@ const PreferenciasTab = ({ dashboardData }) => {
       user_id: selectedStudentId,
       package_id: selectedPackageData.id,
       amount_paid: priceToRegister,
-      purchase_date: format(purchaseDate, 'yyyy-MM-dd'),
+      purchase_date: format(finalPurchaseDate, 'yyyy-MM-dd'),
       end_date: format(finalEndDate, 'yyyy-MM-dd'),
     });
 
@@ -583,7 +591,7 @@ const PreferenciasTab = ({ dashboardData }) => {
 
             const appointmentInserts = [];
             const slotIdsToFill = new Set();
-            let currentDate = new Date(purchaseDate); 
+            let currentDate = new Date(finalPurchaseDate); 
             let classesScheduled = 0;
 
             while (classesScheduled < totalClassesToSchedule && currentDate <= finalEndDate) {
@@ -674,7 +682,7 @@ const PreferenciasTab = ({ dashboardData }) => {
       setObservation('');
       setPurchaseDate(new Date());
       setEndDate(addMonths(new Date(), 1));
-      setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0].substring(0, 5), days: [], price: '', endDate: addMonths(new Date(), 1) });
+      setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0].substring(0, 5), days: [], price: '', startDate: new Date(), endDate: addMonths(new Date(), 1) });
       
       if (onUpdate) onUpdate();
     }
@@ -749,30 +757,32 @@ const PreferenciasTab = ({ dashboardData }) => {
               </SelectContent>
             </Select>
 
-            {/* Data de Início (Purchase Date) */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !purchaseDate && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {purchaseDate ? format(purchaseDate, "PPP", { locale: ptBR }) : <span>Data de Início</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={purchaseDate}
-                  onSelect={setPurchaseDate}
-                  initialFocus
-                  locale={ptBR}
-                />
-              </PopoverContent>
-            </Popover>
+            {/* Data de Início (Purchase Date) - Visível apenas para pacotes NÃO automáticos */}
+            {!isAutomaticScheduling && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !purchaseDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {purchaseDate ? format(purchaseDate, "PPP", { locale: ptBR }) : <span>Data de Início</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={purchaseDate}
+                      onSelect={setPurchaseDate}
+                      initialFocus
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+            )}
             
             {/* Data de Fim (End Date) - OCULTA se for Pacote Personalizado */}
             {!isAutomaticScheduling && (
@@ -846,6 +856,31 @@ const PreferenciasTab = ({ dashboardData }) => {
                   
                   {/* Duração e Horário */}
                   <div className="grid grid-cols-2 gap-4">
+                      {/* Data de Início do Personalizado */}
+                      <div className="space-y-2">
+                          <Label htmlFor="pck-start-date">Data de Início</Label>
+                          <Popover>
+                              <PopoverTrigger asChild>
+                                  <Button
+                                      variant={"outline"}
+                                      className={cn("w-full justify-start text-left font-normal")}
+                                  >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {format(pckStartDate, "PPP", { locale: ptBR })}
+                                  </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                  <Calendar
+                                      mode="single"
+                                      selected={pckStartDate}
+                                      onSelect={(date) => handlePckPersonalChange('startDate', date)}
+                                      initialFocus
+                                      locale={ptBR}
+                                  />
+                              </PopoverContent>
+                          </Popover>
+                      </div>
+                      {/* Duração da Aula */}
                       <div className="space-y-2">
                           <Label htmlFor="pck-duration">Duração (Minutos)</Label>
                           <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
@@ -859,6 +894,10 @@ const PreferenciasTab = ({ dashboardData }) => {
                               </SelectContent>
                           </Select>
                       </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                      {/* Horário de Início */}
                       <div className="space-y-2">
                           <Label htmlFor="pck-time">Horário de Início Fixo</Label>
                           <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
@@ -871,6 +910,30 @@ const PreferenciasTab = ({ dashboardData }) => {
                                   ))}
                               </SelectContent>
                           </Select>
+                      </div>
+                      {/* Validade do Pacote */}
+                      <div className="space-y-2">
+                          <Label>Validade (Término)</Label>
+                          <Popover>
+                              <PopoverTrigger asChild>
+                                  <Button
+                                      variant={"outline"}
+                                      className={cn("w-full justify-start text-left font-normal")}
+                                  >
+                                      <CalendarIcon className="mr-2 h-4 w-4" />
+                                      {format(pckEndDate, "PPP", { locale: ptBR })}
+                                  </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                  <Calendar
+                                      mode="single"
+                                      selected={pckEndDate}
+                                      onSelect={(date) => handlePckPersonalChange('endDate', date)}
+                                      initialFocus
+                                      locale={ptBR}
+                                  />
+                              </PopoverContent>
+                          </Popover>
                       </div>
                   </div>
 
@@ -891,31 +954,6 @@ const PreferenciasTab = ({ dashboardData }) => {
                           ))}
                       </div>
                       {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
-                  </div>
-
-                  {/* Validade do Pacote */}
-                  <div className="space-y-2">
-                      <Label>Validade (Término)</Label>
-                      <Popover>
-                          <PopoverTrigger asChild>
-                              <Button
-                                  variant={"outline"}
-                                  className={cn("w-full justify-start text-left font-normal")}
-                              >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {format(pckEndDate, "PPP", { locale: ptBR })}
-                              </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                  mode="single"
-                                  selected={pckEndDate}
-                                  onSelect={(date) => handlePckPersonalChange('endDate', date)}
-                                  initialFocus
-                                  locale={ptBR}
-                              />
-                          </PopoverContent>
-                      </Popover>
                   </div>
               </motion.div>
           ) : null}
