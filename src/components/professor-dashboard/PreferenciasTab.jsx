@@ -1,4 +1,4 @@
-// Archivo: src/components/professor-dashboard/PreferenciasTab.jsx
+// Arquivo: src/components/professor-dashboard/PreferenciasTab.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -593,6 +593,7 @@ const PreferenciasTab = ({ dashboardData }) => {
             let currentDate = new Date(finalPurchaseDate); 
             let classesScheduled = 0;
 
+            // INÍCIO DO LOOP DE AGENDAMENTO CORRIGIDO
             while (classesScheduled < totalClassesToSchedule && currentDate <= finalEndDate) {
                 const dayOfWeek = getDay(currentDate);
 
@@ -636,8 +637,11 @@ const PreferenciasTab = ({ dashboardData }) => {
                         classesScheduled++;
                     }
                 }
+                
+                // AVANÇA PARA O PRÓXIMO DIA
                 currentDate = add(currentDate, { days: 1 });
             }
+            // FIM DO LOOP DE AGENDAMENTO CORRIGIDO
 
             if (appointmentInserts.length > 0) {
                 const { error: insertError } = await supabase.from('appointments').insert(appointmentInserts);
@@ -672,7 +676,7 @@ const PreferenciasTab = ({ dashboardData }) => {
     if (logError) {
       toast({ variant: 'destructive', title: 'Erro ao registrar', description: `Pacote atribuído, mas falha ao registrar no histórico: ${logError.message}` });
     } else {
-      toast({ variant: 'default', title: 'Pacote incluído!', description: `Pacote "${selectedPackageData.name}" (${classesToRegister} aulas) foi incluído para ${selectedStudent.full_name}.` });
+      toast({ variant: 'default', title: 'Pacote incluído!', description: `Paquete "${selectedPackageData.name}" (${classesToRegister} aulas) foi incluído para ${selectedStudent.full_name}.` });
       
       // Limpar estados
       setSelectedStudentId(null);
