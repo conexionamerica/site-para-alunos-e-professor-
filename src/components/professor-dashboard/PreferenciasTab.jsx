@@ -1,4 +1,4 @@
-// Arquivo: src/components/professor-dashboard/PreferenciasTab.jsx
+// Archivo: src/components/professor-dashboard/PreferenciasTab.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -589,16 +589,25 @@ const PreferenciasTab = ({ dashboardData }) => {
             if (slotsError) throw slotsError;
 
             const appointmentInserts = [];
-            const slotIdsToFill = new Set();
             let currentDate = new Date(finalPurchaseDate); 
             let classesScheduled = 0;
+            
+            // NEW: Fetch existing appointments to prevent dynamic conflicts (safer but still relies on RLS)
+            const { data: existingAppointments, error: aptError } = await supabase
+                .from('appointments')
+                .select('class_datetime, duration_minutes')
+                .eq('professor_id', professorId)
+                .gte('class_datetime', format(new Date(), 'yyyy-MM-dd'))
+                .in('status', ['scheduled', 'rescheduled']);
+            
+            if (aptError) console.error("Error checking for appointments:", aptError);
+
 
             // INÍCIO DO LOOP DE AGENDAMENTO CORRIGIDO
             while (classesScheduled < totalClassesToSchedule && currentDate <= finalEndDate) {
                 const dayOfWeek = getDay(currentDate);
 
                 if (days.includes(dayOfWeek)) {
-                    // CORREÇÃO: Usar o formato HH:mm para parsing
                     const startTime = time; 
                     const startTimeFull = `${startTime}:00`; 
                     const startTimeObj = parse(startTimeFull, 'HH:mm:ss', currentDate);
@@ -608,14 +617,32 @@ const PreferenciasTab = ({ dashboardData }) => {
                     
                     for (let i = 0; i < slotsPerClass; i++) {
                         const slotTime = format(add(startTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
+                        
                         const matchingSlot = allSlots.find(s => 
                             s.day_of_week === dayOfWeek && s.start_time === slotTime
                         );
+                        
+                        // Check 1: Slot must exist and be 'active' in general preferences
+                        if (!matchingSlot || matchingSlot.status !== 'active') {
+                             canBook = false;
+                             break;
+                        }
+                        
+                        // Check 2: Dynamic conflict (check against existing appointments)
+                        const slotDateTimeKey = format(add(currentDate, { hours: startTimeObj.getHours(), minutes: startTimeObj.getMinutes() + i * 15 }), 'yyyy-MM-dd HH:mm:ss');
 
-                        if (!matchingSlot || matchingSlot.status === 'filled') {
+                        if ((existingAppointments || []).some(apt => {
+                            const aptStart = parseISO(apt.class_datetime);
+                            const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
+                            const newSlotStart = add(currentDate, { hours: startTimeObj.getHours(), minutes: startTimeObj.getMinutes() + i * 15 });
+                            
+                            // Check if new slot overlaps with existing appointment
+                            return newSlotStart >= aptStart && newSlotStart < aptEnd;
+                        })) {
                             canBook = false;
                             break;
                         }
+                        
                         requiredSlots.push(matchingSlot);
                     }
 
@@ -632,8 +659,7 @@ const PreferenciasTab = ({ dashboardData }) => {
                             status: 'scheduled',
                             duration_minutes: classDurationMinutes,
                         });
-
-                        requiredSlots.forEach(slot => slotIdsToFill.add(slot.id));
+                        
                         classesScheduled++;
                     }
                 }
@@ -644,15 +670,13 @@ const PreferenciasTab = ({ dashboardData }) => {
             // FIM DO LOOP DE AGENDAMENTO CORRIGIDO
 
             if (appointmentInserts.length > 0) {
+                // Insere as aulas agendadas (sem lock permanente nos slots)
                 const { error: insertError } = await supabase.from('appointments').insert(appointmentInserts);
-                if (insertError) throw new Error(`Falha ao criar aulas agendadas: ${insertError.message}`);
-
-                if (slotIdsToFill.size > 0) {
-                    const { error: updateSlotsError } = await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToFill));
-                    if (updateSlotsError) throw new Error(`Falha ao bloquear horários: ${updateSlotsError.message}`);
-                }
+                if (insertError) throw new Error(`Falha ao criar aulas agendadas. Se houver conflitos de horário, parte do agendamento pode ter sido ignorada. Detalhes: ${insertError.message}`);
                 
-                toast({ variant: 'info', title: 'Agendamento Automático!', description: `${classesScheduled} aulas foram agendadas e os horários bloqueados.` });
+                // Não é necessário o update de class_slots.status para filled/active
+                
+                toast({ variant: 'info', title: 'Agendamento Automático!', description: `${appointmentInserts.length} aulas foram agendadas.` });
             } else {
                  toast({ variant: 'warning', title: 'Agendamento Falhou', description: 'Nenhum horário disponível encontrado dentro do período para este pacote.' });
             }
