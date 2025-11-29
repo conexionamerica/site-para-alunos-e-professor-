@@ -581,6 +581,7 @@ const PreferenciasTab = ({ dashboardData }) => {
             const slotsPerClass = Math.ceil(classDurationMinutes / 15);
             const studentId = selectedStudentId;
 
+            // Fetch all active class slots for the professor (used for ID lookup)
             const { data: allSlots, error: slotsError } = await supabase
                 .from('class_slots')
                 .select('id, day_of_week, start_time, status')
@@ -592,7 +593,7 @@ const PreferenciasTab = ({ dashboardData }) => {
             let currentDate = new Date(finalPurchaseDate); 
             let classesScheduled = 0;
             
-            // NEW: Fetch existing appointments to prevent dynamic conflicts (safer but still relies on RLS)
+            // Fetch existing appointments to prevent dynamic conflicts
             const { data: existingAppointments, error: aptError } = await supabase
                 .from('appointments')
                 .select('class_datetime, duration_minutes')
@@ -612,50 +613,53 @@ const PreferenciasTab = ({ dashboardData }) => {
                     const startTimeFull = `${startTime}:00`; 
                     const startTimeObj = parse(startTimeFull, 'HH:mm:ss', currentDate);
 
-                    const requiredSlots = [];
                     let canBook = true;
                     
                     for (let i = 0; i < slotsPerClass; i++) {
                         const slotTime = format(add(startTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
                         
-                        const matchingSlot = allSlots.find(s => 
+                        // Check 1: Slot must exist in the professor's configured general slots (just for ID reference)
+                        const matchingSlotInProfPrefs = allSlots.find(s => 
                             s.day_of_week === dayOfWeek && s.start_time === slotTime
                         );
-                        
-                        // Check 1: Slot must exist and be 'active' in general preferences
-                        if (!matchingSlot || matchingSlot.status !== 'active') {
-                             canBook = false;
-                             break;
-                        }
-                        
-                        // Check 2: Dynamic conflict (check against existing appointments)
-                        const slotDateTimeKey = format(add(currentDate, { hours: startTimeObj.getHours(), minutes: startTimeObj.getMinutes() + i * 15 }), 'yyyy-MM-dd HH:mm:ss');
 
+                        // If the slot is not defined in the professor's preferences AT ALL, we cannot book it.
+                        // For custom packages, we allow booking even if status is inactive, but it MUST exist.
+                        if (!matchingSlotInProfPrefs) {
+                            canBook = false;
+                            break;
+                        }
+
+                        // Check 2: Dynamic conflict against actual booked appointments
+                        const newSlotStart = add(currentDate, { hours: startTimeObj.getHours(), minutes: startTimeObj.getMinutes() + i * 15 });
+                        
                         if ((existingAppointments || []).some(apt => {
                             const aptStart = parseISO(apt.class_datetime);
                             const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
-                            const newSlotStart = add(currentDate, { hours: startTimeObj.getHours(), minutes: startTimeObj.getMinutes() + i * 15 });
                             
-                            // Check if new slot overlaps with existing appointment
+                            // Check if new slot time overlaps with existing appointment
                             return newSlotStart >= aptStart && newSlotStart < aptEnd;
                         })) {
                             canBook = false;
                             break;
                         }
-                        
-                        requiredSlots.push(matchingSlot);
                     }
 
                     if (canBook) {
-                        const primarySlot = requiredSlots[0];
                         const [hour, minute] = startTime.split(':').map(Number);
                         const classDateTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour, minute, 0); 
+                        
+                        // Find the primary slot ID for the INSERT:
+                        const primarySlot = allSlots.find(s => 
+                            s.day_of_week === dayOfWeek && s.start_time === startTimeFull
+                        );
+
 
                         appointmentInserts.push({
                             student_id: studentId,
                             professor_id: professorId,
                             class_datetime: classDateTime.toISOString(),
-                            class_slot_id: primarySlot.id,
+                            class_slot_id: primarySlot.id, // Use the starting slot ID
                             status: 'scheduled',
                             duration_minutes: classDurationMinutes,
                         });
@@ -673,8 +677,6 @@ const PreferenciasTab = ({ dashboardData }) => {
                 // Insere as aulas agendadas (sem lock permanente nos slots)
                 const { error: insertError } = await supabase.from('appointments').insert(appointmentInserts);
                 if (insertError) throw new Error(`Falha ao criar aulas agendadas. Se houver conflitos de horário, parte do agendamento pode ter sido ignorada. Detalhes: ${insertError.message}`);
-                
-                // Não é necessário o update de class_slots.status para filled/active
                 
                 toast({ variant: 'info', title: 'Agendamento Automático!', description: `${appointmentInserts.length} aulas foram agendadas.` });
             } else {
@@ -700,7 +702,7 @@ const PreferenciasTab = ({ dashboardData }) => {
     if (logError) {
       toast({ variant: 'destructive', title: 'Erro ao registrar', description: `Pacote atribuído, mas falha ao registrar no histórico: ${logError.message}` });
     } else {
-      toast({ variant: 'default', title: 'Pacote incluído!', description: `Paquete "${selectedPackageData.name}" (${classesToRegister} aulas) foi incluído para ${selectedStudent.full_name}.` });
+      toast({ variant: 'default', title: 'Paquete incluído!', description: `Paquete "${selectedPackageData.name}" (${classesToRegister} aulas) fue incluido para ${selectedStudent.full_name}.` });
       
       // Limpar estados
       setSelectedStudentId(null);
@@ -742,15 +744,15 @@ const PreferenciasTab = ({ dashboardData }) => {
           <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" role="combobox" aria-expanded={popoverOpen} className="w-full justify-between">
-                {selectedStudent ? selectedStudent.full_name : "Selecione um aluno..."}
+                {selectedStudent ? selectedStudent.full_name : "Selecione um alumno..."}
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
               <Command>
-                <CommandInput placeholder="Buscar aluno..." />
+                <CommandInput placeholder="Buscar alumno..." />
                 <CommandList>
-                  <CommandEmpty>Nenhum aluno encontrado.</CommandEmpty>
+                  <CommandEmpty>Nenhum alumno encontrado.</CommandEmpty>
                   <CommandGroup>
                     {/* CORREÇÃO: Usa students extraído */}
                     {students.map((student) => (
