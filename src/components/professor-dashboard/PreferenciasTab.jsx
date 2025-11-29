@@ -1,4 +1,4 @@
-// Arquivo: src/components/professor-dashboard/PreferenciasTab.jsx
+// Archivo: src/components/professor-dashboard/PreferenciasTab.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -506,7 +506,6 @@ const PreferenciasTab = ({ dashboardData }) => {
     
     // --- VALIDAÇÃO PCKPERSONAL (AGORA USADO POR 'PERSONALIZADO') ---
     if (isAutomaticScheduling) {
-        // CORREÇÃO: Adicionada validação para pckStartDate
         if (!totalClasses || !duration || !time || days.length === 0 || !price || !pckEndDate || !pckStartDate) {
             toast({ variant: 'destructive', title: 'Campos do Pacote Personalizado obrigatórios', description: 'Por favor, preencha todos os detalhes do agendamento (aulas, duração, horário, dias, preço, data de início e validade).' });
             setIsSubmittingPackage(false);
@@ -592,9 +591,6 @@ const PreferenciasTab = ({ dashboardData }) => {
             const appointmentInserts = [];
             const slotIdsToFill = new Set();
             let currentDate = new Date(finalPurchaseDate); 
-
-            // Se a data de início for hoje, a primeira aula será agendada para hoje.
-            // Se for no passado, começamos a agendar a partir da próxima ocorrência do dia da semana.
             let classesScheduled = 0;
 
             while (classesScheduled < totalClassesToSchedule && currentDate <= finalEndDate) {
