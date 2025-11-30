@@ -299,7 +299,7 @@ const ProfessorDashboardPage = () => {
                 <header className="flex flex-col bg-white shadow-md">
                     {/* Linha superior: Logo e Dropdown - Fundo Branco e Conteúdo Centralizado */}
                     <div className="w-full flex justify-center items-center h-16 bg-white border-b border-slate-200">
-                        <div className="w-full max-w-7xl px-4 lg:px-8 flex justify-between items-center">
+                        <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 flex justify-between items-center"> {/* Adicionado mx-auto aqui */}
                             <Logo /> 
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -338,7 +338,6 @@ const ProfessorDashboardPage = () => {
 
                     {/* Linha inferior: TabsList para Navegação Desktop - Fundo Branco e Alinhamento */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
-                        {/* Removida a div w-full flex justify-center que duplicava a centralização */}
                         <div className="w-full max-w-7xl mx-auto px-4 lg:px-8">
                             <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
                                 <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
@@ -395,8 +394,9 @@ const ProfessorDashboardPage = () => {
 
                 </header>
                 
-                {/* Conteúdo da main - Adicionada a centralização para o container wrapper */}
-                <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center">
+                {/* Conteúdo da main */}
+                {/* Mantive o w-full max-w-7xl, mas agora ele está dentro da main centralizada pelo 'flex justify-center' */}
+                <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center"> 
                     <div className="w-full max-w-7xl px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
