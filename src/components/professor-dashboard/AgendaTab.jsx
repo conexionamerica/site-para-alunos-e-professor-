@@ -214,12 +214,12 @@ const AgendaTab = ({ dashboardData }) => {
 
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-sm space-y-6">
-            <h2 className="text-2xl font-bold text-slate-800">Minha Agenda</h2>
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm space-y-4 sm:space-y-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Minha Agenda</h2>
             
             {/* FILTROS DE DIA DA SEMANA */}
             <div className="flex flex-wrap gap-2 items-center border-b pb-4">
-                <Filter className="h-5 w-5 text-sky-600 mr-2" />
+                <Filter className="h-5 w-5 text-sky-600 mr-2 flex-shrink-0" />
                 {Object.entries(daysOfWeekMap).map(([index, day]) => {
                     const dayIndex = parseInt(index);
                     
@@ -234,7 +234,7 @@ const AgendaTab = ({ dashboardData }) => {
                             variant={isActive ? 'default' : 'outline'}
                             onClick={() => handleDayFilter(dayIndex)}
                             className={cn(
-                                "h-9 px-4 py-2 transition-colors",
+                                "h-8 sm:h-9 px-3 sm:px-4 py-1.5 sm:py-2 transition-colors text-xs sm:text-sm",
                                 isActive ? "bg-sky-600 hover:bg-sky-700 text-white" : "text-slate-700 border-slate-300 hover:bg-slate-100"
                             )}
                         >
@@ -243,15 +243,15 @@ const AgendaTab = ({ dashboardData }) => {
                     );
                 })}
                  {selectedDayOfWeek !== null && quickFilter === null && (
-                    <Button variant="ghost" size="icon" onClick={() => handleDayFilter(null)} className="ml-2">
+                    <Button variant="ghost" size="icon" onClick={() => handleDayFilter(null)} className="ml-0 sm:ml-2">
                         <X className="h-5 w-5 text-red-500" />
                     </Button>
                 )}
             </div>
 
             {/* BARRA DE NAVEGAÇÃO / FILTROS RÁPIDOS */}
-            <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border">
-                <div className="flex items-center space-x-3">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 p-3 rounded-lg border space-y-3 sm:space-y-0">
+                <div className="flex flex-wrap items-center space-x-3 w-full sm:w-auto">
                     
                     {/* BOTÃO DE CALENDÁRIO */}
                     <Popover>
@@ -302,15 +302,17 @@ const AgendaTab = ({ dashboardData }) => {
                         onClick={() => handleQuickFilter('ALL')}
                         className={cn(quickFilter === 'ALL' && "bg-sky-600 hover:bg-sky-700")}
                     >
-                        Todas as Aulas
+                        Todas
                     </Button>
                 </div>
                 
                 {/* TÍTULO CENTRALIZADO */}
-                <span className="font-semibold text-sky-700 ml-4">{displayDate}</span>
+                <span className="font-semibold text-sky-700 w-full sm:w-auto mt-2 sm:mt-0 text-center sm:text-left">
+                    {displayDate}
+                </span>
                 
                 {/* NAVEGAÇÃO SEMANAL (Aparece apenas se o filtro semanal estiver ativo) */}
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
                     {showWeekNavigation && (
                         <>
                             <Button onClick={() => navigateWeek('prev')} variant="outline" size="sm">Semana Anterior</Button>
