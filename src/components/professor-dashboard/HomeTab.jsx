@@ -183,8 +183,8 @@ const HomeTab = ({ dashboardData }) => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8">
+      <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
         <h3 className="font-bold mb-4">Solicitações de Agendamento ({solicitudes.length})</h3>
         {loading ? <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin" /></div> :
           solicitudes.length > 0 ? (
@@ -198,7 +198,7 @@ const HomeTab = ({ dashboardData }) => {
                       {renderHorarios(req.horarios_propuestos)}
                     </div>
                   </div>
-                  <div className="flex gap-2 self-end sm:self-center">
+                  <div className="flex gap-2 mt-3 sm:mt-0 self-end sm:self-center">
                     <Button
                       size="sm"
                       variant="outline"
@@ -228,7 +228,7 @@ const HomeTab = ({ dashboardData }) => {
               <p className="text-sm">Quando um aluno solicitar uma aula, aparecerá aqui.</p>
             </div>}
       </div>
-      <div className="space-y-8">
+      <div className="space-y-4 lg:space-y-8">
         <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
           <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
           {/* CORREÇÃO: Estrutura do operador ternário para evitar o erro de sintaxe JSX/ESBuild */}
