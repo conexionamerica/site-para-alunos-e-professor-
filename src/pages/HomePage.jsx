@@ -277,7 +277,7 @@ const HomePage = () => {
       return;
     }
     if (classStats.pending > 0) {
-      toast({ variant: 'info', title: 'Solicitação Pendente', description: 'Você já tem um pedido de agendamento em análise.' });
+      toast({ variant: 'info', title: 'Solicitação Pendente', description: 'Você já tem um pedido de agendamento em análise. Aguarde a aprovação do professor.' });
       return;
     }
 
@@ -389,8 +389,8 @@ const HomePage = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <div>
-        <div className="flex justify-between items-start mb-6">
-          <div className='flex-1'>
+        <div className="flex flex-col sm:flex-row justify-between items-start mb-6">
+          <div className='flex-1 mb-4 sm:mb-0'>
             <h1 className="text-2xl font-bold text-slate-800">Painel do Aluno</h1>
             <p className="text-lg text-slate-600">Bem-vindo(a) de volta, <span className="font-semibold text-sky-600">{profile?.full_name || user?.email}</span>!</p>
           </div>
@@ -399,8 +399,14 @@ const HomePage = () => {
             <NotificationsWidget />
           </div>
         </div>
+        
         <Tabs defaultValue="agenda" className="w-full mt-8">
-          <TabsList className="grid w-full grid-cols-3 bg-slate-200"><TabsTrigger value="faturas"><FileText className="mr-2 h-4 w-4" />Minhas Faturas</TabsTrigger><TabsTrigger value="agenda"><Package className="mr-2 h-4 w-4" />Agenda Aqui</TabsTrigger><TabsTrigger value="aulas"><BookOpen className="mr-2 h-4 w-4" />Minhas Aulas</TabsTrigger></TabsList>
+          <TabsList className="grid w-full grid-cols-3 bg-slate-200">
+            <TabsTrigger value="faturas"><FileText className="mr-2 h-4 w-4 hidden sm:block" />Faturas</TabsTrigger>
+            <TabsTrigger value="agenda"><Package className="mr-2 h-4 w-4 hidden sm:block" />Agenda</TabsTrigger>
+            <TabsTrigger value="aulas"><BookOpen className="mr-2 h-4 w-4 hidden sm:block" />Aulas</TabsTrigger>
+          </TabsList>
+
           <TabsContent value="faturas" className="mt-4 space-y-6">
             <Alert className="border-sky-400 bg-sky-50 text-sky-900 [&>svg]:text-sky-600">
               <Sparkles className="h-4 w-4" />
