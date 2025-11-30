@@ -13,13 +13,12 @@ import AgendaTab from '@/components/professor-dashboard/AgendaTab';
 import AlunosTab from '@/components/professor-dashboard/AlunosTab';
 import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
-// import AdmTab from '@/components/professor-dashboard/AdmTab'; // ELIMINADO: Import de AdmTab
 import { useToast } from '@/components/ui/use-toast'; 
 import { Link } from 'react-router-dom'; 
 
-// Función de búsqueda de datos
+// Função de busca de dados
 const fetchProfessorDashboardData = async (professorId) => {
-// ... (código de fetchProfessorDashboardData sin cambios)
+// ... (código de fetchProfessorDashboardData sem alterações)
     const today = new Date().toISOString();
     
     // 1. Fetch del perfil del profesor (solo nombre)
@@ -202,7 +201,6 @@ const ProfessorDashboardPage = () => {
         { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab }, 
         { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab }, 
         { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
-        // ELIMINADO: { id: 'adm', icon: Shield, label: 'Adm', component: AdmTab }, 
     ];
 
     // Componente Sidebar (Layout Mobile/Toggle)
@@ -340,28 +338,27 @@ const ProfessorDashboardPage = () => {
 
                     {/* Linha inferior: TabsList para Navegação Desktop - Fundo Branco e Alinhamento */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
-                        <div className="w-full flex justify-center">
-                            <div className="w-full max-w-7xl px-4 lg:px-8">
-                                <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
-                                    <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
-                                        {navItems.map(item => (
-                                            <TabsTrigger
-                                                key={item.id}
-                                                value={item.id}
-                                                onClick={() => setActiveTab(item.id)}
-                                                className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-none transition-all duration-200 border-b-2 border-transparent 
-                                                    ${activeTab === item.id
-                                                        ? 'text-sky-600 border-sky-600 font-semibold' 
-                                                        : 'text-gray-600 hover:text-gray-800'
-                                                    }`}
-                                            >
-                                                <item.icon className="h-5 w-5 mr-2" />
-                                                {item.label}
-                                            </TabsTrigger>
-                                        ))}
-                                    </TabsList>
-                                </Tabs>
-                            </div>
+                        {/* Removida a div w-full flex justify-center que duplicava a centralização */}
+                        <div className="w-full max-w-7xl mx-auto px-4 lg:px-8">
+                            <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
+                                <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
+                                    {navItems.map(item => (
+                                        <TabsTrigger
+                                            key={item.id}
+                                            value={item.id}
+                                            onClick={() => setActiveTab(item.id)}
+                                            className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-none transition-all duration-200 border-b-2 border-transparent 
+                                                ${activeTab === item.id
+                                                    ? 'text-sky-600 border-sky-600 font-semibold' 
+                                                    : 'text-gray-600 hover:text-gray-800'
+                                                }`}
+                                        >
+                                            <item.icon className="h-5 w-5 mr-2" />
+                                            {item.label}
+                                        </TabsTrigger>
+                                    ))}
+                                </TabsList>
+                            </Tabs>
                         </div>
                     </div>
                      {/* Header Mobile */}
@@ -398,7 +395,7 @@ const ProfessorDashboardPage = () => {
 
                 </header>
                 
-                {/* Conteúdo da main - Utilizamos um wrapper centralizado com limite de largura */}
+                {/* Conteúdo da main - Adicionada a centralização para o container wrapper */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center">
                     <div className="w-full max-w-7xl px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
