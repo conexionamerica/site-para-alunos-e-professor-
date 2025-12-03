@@ -1,7 +1,7 @@
 // Arquivo: src/pages/ProfessorDashboardPage.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import AlunosTab from '@/components/professor-dashboard/AlunosTab';
 import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import { useToast } from '@/components/ui/use-toast'; 
+import { Link } from 'react-router-dom'; 
 
 // Função de busca de dados
 const fetchProfessorDashboardData = async (professorId) => {
@@ -399,9 +400,9 @@ const ProfessorDashboardPage = () => {
 
                 </header>
                 
-                {/* Conteúdo da main */}
-                <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center"> 
-                    <div className="w-full max-w-7xl px-4 lg:px-8 py-4 lg:py-8 h-full"> 
+                {/* Conteúdo da main (CORREÇÃO DE LAYOUT) */}
+                <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center w-full"> 
+                    <div className="w-full max-w-7xl px-4 lg:px-8 py-4 lg:py-8"> 
                         <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
                             {navItems.map(item => (
