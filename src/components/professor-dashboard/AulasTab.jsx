@@ -1,313 +1,438 @@
+// Archivo: src/components/professor-dashboard/AulasTab.jsx
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '../../lib/customSupabaseClient';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '../ui/table';
-import { Button } from '../ui/button';
-import { Calendar } from '../ui/calendar';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-    DialogFooter,
-} from '../ui/dialog';
-import { format, parseISO, add, getDay, parse, isAfter } from 'date-fns';
+import { supabase } from '@/lib/customSupabaseClient';
+import { useToast } from '@/components/ui/use-toast';
+import { format, parseISO, parse, isValid, getDay, add, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2 } from 'lucide-react';
-import { useToast } from '../ui/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MoreVertical, Loader2, Star, Calendar, Clock, RotateCcw, UserX, Calendar as CalendarIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as UICalendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from '@/lib/utils';
 
-// Array de todos os horários possíveis (intervalos de 15 minutos)
-const ALL_TIMES = [];
-for (let h = 0; h <= 23; h++) {
-    for (let m = 0; m < 60; m += 15) {
-        ALL_TIMES.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-    }
-}
 
-// =============================================================================
-// Componente RescheduleDialog (onde a correção foi aplicada)
-// =============================================================================
-const RescheduleDialog = ({ appointment, onRescheduleSuccess }) => {
+const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
+  const totalMinutes = 7 * 60 + i * 15;
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+});
+
+const StarRating = ({ rating, setRating }) => {
+  return (
+    <div className="flex items-center">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          key={star}
+          className={`h-6 w-6 cursor-pointer ${rating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+          onClick={() => setRating && setRating(star)}
+        />
+      ))}
+    </div>
+  );
+};
+
+
+const FeedbackDialog = ({ appointment, isOpen, onClose, onFeedbackSent }) => {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [ratings, setRatings] = useState({
+    fala: 0, leitura: 0, escrita: 0, compreensao: 0, audicao: 0, gramatica: 0, pronuncia: 0, vocabulario: 0,
+  });
+  const [comment, setComment] = useState('');
+
+  const handleSetRating = (category, value) => setRatings(prev => ({ ...prev, [category]: value }));
+  
+  const resetForm = () => {
+      setRatings({ fala: 0, leitura: 0, escrita: 0, compreensao: 0, audicao: 0, gramatica: 0, pronuncia: 0, vocabulario: 0 });
+      setComment('');
+  }
+
+  const handleSubmit = async () => {
+      if(Object.values(ratings).some(r => r === 0)) {
+          toast({ variant: 'destructive', title: 'Avaliação incompleta', description: 'Por favor, preencha todas as estrelas.' });
+          return;
+      }
+      setIsSubmitting(true);
+      try {
+          const { data: feedbackData, error: feedbackError } = await supabase
+              .from('class_feedback').insert([{
+                  appointment_id: appointment.id,
+                  professor_id: appointment.professor_id,
+                  student_id: appointment.student_id,
+                  comment: comment, ...ratings
+              }]).select().single();
+          if (feedbackError) throw feedbackError;
+
+          const { error: appointmentError } = await supabase
+              .from('appointments').update({ status: 'completed', feedback_id: feedbackData.id }).eq('id', appointment.id);
+          if (appointmentError) throw appointmentError;
+          
+          // DÉBITO: Registrar o débito de -1 aula na assigned_packages_log para consumo do crédito.
+          const { error: debitError } = await supabase.from('assigned_packages_log').insert({
+              professor_id: appointment.professorId, 
+              student_id: appointment.student_id,
+              package_id: appointment.customPackageId, // ID do pacote 'Personalizado'
+              assigned_classes: -1, // Débito de 1 aula
+              status: 'completed',
+              observation: `Débito de aula concluída: ${format(parseISO(appointment.class_datetime), 'dd/MM/yyyy HH:mm')}`
+          });
+          if (debitError) console.error("Error creating debit log:", debitError);
+          
+          const { error: notificationError } = await supabase.from('notifications').insert({
+              user_id: appointment.student_id,
+              type: 'class_feedback',
+              content: { 
+                  message: `Sua aula de ${appointment.student?.spanish_level ? 'Espanhol' : 'Inglês'} foi avaliada.`,
+                  subject: appointment.student?.spanish_level ? 'Espanhol' : 'Inglês',
+                  appointmentId: appointment.id,
+                  ratings: ratings,
+                  comment: comment
+              },
+          });
+          if(notificationError) console.error("Error creating feedback notification:", notificationError);
+          
+          toast({ variant: 'default', title: 'Feedback enviado!', description: 'O aluno foi notificado sobre a avaliação.'});
+          resetForm();
+          onFeedbackSent();
+          onClose();
+
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Erro ao enviar feedback', description: error.message });
+      } finally { setIsSubmitting(false); }
+  };
+
+  if (!appointment) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Avaliar Aluno</DialogTitle>
+          <DialogDescription className="flex items-center gap-4 pt-2">
+            <Avatar>
+                <AvatarImage src={appointment.student?.avatar_url} />
+                <AvatarFallback>{appointment.student?.full_name?.[0]}</AvatarFallback>
+            </Avatar>
+            <div>
+                <p className="font-bold">{appointment.student?.full_name}</p>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <Calendar className="h-3 w-3" /> {format(parseISO(appointment.class_datetime), 'dd/MM/yyyy')}
+                    <Clock className="h-3 w-3" /> {format(parseISO(appointment.class_datetime), 'HH:mm')}
+                </div>
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-4 max-h-[50vh] overflow-y-auto pr-2">
+            {Object.keys(ratings).map(category => (
+                <div key={category} className="flex justify-between items-center">
+                    <p className="capitalize text-sm font-medium">{category.replace('_', ' ')}</p>
+                    <StarRating rating={ratings[category]} setRating={(value) => handleSetRating(category, value)} />
+                </div>
+            ))}
+            <Textarea placeholder="Adicione um comentário sobre o desempenho do Aluno..." value={comment} onChange={(e) => setComment(e.target.value)} className="mt-4" />
+        </div>
+        <DialogFooter>
+            {/* CORREÇÃO: Botão Salvar com estilo azul */}
+            <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-sky-600 hover:bg-sky-700 text-white">
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Salvando...</> : 'Salvar'}
+            </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+
+const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
     const { toast } = useToast();
-    const [open, setOpen] = useState(false);
-    const [selectedDate, setSelectedDate] = useState(null);
-    const [selectedTime, setSelectedTime] = useState(null);
-    const [availableTimes, setAvailableTimes] = useState([]);
-    const [loadingSlots, setLoadingSlots] = useState(false);
+    const [newDate, setNewDate] = useState(null);
+    const [newTime, setNewTime] = useState('');
+    const [observation, setObservation] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // FUNÇÃO CORRIGIDA: Filtra slots baseados na disponibilidade do professor e conflitos
+    // Filtro inicial de 07:00 a 23:30 (todos os horários no intervalo de trabalho)
+    const [availableTimes, setAvailableTimes] = useState(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30')); 
+    const [loadingSlots, setLoadingSlots] = useState(false); 
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false); 
+    
+    const originalStart = appointment?.class_datetime ? parseISO(appointment.class_datetime) : null;
+    const originalEnd = originalStart && appointment.duration_minutes ? format(new Date(originalStart.getTime() + appointment.duration_minutes * 60000), 'HH:mm') : 'N/A';
+    const originalTimeRange = originalStart ? `${format(originalStart, 'HH:mm')} - ${originalEnd}` : 'N/A';
+    
+    
+    // CORREÇÃO DE LÓGICA: Função para buscar slots disponíveis
     const fetchAvailableSlots = useCallback(async (date) => {
-        if (!date || !appointment?.professor_id || !appointment?.duration_minutes) {
-            // Se faltarem dados, exibe horários padrão (mas sem garantias de disponibilidade)
-            setAvailableTimes(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30'));
+        // CORREÇÃO: Usamos appointment.professorId, que é passado pelo componente pai
+        if (!date || !appointment?.professorId || !appointment?.duration_minutes) {
+            setAvailableTimes(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30')); 
             return;
         }
 
         setLoadingSlots(true);
         const dayString = format(date, 'yyyy-MM-dd');
-        // getDay() retorna 0 (Domingo) a 6 (Sábado)
-        const dayOfWeek = getDay(date);
-
-        // 1. Busca slots de preferência ATIVOS do professor para o dia da semana
+        const dayOfWeek = getDay(date); // 0 (Dom) a 6 (Sáb)
+        
+        // 1. Busca slots de preferência ATIVOS do professor
         const { data: preferredSlots, error: slotsError } = await supabase
             .from('class_slots')
             .select('start_time')
-            .eq('professor_id', appointment.professor_id)
+            // CORREÇÃO: Usa professorId da prop estendida
+            .eq('professor_id', appointment.professorId) 
             .eq('day_of_week', dayOfWeek)
             .eq('status', 'active'); // Filtra apenas slots ativos (preferência)
 
         if (slotsError) {
-            console.error('Erro ao buscar slots de preferência:', slotsError);
+            console.error("Error fetching preferred slots:", slotsError);
             setLoadingSlots(false);
+            setAvailableTimes(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30'));
             return;
         }
-
-        // Mapeia para um Set de HH:mm para comparação rápida
+        
+        // Mapeia para HH:mm para comparação rápida
         const preferredTimes = new Set(preferredSlots.map(s => s.start_time.substring(0, 5)));
-
-        // 2. Busca aulas agendadas (e em estados de bloqueio) para o professor no dia
+        
+        // 2. Busca aulas agendadas para o professor no dia selecionado
         const { data: appointmentsForDay, error: aptError } = await supabase
             .from('appointments')
             .select('class_datetime, duration_minutes, id')
-            .eq('professor_id', appointment.professor_id)
-            .in('status', ['scheduled', 'rescheduled', 'pending']) // Considera estes como ocupados
+            // CORREÇÃO: Usa professorId da prop estendida
+            .eq('professor_id', appointment.professorId) 
+            .in('status', ['scheduled', 'rescheduled', 'pending'])
             .gte('class_datetime', `${dayString}T00:00:00Z`)
             .lte('class_datetime', `${dayString}T23:59:59Z`);
 
         if (aptError) {
-            console.error('Erro ao buscar agendamentos para o dia:', aptError);
+            console.error("Error fetching day appointments:", aptError);
             setLoadingSlots(false);
+            setAvailableTimes(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30'));
             return;
         }
 
         const bookedSlots = new Set();
         const classDuration = appointment.duration_minutes;
-        // Slots de 15 minutos necessários para a duração desta aula
         const slotsPerClass = Math.ceil(classDuration / 15);
 
         appointmentsForDay.forEach(apt => {
-            // IGNORE A PRÓPRIA AULA que está sendo reagendada
+            // Ignora a própria aula para reagendamento
             if (apt.id === appointment.id) return;
-
+            
             const startTime = parseISO(apt.class_datetime);
             const aptDuration = apt.duration_minutes || classDuration;
             const occupiedSlotsCount = Math.ceil(aptDuration / 15);
-
-            // Marca TODOS os slots de 15 minutos que a aula ocupará como reservados
+            
             for (let i = 0; i < occupiedSlotsCount; i++) {
-                // Calcula o HH:mm ocupado
-                const occupiedTime = format(add(startTime, { minutes: i * 15 }), 'HH:mm');
+                const occupiedTime = format(new Date(startTime.getTime() + i * 15 * 60000), 'HH:mm');
                 bookedSlots.add(occupiedTime);
             }
         });
-
-        // 3. Combina Preferências e Conflitos para encontrar horários válidos
+        
+        // 3. Combina Preferências e Conflitos
         const newAvailableTimes = ALL_TIMES.filter(time => {
-            // Verifica o limite de horário global (pode ser ajustado)
-            if (time < '07:00' || time > '23:30') return false;
-
+            // Verifica o limite de horário global (07:00 a 23:30)
+            if (time < '07:00' || time > '23:30') return false; 
+            
             const startTimeObj = parse(time, 'HH:mm', date);
             
             // Não permite agendamento no passado
             if (isAfter(new Date(), startTimeObj)) return false;
-
-
+            
             // Verifica se há slots consecutivos livres e preferenciais para a duração total da aula
             for (let i = 0; i < slotsPerClass; i++) {
-                // Calcula o HH:mm do slot de 15 minutos 'i'
-                const requiredSlotTime = format(add(startTimeObj, { minutes: i * 15 }), 'HH:mm');
-
-                // Garante que o slot de término não ultrapasse o limite
-                if (i * 15 >= classDuration) {
-                    // Este break é uma otimização, mas a verificação real está abaixo
-                    break;
-                }
+                const requiredSlotTime = format(add(startTimeObj, { minutes: i * 15 * 60000 }), 'HH:mm');
                 
                 // Se o slot necessário estiver fora do limite (depois de 23:30)
                 if (requiredSlotTime > '23:30') {
                     return false;
                 }
-
-                // VERIFICAÇÃO 1: O slot de 15 minutos deve estar nas preferências ATIVAS do professor.
+                
+                // Se o slot necessário estiver reservado por outra aula
+                if (bookedSlots.has(requiredSlotTime)) { 
+                    return false;
+                }
+                
+                // CORREÇÃO ESSENCIAL: Todos os slots de 15 minutos que a aula OCUPE 
+                // DEVEM estar marcados como 'active' nas preferências do professor para aquele dia.
                 if (!preferredTimes.has(requiredSlotTime)) {
                     return false;
                 }
-
-                // VERIFICAÇÃO 2: O slot de 15 minutos não deve estar reservado por OUTRA aula.
-                if (bookedSlots.has(requiredSlotTime)) {
-                    return false;
-                }
             }
-            // Se o loop terminou, todos os slots necessários para a duração da aula estão:
-            // 1. Dentro das preferências ativas do professor.
-            // 2. Não estão em conflito com outras aulas.
             return true;
         });
 
         setAvailableTimes(newAvailableTimes);
         setLoadingSlots(false);
-    }, [appointment?.professor_id, appointment?.duration_minutes, appointment?.id]);
-
+    }, [appointment?.professorId, appointment?.duration_minutes, appointment?.id]);
+    // FIM DA CORREÇÃO DE LÓGICA
+    
+    // Efeito para recarregar slots quando a data muda
     useEffect(() => {
-        if (open) {
-            // Limpa a seleção ao abrir o diálogo
-            setSelectedDate(null);
-            setSelectedTime(null);
-        }
-    }, [open]);
-
-    useEffect(() => {
-        if (selectedDate) {
-            fetchAvailableSlots(selectedDate);
-            setSelectedTime(null); // Reseta a hora ao mudar o dia
+        if (newDate && isValid(newDate)) {
+            fetchAvailableSlots(newDate);
+            setNewTime(''); 
         } else {
-            setAvailableTimes([]);
+            // Se nenhuma data válida for selecionada, mostra a lista filtrada de 07:00 a 23:30
+            setAvailableTimes(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30')); 
+            setNewTime('');
         }
-    }, [selectedDate, fetchAvailableSlots]);
+    }, [newDate, fetchAvailableSlots]);
 
 
-    const handleReschedule = async () => {
-        if (!selectedDate || !selectedTime) {
-            toast({
-                title: "Erro de Reagendamento",
-                description: "Selecione uma data e um horário para reagendar a aula.",
-                variant: "destructive",
-            });
+    const handleSubmit = async () => {
+        if (!newDate || !newTime) {
+            toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione uma nova data e um novo horário.' });
             return;
         }
 
         setIsSubmitting(true);
+        
         try {
-            // Combina a data selecionada com o horário (HH:mm)
-            const rescheduleDateTimeString = `${format(selectedDate, 'yyyy-MM-dd')}T${selectedTime}:00-03:00`; // Considerando fuso horário -03:00
+            // 1. Constrói o novo datetime
+            const dateStr = format(newDate, 'yyyy-MM-dd');
+            // Usamos .000Z para garantir que o Supabase interprete corretamente
+            const newDateTimeStr = `${dateStr}T${newTime}:00.000Z`; 
+            
+            if (!isValid(parseISO(newDateTimeStr))) {
+                throw new Error("A data e hora selecionadas são inválidas.");
+            }
 
-            const { error } = await supabase
+            // 2. Atualiza a aula existente com a nova data e status 'scheduled'
+            const { error: updateError } = await supabase
                 .from('appointments')
-                .update({
-                    class_datetime: rescheduleDateTimeString,
-                    status: 'rescheduled', // O status pode ser 'rescheduled' ou 'pending_reschedule'
-                    rescheduled_by: 'professor',
+                .update({ 
+                    class_datetime: newDateTimeStr,
+                    status: 'scheduled', 
                 })
                 .eq('id', appointment.id);
 
-            if (error) throw error;
+            if (updateError) throw updateError;
 
-            toast({
-                title: "Sucesso!",
-                description: `Aula reagendada para ${format(parseISO(rescheduleDateTimeString), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}.`,
+            // 3. Adiciona CRÉDITO de +1 aula na assigned_packages_log para anular a aula original
+            const { error: creditError } = await supabase
+                .from('assigned_packages_log')
+                .insert({
+                    professor_id: appointment.professorId, 
+                    student_id: appointment.student_id,
+                    package_id: appointment.customPackageId, 
+                    assigned_classes: 1, // Creditar 1 aula (para compensar a aula original)
+                    status: 'rescheduled_credit',
+                    observation: `Crédito devolvido pela remarcação (Prof.) da aula original em ${format(parseISO(appointment.class_datetime), 'dd/MM/yyyy')}. Novo horário: ${format(newDate, 'dd/MM/yyyy')} ${newTime}. Motivo: ${observation}`
+                });
+
+            if (creditError) console.error("Error creating credit log:", creditError);
+
+            // 4. Notificação para o aluno
+            const { error: notificationError } = await supabase.from('notifications').insert({
+                user_id: appointment.student_id,
+                type: 'class_rescheduled',
+                content: { 
+                    message: `Sua aula foi reagendada pelo professor para ${format(newDate, 'dd/MM/yyyy')} às ${newTime}.`,
+                    newDateTime: newDateTimeStr,
+                    oldDateTime: appointment.class_datetime,
+                },
             });
-            setOpen(false);
-            if (onRescheduleSuccess) {
-                onRescheduleSuccess();
-            }
+            if (notificationError) console.error("Error creating reschedule notification:", notificationError);
+
+
+            toast({ 
+                variant: 'default', 
+                title: 'Aula Reagendada!', 
+                description: `Aula de ${appointment.student.full_name} reagendada para ${format(newDate, 'dd/MM/yyyy')} às ${newTime}.`
+            });
+            onReschedule(); 
+            onClose();
+
         } catch (error) {
-            toast({
-                title: "Erro ao Reagendar",
-                description: error.message || "Não foi possível reagendar a aula. Tente novamente.",
-                variant: "destructive",
-            });
+            toast({ variant: 'destructive', title: 'Erro ao salvar reagendamento', description: error.message });
         } finally {
             setIsSubmitting(false);
         }
     };
-
-    const footerText = useMemo(() => {
-        if (!selectedDate) {
-            return "Selecione uma data no calendário.";
-        }
-        if (loadingSlots) {
-            return "Buscando horários disponíveis...";
-        }
-        if (availableTimes.length === 0) {
-            return "Nenhum horário disponível nas preferências do professor para o dia selecionado.";
-        }
-        if (!selectedTime) {
-            return "Selecione um horário disponível.";
-        }
-        return `Reagendar para ${format(selectedDate, 'dd/MM/yyyy', { locale: ptBR })} às ${selectedTime}`;
-    }, [selectedDate, selectedTime, availableTimes.length, loadingSlots]);
+    
+    if (!appointment) return null;
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 text-xs">
-                    Reagendar
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[480px]">
                 <DialogHeader>
-                    <DialogTitle>Reagendar Aula com {appointment.aluno_nome}</DialogTitle>
-                    <DialogDescription>
-                        Selecione a nova data e horário para a aula de {appointment.subject}.
-                        Duração: {appointment.duration_minutes} minutos.
+                    <DialogTitle>Reagendar Aula</DialogTitle>
+                    <DialogDescription className="pt-2">
+                        <div className="flex items-center gap-4">
+                            <Avatar><AvatarImage src={appointment.student?.avatar_url} /><AvatarFallback>{appointment.student?.full_name?.[0]}</AvatarFallback></Avatar>
+                            <div>
+                                <p className="font-bold text-slate-800">{appointment.student?.full_name}</p>
+                                <div className="flex items-center gap-2 text-xs text-slate-500">
+                                    <Calendar className="h-3 w-3" /> {format(parseISO(appointment.class_datetime), 'dd/MM/yyyy')}
+                                    <Clock className="h-3 w-3" /> {originalTimeRange}
+                                </div>
+                            </div>
+                        </div>
                     </DialogDescription>
                 </DialogHeader>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col items-center border p-4 rounded-lg">
-                        <h4 className="font-semibold mb-2">Selecione a Data</h4>
-                        <Calendar
-                            mode="single"
-                            selected={selectedDate}
-                            onSelect={setSelectedDate}
-                            locale={ptBR}
-                            // Restringe seleção ao futuro (após hoje)
-                            disabled={(date) => isAfter(new Date(date.setHours(23, 59, 59, 999)), new Date()) === false}
-                            className="rounded-md border shadow"
-                        />
-                    </div>
-                    <div className="border p-4 rounded-lg">
-                        <h4 className="font-semibold mb-2">Selecione o Horário</h4>
-                        <div className="max-h-[350px] overflow-y-auto">
-                            {loadingSlots ? (
-                                <div className="flex justify-center items-center h-full min-h-[100px]">
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Carregando slots...
-                                </div>
-                            ) : availableTimes.length > 0 ? (
-                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                                    {availableTimes.map((time) => (
-                                        <Button
-                                            key={time}
-                                            variant={selectedTime === time ? "default" : "outline"}
-                                            onClick={() => setSelectedTime(time)}
-                                            size="sm"
-                                        >
-                                            {time}
-                                        </Button>
-                                    ))}
-                                </div>
+                <div className="space-y-4 py-4">
+                    {/* CORREÇÃO: Título de seção com estilo azul */}
+                    <h4 className="text-sm font-semibold text-sky-600 flex items-center">Nova Data</h4>
+                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                        <PopoverTrigger asChild>
+                            <Button variant={"outline"} className='w-full justify-start text-left font-normal'>
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {newDate ? format(newDate, "dd/MM/yyyy", { locale: ptBR }) : <span>dd/mm/aaaa</span>}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                            <UICalendar
+                                mode="single"
+                                selected={newDate}
+                                onSelect={(date) => {
+                                    setNewDate(date);
+                                    setIsCalendarOpen(false); 
+                                }}
+                                initialFocus
+                                locale={ptBR}
+                                disabled={(date) => date < new Date() } 
+                            />
+                        </PopoverContent>
+                    </Popover>
+                    
+                    {/* CORREÇÃO: Título de seção com estilo azul */}
+                    <h4 className="text-sm font-semibold text-sky-600 flex items-center">Novo Horário</h4>
+                    <Select onValueChange={setNewTime} value={newTime} disabled={loadingSlots || !newDate}>
+                        <SelectTrigger className='w-full'>
+                            <SelectValue placeholder={loadingSlots ? "Carregando horários..." : "Selecione um horário disponível..."} />
+                        </SelectTrigger>
+                        <SelectContent className='max-h-60 overflow-y-auto'> 
+                            {availableTimes.length > 0 ? (
+                                availableTimes.map(time => (
+                                    <SelectItem key={time} value={time}>{time}</SelectItem>
+                                ))
                             ) : (
-                                <p className="text-sm text-gray-500">
-                                    {selectedDate ? "Nenhum horário disponível para o dia selecionado." : "Selecione uma data para ver os horários."}
-                                </p>
+                                <div className="p-2 text-center text-slate-500">
+                                    {newDate ? 'Nenhum horário disponível nas preferências.' : 'Selecione uma data primeiro.'}
+                                </div>
                             )}
-                        </div>
-                    </div>
+                        </SelectContent>
+                    </Select>
+                    
+                    {/* CORREÇÃO: Título de seção com estilo azul */}
+                    <h4 className="text-sm font-semibold text-sky-600 mt-6">Descrição</h4>
+                    <Textarea 
+                        placeholder="Descreva o motivo do reagendamento..." 
+                        value={observation} 
+                        onChange={(e) => setObservation(e.target.value)} 
+                    />
                 </div>
-                <DialogFooter className="mt-4">
-                    <p className="mr-auto text-sm text-gray-600">{footerText}</p>
-                    <Button
-                        onClick={handleReschedule}
-                        disabled={!selectedDate || !selectedTime || isSubmitting}
-                    >
-                        {isSubmitting ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Reagendando...
-                            </>
-                        ) : (
-                            "Confirmar Reagendamento"
-                        )}
+                <DialogFooter>
+                    {/* CORREÇÃO: Botão Salvar com estilo azul */}
+                    <Button onClick={handleSubmit} disabled={isSubmitting || !newDate || !newTime} className="bg-sky-600 hover:bg-sky-700">
+                        {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Salvar</> : 'Salvar'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -315,154 +440,161 @@ const RescheduleDialog = ({ appointment, onRescheduleSuccess }) => {
     );
 };
 
-// =============================================================================
-// Componente principal AulasTab
-// =============================================================================
-const AulasTab = ({ professorId }) => {
-    const [appointments, setAppointments] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const { toast } = useToast();
 
-    const fetchAppointments = useCallback(async () => {
-        setLoading(true);
-        try {
-            // Busca as aulas agendadas (scheduled), reagendadas (rescheduled) e pendentes (pending)
-            const { data, error } = await supabase
-                .from('appointments')
-                .select(`
-                    id, 
-                    class_datetime, 
-                    status, 
-                    subject, 
-                    duration_minutes, 
-                    aluno_id,
-                    aluno_profile:aluno_id(full_name) 
-                `)
-                .eq('professor_id', professorId)
-                .in('status', ['scheduled', 'rescheduled', 'pending', 'cancelled']) // Inclui canceladas para histórico, se necessário
-                .order('class_datetime', { ascending: true });
+// CORRECCIÓN PRINCIPAL: Agora só recebe 'dashboardData'
+const AulasTab = ({ dashboardData }) => {
+  const { toast } = useToast();
+  const [nameFilter, setNameFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState(null);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
+  const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
+  
+  // Extração segura das propriedades a partir de dashboardData
+  const data = dashboardData?.data || {}; 
+  const loading = dashboardData?.loading || false; 
+  const professorId = dashboardData?.professorId; 
+  const onUpdate = dashboardData?.onUpdate; // <-- CORREÇÃO: Obtém onUpdate do objeto
+  const appointments = data.appointments || [];
+  const packages = data.packages || [];
 
-            if (error) throw error;
 
-            const formattedData = data.map(apt => ({
-                ...apt,
-                aluno_nome: apt.aluno_profile ? apt.aluno_profile.full_name : 'Aluno Desconhecido',
-                class_datetime_obj: parseISO(apt.class_datetime),
-            })).filter(apt => ['scheduled', 'rescheduled', 'pending'].includes(apt.status) && isAfter(add(apt.class_datetime_obj, { minutes: apt.duration_minutes }), new Date()));
-            // Filtra para mostrar apenas aulas futuras e com status ativo/pendente
+  const handleUpdate = () => {
+    if (onUpdate) onUpdate(); // Executa o onUpdate se existir
+  };
 
-            setAppointments(formattedData);
-        } catch (error) {
-            toast({
-                title: "Erro de Carregamento",
-                description: "Não foi possível carregar as aulas. " + error.message,
-                variant: "destructive",
-            });
-        } finally {
-            setLoading(false);
-        }
-    }, [professorId, toast]);
+  // 1. OBTENÇÃO DO ID DO PACOTE 'PERSONALIZADO'
+  const customPackageId = useMemo(() => {
+    // Acessa packages de forma segura
+    return packages.find(p => p.name === 'Personalizado')?.id;
+  }, [packages]);
 
-    useEffect(() => {
-        if (professorId) {
-            fetchAppointments();
-        }
-    }, [professorId, fetchAppointments]);
+  const handleMarkAsMissed = async (appointment) => {
+    // CORREÇÃO: Verifica se o aluno existe antes de acessar full_name
+    if (!window.confirm(`Tem certeza que deseja marcar a aula de ${appointment.student?.full_name || 'este aluno'} como FALTA? Esta ação não pode ser desfeita e consumirá um crédito do aluno.`)) return;
 
-    const handleCancel = async (appointmentId) => {
-        if (!window.confirm("Tem certeza que deseja cancelar esta aula?")) return;
-
-        try {
-            const { error } = await supabase
-                .from('appointments')
-                .update({
-                    status: 'cancelled',
-                    cancellation_reason: 'Professor cancelou'
-                })
-                .eq('id', appointmentId);
-
-            if (error) throw error;
-
-            toast({
-                title: "Sucesso!",
-                description: "Aula cancelada com sucesso.",
-            });
-            fetchAppointments(); // Recarrega a lista
-        } catch (error) {
-            toast({
-                title: "Erro ao Cancelar",
-                description: error.message || "Não foi possível cancelar a aula.",
-                variant: "destructive",
-            });
-        }
-    };
-
-    if (loading) {
-        return <div className="p-4 flex justify-center"><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Carregando aulas...</div>;
+    // 1. Atualiza o status da aula
+    const { error } = await supabase.from('appointments').update({ status: 'missed' }).eq('id', appointment.id);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Erro ao marcar falta', description: error.message });
+      return;
     }
+    
+    // 2. CORREÇÃO: Registrar o débito da falta na assigned_packages_log para consumo do crédito.
+    const { error: debitError } = await supabase.from('assigned_packages_log').insert({
+        professor_id: professorId, // Usa o professorId do dashboardData
+        student_id: appointment.student_id,
+        package_id: customPackageId, // Usa o ID do pacote 'Personalizado'
+        assigned_classes: -1, 
+        status: 'missed',
+        observation: `Débito de falta: ${format(parseISO(appointment.class_datetime), 'dd/MM/yyyy HH:mm')}`
+    });
+    if (debitError) console.error("Error creating debit log for missed class:", debitError);
 
-    if (appointments.length === 0) {
-        return <p className="p-4 text-center text-gray-500">Você não tem aulas agendadas, reagendadas ou pendentes no futuro.</p>;
+    // 3. Envia a notificação
+    await supabase.from('notifications').insert({
+      user_id: appointment.student_id,
+      type: 'class_missed',
+      content: { message: `Sua aula de ${format(parseISO(appointment.class_datetime), 'dd/MM/yyyy')} foi marcada como falta.` }
+    });
+    
+    toast({ variant: 'default', title: 'Aula marcada como falta!' });
+    handleUpdate();
+  };
+
+  const handleOpenReschedule = (appointment) => {
+    // Adiciona o customPackageId e professorId ao objeto appointment
+    // ISSO É CRÍTICO para que o RescheduleDialog e o FeedbackDialog funcionem corretamente.
+    setSelectedAppointment({ ...appointment, customPackageId, professorId }); 
+    setIsRescheduleDialogOpen(true);
+  }
+  
+  // CORREÇÃO: Filtra appointments usando a variável appointments extraída
+  const filteredAppointments = (appointments || []).filter(apt => {
+    const nameMatch = apt.student?.full_name?.toLowerCase().includes(nameFilter.toLowerCase());
+    const dateMatch = !dateFilter || (apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === format(new Date(dateFilter), 'yyyy-MM-dd'));
+    return nameMatch && dateMatch;
+  }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime)); 
+
+  const openFeedbackDialog = (appointment) => {
+    // Passa o customPackageId e professorId para o FeedbackDialog 
+    setSelectedAppointment({ ...appointment, customPackageId, professorId }); 
+    setIsFeedbackDialogOpen(true);
+  }
+
+  const StatusBadge = ({ status }) => {
+    switch(status) {
+        case 'scheduled': return <Badge className="bg-sky-500 hover:bg-sky-600 text-white">Agendada</Badge>;
+        case 'completed': return <Badge className="bg-green-500 hover:bg-green-600 text-white">Realizada</Badge>;
+        case 'canceled': return <Badge variant="destructive">Cancelada</Badge>;
+        case 'missed': return <Badge className="bg-orange-500 hover:bg-orange-600 text-white">Falta</Badge>;
+        case 'rescheduled': return <Badge className="bg-purple-500 hover:bg-purple-600 text-white">Reagendada</Badge>;
+        default: return <Badge variant="secondary">{status}</Badge>;
     }
+  };
 
-    return (
-        <div className="space-y-4 p-4">
-            <h3 className="text-xl font-semibold mb-4">Próximas Aulas</h3>
-            <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Data e Hora</TableHead>
-                            <TableHead>Aluno</TableHead>
-                            <TableHead>Assunto</TableHead>
-                            <TableHead>Duração</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {appointments.map((appointment) => (
-                            <TableRow key={appointment.id}>
-                                <TableCell className="font-medium">
-                                    {format(appointment.class_datetime_obj, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                                </TableCell>
-                                <TableCell>{appointment.aluno_nome}</TableCell>
-                                <TableCell>{appointment.subject}</TableCell>
-                                <TableCell>{appointment.duration_minutes} min</TableCell>
-                                <TableCell>
-                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                        appointment.status === 'scheduled' ? 'bg-green-100 text-green-800' :
-                                        appointment.status === 'rescheduled' ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-blue-100 text-blue-800'
-                                    }`}>
-                                        {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                                    </span>
-                                </TableCell>
-                                <TableCell className="text-right flex justify-end space-x-2">
-                                    {appointment.status !== 'cancelled' && (
-                                        <>
-                                            <RescheduleDialog 
-                                                appointment={appointment} 
-                                                onRescheduleSuccess={fetchAppointments} 
-                                            />
-                                            <Button 
-                                                variant="destructive" 
-                                                size="sm" 
-                                                className="h-7 text-xs"
-                                                onClick={() => handleCancel(appointment.id)}
-                                            >
-                                                Cancelar
-                                            </Button>
-                                        </>
-                                    )}
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
-    );
+  return (
+    <div className="bg-white p-6 rounded-lg shadow-sm">
+      <h3 className="font-bold mb-4">Todas as Aulas ({filteredAppointments.length})</h3>
+      <div className="flex gap-4 mb-4">
+        <Input placeholder="Filtrar por nome do aluno..." value={nameFilter} onChange={e => setNameFilter(e.target.value)} />
+        <Input type="date" value={dateFilter || ''} onChange={e => setDateFilter(e.target.value)} />
+        <Button variant="outline" onClick={() => { setNameFilter(""); setDateFilter("") }}>Limpar</Button>
+      </div>
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader className="bg-slate-50">
+            <TableRow>
+              <TableHead>Aluno</TableHead>
+              <TableHead>Matéria</TableHead>
+              <TableHead>Data</TableHead>
+              <TableHead>Hora</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? <TableRow><TableCell colSpan="6" className="text-center p-8"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow> :
+            filteredAppointments.length > 0 ? filteredAppointments.map(apt => (
+              <TableRow key={apt.id}>
+                <TableCell className="font-medium">{apt.student?.full_name || 'N/A'}</TableCell>
+                <TableCell>{apt.student?.spanish_level ? 'Espanhol' : 'Inglês'}</TableCell>
+                <TableCell>{apt.class_datetime ? format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR }) : 'N/A'}</TableCell>
+                <TableCell>{apt.class_datetime ? format(parseISO(apt.class_datetime), 'HH:mm') : 'N/A'}</TableCell>
+                <TableCell><StatusBadge status={apt.status} /></TableCell>
+                <TableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => openFeedbackDialog(apt)} disabled={!['scheduled', 'rescheduled'].includes(apt.status)}>
+                        <Star className="mr-2 h-4 w-4" /> Marcar como Concluída
+                      </DropdownMenuItem>
+                       <DropdownMenuItem onClick={() => handleOpenReschedule(apt)} disabled={!['scheduled'].includes(apt.status)}>
+                        <RotateCcw className="mr-2 h-4 w-4" /> Reagendar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleMarkAsMissed(apt)} disabled={!['scheduled'].includes(apt.status)} className="text-orange-600 focus:text-orange-700 focus:bg-orange-50">
+                         <UserX className="mr-2 h-4 w-4" /> Marcar Falta
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            )) : <TableRow><TableCell colSpan="6" className="text-center p-8 text-slate-500">Nenhuma aula encontrada com o filtro atual.</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </div>
+      <FeedbackDialog appointment={selectedAppointment} isOpen={isFeedbackDialogOpen} onClose={() => setIsFeedbackDialogOpen(false)} onFeedbackSent={handleUpdate} />
+      {/* Diálogo de Reagendamento */}
+      {selectedAppointment && (
+        <RescheduleDialog 
+            appointment={selectedAppointment} 
+            isOpen={isRescheduleDialogOpen} 
+            onClose={() => setIsRescheduleDialogOpen(false)} 
+            onReschedule={handleUpdate} 
+        />
+      )}
+    </div>
+  );
 };
 
 export default AulasTab;
