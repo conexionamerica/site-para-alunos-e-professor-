@@ -1,7 +1,7 @@
 // Arquivo: src/pages/ProfessorDashboardPage.jsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,6 @@ import AlunosTab from '@/components/professor-dashboard/AlunosTab';
 import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import { useToast } from '@/components/ui/use-toast'; 
-import { Link } from 'react-router-dom'; 
 
 // Função de busca de dados
 const fetchProfessorDashboardData = async (professorId) => {
@@ -81,10 +80,10 @@ const fetchProfessorDashboardData = async (professorId) => {
         .select(`*, student:profiles!student_id(full_name, spanish_level)`)
         .eq('professor_id', professorId)
         .order('class_datetime', { ascending: false });
-    // CORREÇÃO: Tratamento de erro para evitar o travamento do dashboard
+    // CORREÇÃO DE ESTABILIDADE: Captura o erro aqui para evitar travamento total
     if (appointmentsError) {
         console.error("Erro no fetch de appointments:", appointmentsError);
-        // Não lançamos o erro, apenas o logamos e permitimos que o código continue
+        // Não lança o erro, permite que o dashboard continue
     }
     
 
@@ -189,7 +188,7 @@ const ProfessorDashboardPage = () => {
         }
     }, [user, navigate, fetchData]);
 
-    // Función para verificar el tamaño de la pantalla y cerrar la sidebar en pantallas mayores
+    // Função para verificar o tamanho da tela e fechar a sidebar
     useEffect(() => {
         const handleResize = () => {
             if (window.innerWidth >= 1024) {
