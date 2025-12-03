@@ -402,11 +402,13 @@ const ProfessorDashboardPage = () => {
                 
                 {/* Conteúdo da main (CORREÇÃO DE LAYOUT) */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center w-full"> 
-                    <div className="w-full max-w-7xl px-4 lg:px-8 py-4 lg:py-8"> 
+                    {/* Removendo padding lateral 'px-4 lg:px-8' para que o conteúdo preencha a largura máxima (max-w-7xl) de ponta a ponta. */}
+                    <div className="w-full max-w-7xl py-4 lg:py-8"> 
                         <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
                             {navItems.map(item => (
                                 <TabsContent key={item.id} value={item.id} className="mt-0">
+                                    {/* O padding será gerenciado dentro de cada componente de Tab (e.g., HomeTab) */}
                                     <item.component dashboardData={dashboardData} /> 
                                 </TabsContent>
                             ))}
