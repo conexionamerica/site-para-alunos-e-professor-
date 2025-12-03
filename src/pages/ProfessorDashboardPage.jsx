@@ -7,8 +7,7 @@ import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu,
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-// CORREÇÃO: Importa o hook useAuth
-import { useAuth } from '@/contexts/SupabaseAuthContext'; 
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient'; 
 import HomeTab from '@/components/professor-dashboard/HomeTab';
 import AulasTab from '@/components/professor-dashboard/AulasTab';
@@ -19,7 +18,7 @@ import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import { useToast } from '@/components/ui/use-toast'; 
 import { Link } from 'react-router-dom'; 
 
-// Função de busca de dados (Mantida a correção de estabilidade)
+// Função de busca de dados
 const fetchProfessorDashboardData = async (professorId) => {
     const today = new Date().toISOString();
     
@@ -132,8 +131,7 @@ const Logo = () => (
 
 
 const ProfessorDashboardPage = () => {
-    // CORREÇÃO: Usa o hook useAuth para obter user e signOut (substituindo logout)
-    const { user, profile, signOut } = useAuth(); 
+    const { user, profile, signOut } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
     
@@ -144,8 +142,7 @@ const ProfessorDashboardPage = () => {
     const [hasError, setHasError] = useState(false);
 
     const handleLogout = async () => {
-        // CORREÇÃO: Usa signOut do hook useAuth
-        await signOut(); 
+        await signOut();
         navigate('/professor-login');
     };
 
@@ -187,7 +184,7 @@ const ProfessorDashboardPage = () => {
         if (user?.id) {
             fetchData();
         } else if (user === null && !profile && !isLoading) {
-            // Caso de que a sessão tenha terminado de carregar e não haja user. Redireciona.
+            // Caso de que la sessão haya terminado de cargar y no haya user. Redirecciona.
             navigate('/professor-login');
         }
     }, [user, navigate, fetchData]);
@@ -405,13 +402,13 @@ const ProfessorDashboardPage = () => {
                 
                 {/* Conteúdo da main (CORREÇÃO DE LAYOUT) */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto w-full"> 
-                    {/* Aplica max-width, centralização (mx-auto) e padding (px-4/lg:px-8) no container do conteúdo da aba */}
-                    <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 py-4 lg:py-8"> 
+                    {/* Aplica max-width e centralização (mx-auto). O padding horizontal foi REMOVIDO daqui. */}
+                    <div className="w-full max-w-7xl mx-auto py-4 lg:py-8"> 
                         <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
                             {navItems.map(item => (
                                 <TabsContent key={item.id} value={item.id} className="mt-0">
-                                    {/* Passando dashboardData para os componentes de aba */}
+                                    {/* ATENÇÃO: O padding horizontal (px-4 lg:px-8) DEVE ser adicionado no DIV raiz de HomeTab, AgendaTab, etc., para replicar o alinhamento do cabeçalho. */}
                                     <item.component dashboardData={dashboardData} /> 
                                 </TabsContent>
                             ))}
