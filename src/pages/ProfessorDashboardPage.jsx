@@ -1,3 +1,5 @@
+// Arquivo: src/pages/ProfessorDashboardPage.jsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -18,7 +20,6 @@ import { Link } from 'react-router-dom';
 
 // Função de busca de dados
 const fetchProfessorDashboardData = async (professorId) => {
-// ... (código de fetchProfessorDashboardData sem alterações)
     const today = new Date().toISOString();
     
     // 1. Fetch del perfil del profesor (solo nombre)
@@ -80,7 +81,12 @@ const fetchProfessorDashboardData = async (professorId) => {
         .select(`*, student:profiles!student_id(full_name, spanish_level)`)
         .eq('professor_id', professorId)
         .order('class_datetime', { ascending: false });
-    if (appointmentsError) throw appointmentsError;
+    // CORREÇÃO: Tratamento de erro para evitar o travamento do dashboard
+    if (appointmentsError) {
+        console.error("Erro no fetch de appointments:", appointmentsError);
+        // Não lançamos o erro, apenas o logamos e permitimos que o código continue
+    }
+    
 
     // 8. Fetch de Faturas y Logs (para AlunosTab, PreferenciasTab)
     const { data: allBillings, error: billingsError } = await supabase
@@ -104,10 +110,10 @@ const fetchProfessorDashboardData = async (professorId) => {
         scheduleRequests: scheduleRequests || [],
         nextClass: nextClass,
         students: students || [], 
-        allProfiles: allProfiles || [], // Novo: Todos os perfis
+        allProfiles: allProfiles || [],
         packages: packages || [],
         classSlots: classSlots || [],
-        appointments: appointments || [],
+        appointments: appointments || [], // Retorna dado, mesmo que possa estar vazio em caso de erro
         allBillings: allBillings || [],
         assignedLogs: assignedLogs || [],
         chatList: chatList || [],
@@ -272,7 +278,7 @@ const ProfessorDashboardPage = () => {
                 <div className="flex flex-col items-center p-8 bg-white rounded-lg shadow-xl">
                     <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
                     <h2 className="text-2xl font-bold text-gray-800">Erro ao Carregar Dados</h2>
-                    <p className="mt-2 text-gray-600 text-center">No se pudo cargar la información del dashboard. Verifique su conexión o intente nuevamente.</p>
+                    <p className="mt-2 text-gray-600 text-center">Não foi possível carregar a informação do dashboard. Verifique sua conexão ou tente novamente.</p>
                     <Button onClick={fetchData} className="mt-4 bg-sky-600 hover:bg-sky-700">
                         Tentar Novamente
                     </Button>
@@ -299,7 +305,7 @@ const ProfessorDashboardPage = () => {
                 <header className="flex flex-col bg-white shadow-md">
                     {/* Linha superior: Logo e Dropdown - Fundo Branco e Conteúdo Centralizado */}
                     <div className="w-full flex justify-center items-center h-16 bg-white border-b border-slate-200">
-                        <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 flex justify-between items-center"> {/* Adicionado mx-auto aqui */}
+                        <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 flex justify-between items-center">
                             <Logo /> 
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -395,7 +401,6 @@ const ProfessorDashboardPage = () => {
                 </header>
                 
                 {/* Conteúdo da main */}
-                {/* Mantive o w-full max-w-7xl, mas agora ele está dentro da main centralizada pelo 'flex justify-center' */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto flex justify-center"> 
                     <div className="w-full max-w-7xl px-4 lg:px-8 py-4 lg:py-8 h-full"> 
                         <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
@@ -409,8 +414,6 @@ const ProfessorDashboardPage = () => {
                     </div>
                 </main>
             </div>
-
-            {/* BOTÓN FLOTANTE DE WHATSAPP: Removido */}
         </div>
     );
 };
