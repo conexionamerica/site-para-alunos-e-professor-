@@ -92,7 +92,9 @@ const ProfessorDashboardPage = () => {
     return (
         <div className="flex min-h-screen bg-gray-100">
             {/* Sidebar para desktop e mobile (oculta/aberta) */}
-            <Sidebar />
+            <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical">
+                <Sidebar />
+            </Tabs>
 
             {/* Overlay para mobile quando sidebar está aberta */}
             {isSidebarOpen && (
@@ -136,13 +138,13 @@ const ProfessorDashboardPage = () => {
                     </DropdownMenu>
                 </header>
 
-                {/* CORREÇÃO DE LAYOUT: Removendo padding lateral da tag main e ajustando o contêiner */}
-                <main className="flex-1 overflow-x-hidden overflow-y-auto w-full"> 
-                    {/* Contêiner principal, centralizado, com padding apenas vertical (topo/baixo) */}
-                    <div className="w-full max-w-7xl mx-auto py-4 lg:py-8">
+                {/* CORREÇÃO DE LAYOUT: Removendo o justify-center do main e aplicando centralização no container interno */}
+                <main className="flex-1 overflow-x-hidden overflow-y-auto w-full">
+                    {/* Aplica max-width, centralização (mx-auto) e padding lateral para o conteúdo da aba */}
+                    <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 py-4 lg:py-8">
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
                             
-                            {/* TabsList para navegação Desktop (Visível apenas em LG) */}
+                            {/* TabsList para navegação Desktop */}
                             <div className="hidden lg:block bg-white border-b border-slate-200 mb-6">
                                 <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
                                     {navItems.map(item => (
@@ -166,7 +168,6 @@ const ProfessorDashboardPage = () => {
                             {/* Tabs Content */}
                             {navItems.map(item => (
                                 <TabsContent key={item.id} value={item.id} className="mt-0">
-                                    {/* O padding horizontal será aplicado DENTRO dos componentes das abas (HomeTab, AulasTab) */}
                                     <item.component />
                                 </TabsContent>
                             ))}
