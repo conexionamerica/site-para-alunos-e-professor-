@@ -1,4 +1,4 @@
-// Archivo: src/components/professor-dashboard/AulasTab.jsx
+// Arquivo: src/components/professor-dashboard/AulasTab.jsx
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -142,7 +142,7 @@ const FeedbackDialog = ({ appointment, isOpen, onClose, onFeedbackSent }) => {
             <Textarea placeholder="Adicione um comentário sobre o desempenho do Aluno..." value={comment} onChange={(e) => setComment(e.target.value)} className="mt-4" />
         </div>
         <DialogFooter>
-            {/* CORREÇÃO: Botão Salvar com estilo azul */}
+            {/* Botão Salvar com estilo azul */}
             <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-sky-600 hover:bg-sky-700 text-white">
                 {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Salvando...</> : 'Salvar'}
             </Button>
@@ -330,7 +330,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
             if (creditError) console.error("Error creating credit log:", creditError);
 
             // 4. Notificação para o aluno
-            const { error: notificationError } = await supabase.from('notifications').insert({
+            await supabase.from('notifications').insert({
                 user_id: appointment.student_id,
                 type: 'class_rescheduled',
                 content: { 
@@ -339,7 +339,6 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
                     oldDateTime: appointment.class_datetime,
                 },
             });
-            if (notificationError) console.error("Error creating reschedule notification:", notificationError);
 
 
             toast({ 
@@ -378,7 +377,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    {/* CORREÇÃO: Título de seção com estilo azul */}
+                    {/* Título de seção com estilo azul */}
                     <h4 className="text-sm font-semibold text-sky-600 flex items-center">Nova Data</h4>
                     <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                         <PopoverTrigger asChild>
@@ -402,7 +401,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
                         </PopoverContent>
                     </Popover>
                     
-                    {/* CORREÇÃO: Título de seção com estilo azul */}
+                    {/* Título de seção com estilo azul */}
                     <h4 className="text-sm font-semibold text-sky-600 flex items-center">Novo Horário</h4>
                     <Select onValueChange={setNewTime} value={newTime} disabled={loadingSlots || !newDate}>
                         <SelectTrigger className='w-full'>
@@ -421,7 +420,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
                         </SelectContent>
                     </Select>
                     
-                    {/* CORREÇÃO: Título de seção com estilo azul */}
+                    {/* Título de seção com estilo azul */}
                     <h4 className="text-sm font-semibold text-sky-600 mt-6">Descrição</h4>
                     <Textarea 
                         placeholder="Descreva o motivo do reagendamento..." 
@@ -430,7 +429,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
                     />
                 </div>
                 <DialogFooter>
-                    {/* CORREÇÃO: Botão Salvar com estilo azul */}
+                    {/* Botão Salvar com estilo azul */}
                     <Button onClick={handleSubmit} disabled={isSubmitting || !newDate || !newTime} className="bg-sky-600 hover:bg-sky-700">
                         {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Salvar</> : 'Salvar'}
                     </Button>
@@ -454,7 +453,7 @@ const AulasTab = ({ dashboardData }) => {
   const data = dashboardData?.data || {}; 
   const loading = dashboardData?.loading || false; 
   const professorId = dashboardData?.professorId; 
-  const onUpdate = dashboardData?.onUpdate; // <-- CORREÇÃO: Obtém onUpdate do objeto
+  const onUpdate = dashboardData?.onUpdate; // Obtém onUpdate do objeto
   const appointments = data.appointments || [];
   const packages = data.packages || [];
 
@@ -465,7 +464,6 @@ const AulasTab = ({ dashboardData }) => {
 
   // 1. OBTENÇÃO DO ID DO PACOTE 'PERSONALIZADO'
   const customPackageId = useMemo(() => {
-    // Acessa packages de forma segura
     return packages.find(p => p.name === 'Personalizado')?.id;
   }, [packages]);
 
@@ -480,7 +478,7 @@ const AulasTab = ({ dashboardData }) => {
       return;
     }
     
-    // 2. CORREÇÃO: Registrar o débito da falta na assigned_packages_log para consumo do crédito.
+    // 2. Registra o débito da falta na assigned_packages_log para consumo do crédito.
     const { error: debitError } = await supabase.from('assigned_packages_log').insert({
         professor_id: professorId, // Usa o professorId do dashboardData
         student_id: appointment.student_id,
@@ -503,13 +501,12 @@ const AulasTab = ({ dashboardData }) => {
   };
 
   const handleOpenReschedule = (appointment) => {
-    // Adiciona o customPackageId e professorId ao objeto appointment
-    // ISSO É CRÍTICO para que o RescheduleDialog e o FeedbackDialog funcionem corretamente.
+    // Adiciona o customPackageId e professorId ao objeto appointment (necessário para o Dialog)
     setSelectedAppointment({ ...appointment, customPackageId, professorId }); 
     setIsRescheduleDialogOpen(true);
   }
   
-  // CORREÇÃO: Filtra appointments usando a variável appointments extraída
+  // Filtra appointments usando a variável appointments extraída
   const filteredAppointments = (appointments || []).filter(apt => {
     const nameMatch = apt.student?.full_name?.toLowerCase().includes(nameFilter.toLowerCase());
     const dateMatch = !dateFilter || (apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === format(new Date(dateFilter), 'yyyy-MM-dd'));
@@ -569,7 +566,11 @@ const AulasTab = ({ dashboardData }) => {
                       <DropdownMenuItem onClick={() => openFeedbackDialog(apt)} disabled={!['scheduled', 'rescheduled'].includes(apt.status)}>
                         <Star className="mr-2 h-4 w-4" /> Marcar como Concluída
                       </DropdownMenuItem>
-                       <DropdownMenuItem onClick={() => handleOpenReschedule(apt)} disabled={!['scheduled'].includes(apt.status)}>
+                       <DropdownMenuItem 
+                            onClick={() => handleOpenReschedule(apt)} 
+                            // CORREÇÃO: Permite reagendamento para status 'scheduled' OU 'missed'
+                            disabled={!['scheduled', 'missed'].includes(apt.status)}
+                        >
                         <RotateCcw className="mr-2 h-4 w-4" /> Reagendar
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleMarkAsMissed(apt)} disabled={!['scheduled'].includes(apt.status)} className="text-orange-600 focus:text-orange-700 focus:bg-orange-50">
