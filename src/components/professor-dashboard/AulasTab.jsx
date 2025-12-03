@@ -531,7 +531,8 @@ const AulasTab = ({ dashboardData }) => {
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm">
+    // CORREÇÃO: Adiciona padding horizontal (px-4 lg:px-8) à div raiz para alinhar ao cabeçalho
+    <div className="bg-white p-6 rounded-lg shadow-sm px-4 lg:px-8">
       <h3 className="font-bold mb-4">Todas as Aulas ({filteredAppointments.length})</h3>
       <div className="flex gap-4 mb-4">
         <Input placeholder="Filtrar por nome do aluno..." value={nameFilter} onChange={e => setNameFilter(e.target.value)} />
