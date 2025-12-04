@@ -89,7 +89,7 @@ export const AuthProvider = ({ children }) => {
     }
     setLoading(false);
   }, [fetchProfile]);
-  
+
   // A função createProfessorUser foi removida deste arquivo.
 
   useEffect(() => {
@@ -105,8 +105,22 @@ export const AuthProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         handleSession(session);
-        if (_event === 'SIGNED_IN') {
+        if (_event === 'SIGNED_IN' && session?.user?.id) {
           const userProfile = await fetchProfile(session.user.id);
+
+          // Verificar si el usuario está inactivo
+          if (userProfile?.is_active === false) {
+            await supabase.auth.signOut();
+            toast({
+              variant: "destructive",
+              title: "Conta Inativa",
+              description: "Sua conta foi inativada. Para mais informações, entre em contato com o suporte.",
+              duration: 8000,
+            });
+            setIsLoading(false);
+            return;
+          }
+
           if (userProfile?.role === 'professor') {
             // Handled by ProfessorLoginPage
           } else {
