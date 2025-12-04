@@ -397,7 +397,6 @@ const HomePage = () => {
           </div>
           <div className="flex items-center gap-4">
             <NextClassWidget nextClass={nextClass} />
-            <NotificationsWidget />
           </div>
         </div>
 
