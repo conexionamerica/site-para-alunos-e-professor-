@@ -75,7 +75,10 @@ const AlunosTab = ({ dashboardData }) => {
 
   // Función para activar/inactivar alumno
   const handleToggleActive = async (student) => {
-    const newStatus = student.is_active === false ? true : false;
+    // Si is_active es undefined o true, el alumno está activo
+    // Si is_active es false, el alumno está inactivo
+    const isCurrentlyActive = student.is_active !== false;
+    const newStatus = !isCurrentlyActive;
     const action = newStatus ? 'ativar' : 'inativar';
 
     if (!window.confirm(`Tem certeza que deseja ${action} o aluno ${student.full_name}?`)) {
@@ -88,10 +91,11 @@ const AlunosTab = ({ dashboardData }) => {
       .eq('id', student.id);
 
     if (error) {
+      console.error('Error toggling student status:', error);
       toast({
         variant: 'destructive',
         title: 'Erro',
-        description: `Não foi possível ${action} o aluno.`
+        description: `Não foi possível ${action} o aluno: ${error.message}`
       });
       return;
     }
@@ -170,7 +174,7 @@ const AlunosTab = ({ dashboardData }) => {
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm px-4 lg:px-8">
+    <div className="bg-white p-6 rounded-lg shadow-sm">
       <h3 className="font-bold mb-4">Gerenciar Alunos ({students.length})</h3>
       <div className="flex justify-between items-center mb-4">
         <div className="relative w-full max-w-sm">

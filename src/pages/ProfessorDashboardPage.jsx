@@ -187,6 +187,51 @@ const ProfessorDashboardPage = () => {
         }
     }, [user, navigate, fetchData]);
 
+    // Suscripción en tiempo real para actualizaciones automáticas
+    useEffect(() => {
+        if (!user?.id) return;
+
+        // Canales de subscripción para actualización automática
+        const appointmentsChannel = supabase
+            .channel('appointments-changes')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'appointments'
+            }, () => {
+                fetchData();
+            })
+            .subscribe();
+
+        const requestsChannel = supabase
+            .channel('requests-changes')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'solicitudes_clase'
+            }, () => {
+                fetchData();
+            })
+            .subscribe();
+
+        const profilesChannel = supabase
+            .channel('profiles-changes')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles'
+            }, () => {
+                fetchData();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(appointmentsChannel);
+            supabase.removeChannel(requestsChannel);
+            supabase.removeChannel(profilesChannel);
+        };
+    }, [user?.id, fetchData]);
+
     // Função para verificar o tamanho da tela e fechar a sidebar
     useEffect(() => {
         const handleResize = () => {
@@ -234,8 +279,8 @@ const ProfessorDashboardPage = () => {
                                 setIsSidebarOpen(false);
                             }}
                             className={`w-full justify-start text-lg px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id
-                                    ? 'bg-blue-600 text-white shadow-lg'
-                                    : 'text-gray-300 hover:bg-gray-800'
+                                ? 'bg-blue-600 text-white shadow-lg'
+                                : 'text-gray-300 hover:bg-gray-800'
                                 }`}
                             disabled={isLoading}
                         >
