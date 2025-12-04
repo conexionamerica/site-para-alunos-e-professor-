@@ -396,7 +396,7 @@ const HomePage = () => {
             <p className="text-lg text-slate-600">Bem-vindo(a) de volta, <span className="font-semibold text-sky-600">{profile?.full_name || user?.email}</span>!</p>
           </div>
           <div className="flex items-center gap-4">
-            <NextClass Widget nextClass={nextClass} />
+            <NextClassWidget nextClass={nextClass} />
             <NotificationsWidget />
           </div>
         </div>
