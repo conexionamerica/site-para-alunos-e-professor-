@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Se incluyen los iconos necesarios para la nueva funcionalidad
 import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw } from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
+import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 
 // IMPORTACIONES NECESSÁRIAS, AHORA CON DialogDescription
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -395,11 +396,14 @@ const HomePage = () => {
             <p className="text-lg text-slate-600">Bem-vindo(a) de volta, <span className="font-semibold text-sky-600">{profile?.full_name || user?.email}</span>!</p>
           </div>
           <div className="flex items-center gap-4">
-            <NextClassWidget nextClass={nextClass} />
+            <NextClass Widget nextClass={nextClass} />
             <NotificationsWidget />
           </div>
         </div>
-        
+
+        {/* Widget de Mensagens do Professor */}
+        <StudentMessagesWidget />
+
         <Tabs defaultValue="agenda" className="w-full mt-8">
           <TabsList className="grid w-full grid-cols-3 bg-slate-200">
             <TabsTrigger value="faturas"><FileText className="mr-2 h-4 w-4 hidden sm:block" />Faturas</TabsTrigger>
