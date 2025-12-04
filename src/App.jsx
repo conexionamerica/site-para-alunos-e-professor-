@@ -19,24 +19,33 @@ import { MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 
-// NOVO COMPONENTE: Tela de Acesso Bloqueado
+// NOVO COMPONENTE: Tela de Acesso Bloqueado - Modal Persistente
 const SuspendedScreen = () => (
-  <div className="flex items-center justify-center min-h-[80vh]">
-    <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-lg border-l-4 border-red-500">
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+    <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-2xl border-l-4 border-red-500 animate-in fade-in zoom-in duration-300">
       <Alert variant="destructive">
         <AlertTitle className="text-xl font-bold">Acesso Bloqueado</AlertTitle>
         <AlertDescription className="mt-2 text-slate-700">
-          Sua conta foi marcada como **inativa**. Para reativá-la e continuar suas aulas, por favor, entre em contato com o suporte da escola.
+          Sua conta foi marcada como <strong>inativa</strong>. Para reativá-la e continuar suas aulas, por favor, entre em contato com o suporte da escola.
         </AlertDescription>
       </Alert>
 
       {/* Botão WhatsApp para o Suporte */}
-      <a href="https://wa.me/555198541835" target="_blank" rel="noopener noreferrer">
-        <Button className="w-full bg-green-500 hover:bg-green-600 text-white shadow-lg">
+      <a 
+        href="https://wa.me/555198541835" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="block"
+      >
+        <Button className="w-full bg-green-500 hover:bg-green-600 text-white shadow-lg text-base py-6">
           <MessageSquare className="mr-2 h-5 w-5" />
           Falar com o Suporte (WhatsApp)
         </Button>
       </a>
+      
+      <p className="text-xs text-center text-slate-500">
+        Esta mensagem permanecerá visível até que você entre em contato com o suporte.
+      </p>
     </div>
   </div>
 );
