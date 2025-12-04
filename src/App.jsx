@@ -14,7 +14,7 @@ import { AnimatePresence } from 'framer-motion';
 import ChatWidget from '@/components/ChatWidget';
 import PostRegistrationForm from '@/components/PostRegistrationForm';
 // IMPORTAÇÕES ADICIONADAS PARA O CARTEL DE BLOQUEIO
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; 
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
@@ -29,7 +29,7 @@ const SuspendedScreen = () => (
           Sua conta foi marcada como **inativa**. Para reativá-la e continuar suas aulas, por favor, entre em contato com o suporte da escola.
         </AlertDescription>
       </Alert>
-      
+
       {/* Botão WhatsApp para o Suporte */}
       <a href="https://wa.me/555198541835" target="_blank" rel="noopener noreferrer">
         <Button className="w-full bg-green-500 hover:bg-green-600 text-white shadow-lg">
@@ -58,37 +58,37 @@ function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#F0F8FF]">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-xl font-semibold text-slate-700">Carregando...</div>
       </div>
     );
   }
-  
+
   const showHeaderFooter = !['/professor-login', '/professor-dashboard'].includes(location.pathname);
   const needsPostRegistration = user && profile && !profile.age;
   const isStudent = user && profile?.role === 'student';
-  
+
   // *** NOVA LÓGICA DE BLOQUEIO: Se for aluno E o campo is_active for explicitamente false ***
-  const isProfileInactive = isStudent && profile && profile.is_active === false; 
+  const isProfileInactive = isStudent && profile && profile.is_active === false;
   // ******************************
 
   // Se o perfil do aluno estiver inativo, renderiza a tela de suspensão e impede o acesso a rotas
   if (isProfileInactive) {
-      return (
-          <div className="flex flex-col min-h-screen bg-[#F0F8FF]">
-              {/* O Header/Footer aparecem se não estivermos nas rotas de login/dashboard do professor */}
-              {showHeaderFooter && <Header />}
-              <main className="flex-grow container mx-auto px-4 py-8">
-                  <SuspendedScreen /> 
-              </main>
-              {showHeaderFooter && <Footer />}
-          </div>
-      );
+    return (
+      <div className="flex flex-col min-h-screen bg-background">
+        {/* O Header/Footer aparecem se não estivermos nas rotas de login/dashboard do professor */}
+        {showHeaderFooter && <Header />}
+        <main className="flex-grow container mx-auto px-4 py-8">
+          <SuspendedScreen />
+        </main>
+        {showHeaderFooter && <Footer />}
+      </div>
+    );
   }
 
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#F0F8FF]">
+    <div className="flex flex-col min-h-screen bg-background">
       <Helmet>
         <title>Conexión América</title>
         <meta name="description" content="Portal de Conexión América." />
@@ -96,11 +96,11 @@ function App() {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
       </Helmet>
-      
+
       {showHeaderFooter && <Header />}
 
       {needsPostRegistration && <PostRegistrationForm />}
-      
+
       <main className={`flex-grow ${showHeaderFooter ? 'container mx-auto px-4 py-8' : ''} ${needsPostRegistration ? 'blur-sm pointer-events-none' : ''}`}>
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
@@ -113,7 +113,7 @@ function App() {
           </Routes>
         </AnimatePresence>
       </main>
-      
+
       {isStudent && !needsPostRegistration && (
         <div className="fixed bottom-6 right-6 z-50 flex items-end gap-3">
           {/* <HelpWidget /> This was a duplicate, HomePage already renders one */}
