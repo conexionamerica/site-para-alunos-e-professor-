@@ -117,7 +117,7 @@ export const AuthProvider = ({ children }) => {
               description: "Sua conta foi inativada. Para mais informações, entre em contato com o suporte.",
               duration: 8000,
             });
-            setIsLoading(false);
+            setLoading(false);
             return;
           }
 

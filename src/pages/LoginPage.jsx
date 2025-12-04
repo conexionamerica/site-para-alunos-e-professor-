@@ -1,5 +1,21 @@
 
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useToast } from '@/components/ui/use-toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Eye, EyeOff, Clock } from 'lucide-react';
+
 const COOLDOWN_SECONDS = 300; // 5 minutes
+
+const formatTime = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -26,7 +42,7 @@ const LoginPage = () => {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, []);
+  }, [cooldown]);
 
   const handlePasswordReset = async () => {
     if (cooldown > 0) {
@@ -47,6 +63,19 @@ const LoginPage = () => {
       return;
     }
     setLoading(true);
+    const { error } = await sendPasswordResetLink(email);
+    if (!error) {
+      localStorage.setItem('passwordResetRequestTime', Date.now().toString());
+      setCooldown(COOLDOWN_SECONDS);
+    }
+    setLoading(false);
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    await signIn(email, password);
+    setLoading(false);
   };
 
   return (
