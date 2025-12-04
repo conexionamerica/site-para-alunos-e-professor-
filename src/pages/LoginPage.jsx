@@ -1,12 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { motion } from "framer-motion";
-import { Link } from 'react-router-dom';
-import { Eye, EyeOff, Clock } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
 
 const COOLDOWN_SECONDS = 300; // 5 minutes
 
@@ -56,23 +47,6 @@ const LoginPage = () => {
       return;
     }
     setLoading(true);
-    await sendPasswordResetLink(email);
-    localStorage.setItem('passwordResetRequestTime', Date.now().toString());
-    setCooldown(COOLDOWN_SECONDS);
-    setLoading(false);
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    await signIn(email, password);
-    setLoading(false);
-  };
-  
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   return (
@@ -108,22 +82,22 @@ const LoginPage = () => {
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-                <Label htmlFor="password">Senha</Label>
-                <button
-                    type="button"
-                    onClick={handlePasswordReset}
-                    className="text-sm font-medium text-sky-600 hover:underline disabled:text-slate-400 disabled:no-underline"
-                    disabled={cooldown > 0}
-                >
-                  {cooldown > 0 ? (
-                    <span className="flex items-center">
-                      <Clock className="mr-1 h-4 w-4" />
-                      Aguarde {formatTime(cooldown)}
-                    </span>
-                  ) : (
-                    'Esqueci a minha senha'
-                  )}
-                </button>
+              <Label htmlFor="password">Senha</Label>
+              <button
+                type="button"
+                onClick={handlePasswordReset}
+                className="text-sm font-medium text-sky-600 hover:underline disabled:text-slate-400 disabled:no-underline"
+                disabled={cooldown > 0}
+              >
+                {cooldown > 0 ? (
+                  <span className="flex items-center">
+                    <Clock className="mr-1 h-4 w-4" />
+                    Aguarde {formatTime(cooldown)}
+                  </span>
+                ) : (
+                  'Esqueci a minha senha'
+                )}
+              </button>
             </div>
             <div className="relative">
               <Input
