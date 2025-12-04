@@ -30,10 +30,10 @@ const HomeTab = ({ dashboardData }) => {
   const professorId = dashboardData?.professorId;
   const data = dashboardData?.data || {};
   const loading = dashboardData?.loading || false;
-  const onUpdate = dashboardData?.onUpdate; 
-  
+  const onUpdate = dashboardData?.onUpdate;
+
   // Extrair as coleções de dados
-  const nextClass = data.nextClass; 
+  const nextClass = data.nextClass;
 
   // CORREÇÃO: Sincroniza as solicitações do pai, mas agora com a verificação de array
   useEffect(() => {
@@ -42,7 +42,7 @@ const HomeTab = ({ dashboardData }) => {
     } else {
       setSolicitudes([]); // Garante que seja um array vazio se o dado for nulo/inválido
     }
-  }, [data?.scheduleRequests]); 
+  }, [data?.scheduleRequests]);
 
   const handleUpdateRequestStatus = async (solicitudId, newStatus) => {
     setUpdatingRequestId(solicitudId);
@@ -53,7 +53,7 @@ const HomeTab = ({ dashboardData }) => {
       setUpdatingRequestId(null);
       return;
     }
-    
+
     // 1. Atualiza o status da solicitação
     const { error: updateError } = await supabase
       .from('solicitudes_clase')
@@ -73,9 +73,9 @@ const HomeTab = ({ dashboardData }) => {
         toast({ variant: 'destructive', title: 'Erro de Agendamento', description: 'Formato de horário inválido.' });
         setUpdatingRequestId(null);
         // Não reverte o status da solicitação, pois o problema é nos dados.
-        return; 
+        return;
       }
-      
+
       try {
         const proposedSchedule = JSON.parse(request.horarios_propuestos);
         const studentId = request.alumno_id;
@@ -92,11 +92,11 @@ const HomeTab = ({ dashboardData }) => {
         const totalClassesInPackage = billingData.packages.number_of_classes;
         const classDuration = billingData.packages.class_duration_minutes;
         const slotsPerClass = Math.ceil(classDuration / 15);
-        
+
         // CORREÇÃO: Busca todos os slots, incluindo o status para a lógica de agendamento.
         const { data: allSlots, error: slotsError } = await supabase.from('class_slots').select('id, day_of_week, start_time, status').eq('professor_id', professorId);
         if (slotsError) throw slotsError;
-        
+
         const appointmentInserts = [];
         const slotIdsToUpdate = new Set();
         let currentDate = new Date();
@@ -108,7 +108,7 @@ const HomeTab = ({ dashboardData }) => {
           if (proposedSchedule.days.includes(dayOfWeek)) {
             const startTime = proposedSchedule.time;
             // CORREÇÃO: Usar a data atual para garantir o fuso horário correto no parse
-            const startTimeObj = parse(startTime, 'HH:mm:ss', currentDate); 
+            const startTimeObj = parse(startTime, 'HH:mm:ss', currentDate);
 
             const requiredSlots = [];
             let canBook = true;
@@ -116,7 +116,7 @@ const HomeTab = ({ dashboardData }) => {
             for (let i = 0; i < slotsPerClass; i++) {
               const slotTime = format(add(startTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
               const matchingSlot = allSlots.find(s => s.day_of_week === dayOfWeek && s.start_time === slotTime);
-              
+
               // Se valida que o slot esteja 'active' e não 'filled' (ocupado) ou 'inactive'.
               if (!matchingSlot || matchingSlot.status !== 'active') {
                 canBook = false;
@@ -129,7 +129,7 @@ const HomeTab = ({ dashboardData }) => {
               const primarySlot = requiredSlots[0];
               const [hour, minute] = startTime.split(':').map(Number);
               // CORREÇÃO: Constrói o classDateTime no fuso horário do servidor/ISO
-              const classDateTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour, minute, 0); 
+              const classDateTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour, minute, 0);
 
               appointmentInserts.push({
                 student_id: studentId,
@@ -155,50 +155,108 @@ const HomeTab = ({ dashboardData }) => {
 
           // Bloqueia TODOS os slots que fazem parte da duração da aula
           if (slotIdsToUpdate.size > 0) {
-              const { error: updateSlotsError } = await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToUpdate));
-              if (updateSlotsError) throw new Error(`Falha ao bloquear horários: ${updateSlotsError.message}`);
+            const { error: updateSlotsError } = await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToUpdate));
+            if (updateSlotsError) throw new Error(`Falha ao bloquear horários: ${updateSlotsError.message}`);
           }
-          
+
           toast({ variant: 'default', title: 'Solicitação Aceita!', description: `${appointmentInserts.length} aulas agendadas e ${slotIdsToUpdate.size} horários bloqueados.` });
         } else {
-            toast({ variant: 'warning', title: 'Aulas não agendadas', description: 'Nenhum horário correspondente foi encontrado para criar as aulas.' });
+          toast({ variant: 'warning', title: 'Aulas não agendadas', description: 'Nenhum horário correspondente foi encontrado para criar as aulas.' });
         }
       } catch (e) {
         // Reverte o status da solicitação se houver erro no processamento
         await supabase.from('solicitudes_clase').update({ status: 'Pendiente' }).eq('solicitud_id', solicitudId);
         toast({ variant: 'destructive', title: `Erro ao processar agendamento`, description: e.message });
       }
+    }
+    // NOVA LÓGICA: Processamento de Solicitações Pontuais (is_recurring: false)
+    else if (newStatus === 'Aceita' && !request.is_recurring) {
+      try {
+        const proposedSchedule = JSON.parse(request.horarios_propuestos);
+        const studentId = request.alumno_id;
+
+        // Buscar billing ativo para obter duração da classe
+        const { data: billingData, error: billingError } = await supabase
+          .from('billing')
+          .select('packages(class_duration_minutes)')
+          .eq('user_id', studentId)
+          .gte('end_date', new Date().toISOString())
+          .order('purchase_date', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (billingError || !billingData) {
+          throw new Error('Fatura ativa do aluno não encontrada.');
+        }
+
+        const classDuration = billingData.packages?.class_duration_minutes || 30;
+
+        // Parsear data e hora da solicitação pontual
+        const classDate = parseISO(proposedSchedule.date);
+        const [hour, minute] = proposedSchedule.time.split(':').map(Number);
+        const classDateTime = new Date(
+          classDate.getFullYear(),
+          classDate.getMonth(),
+          classDate.getDate(),
+          hour,
+          minute,
+          0
+        );
+
+        // Criar appointment único
+        const { error: insertError } = await supabase
+          .from('appointments')
+          .insert({
+            student_id: studentId,
+            professor_id: professorId,
+            class_datetime: classDateTime.toISOString(),
+            status: 'scheduled',
+            duration_minutes: classDuration,
+          });
+
+        if (insertError) throw new Error(`Falha ao criar aula: ${insertError.message}`);
+
+        toast({
+          variant: 'default',
+          title: 'Aula Pontual Agendada!',
+          description: `Aula agendada para ${format(classDate, 'dd/MM/yyyy')} às ${proposedSchedule.time.substring(0, 5)}.`
+        });
+      } catch (e) {
+        // Reverte o status se houver erro
+        await supabase.from('solicitudes_clase').update({ status: 'Pendiente' }).eq('solicitud_id', solicitudId);
+        toast({ variant: 'destructive', title: 'Erro ao processar aula pontual', description: e.message });
+      }
     } else if (newStatus === 'Rejeitada') {
       toast({ variant: 'destructive', title: 'Solicitação Rejeitada' });
     }
-    
+
     // 3. Chama o onUpdate do componente pai para recarregar os dados
     if (onUpdate) onUpdate(solicitudId);
     setUpdatingRequestId(null);
   };
-  
+
   const renderHorarios = (horariosJson) => {
     try {
-        // CORREÇÃO: Trata JSON como string e valida antes de parsear
-        if (!horariosJson || typeof horariosJson !== 'string' || !horariosJson.startsWith('{')) return <p className="text-sm text-slate-500">Detalhes não disponíveis</p>;
-        
-        const schedule = JSON.parse(horariosJson);
-        if (!schedule.is_recurring) return <p className="text-sm text-slate-500">Aula individual</p>;
-        
-        return (
-            <div className="flex items-center gap-4 text-sm text-slate-700 mt-2">
-                <div className="flex items-center gap-1">
-                    <Clock className="w-4 h-4 text-sky-600" />
-                    <span className="font-semibold">{schedule.time.substring(0, 5)}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4 text-sky-600" />
-                    <span className="font-semibold">{schedule.days.map(d => daysOfWeekMap[d]).join(', ')}</span>
-                </div>
-            </div>
-        );
+      // CORREÇÃO: Trata JSON como string e valida antes de parsear
+      if (!horariosJson || typeof horariosJson !== 'string' || !horariosJson.startsWith('{')) return <p className="text-sm text-slate-500">Detalhes não disponíveis</p>;
+
+      const schedule = JSON.parse(horariosJson);
+      if (!schedule.is_recurring) return <p className="text-sm text-slate-500">Aula individual</p>;
+
+      return (
+        <div className="flex items-center gap-4 text-sm text-slate-700 mt-2">
+          <div className="flex items-center gap-1">
+            <Clock className="w-4 h-4 text-sky-600" />
+            <span className="font-semibold">{schedule.time.substring(0, 5)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-sky-600" />
+            <span className="font-semibold">{schedule.days.map(d => daysOfWeekMap[d]).join(', ')}</span>
+          </div>
+        </div>
+      );
     } catch (e) {
-        return <p className="text-xs text-red-500">Erro ao ler detalhes</p>;
+      return <p className="text-xs text-red-500">Erro ao ler detalhes</p>;
     }
   };
 
@@ -253,7 +311,7 @@ const HomeTab = ({ dashboardData }) => {
         <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
           <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
           {loading ? (
-            <p>Carregando...</p> 
+            <p>Carregando...</p>
           ) : nextClass ? (
             <>
               <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
