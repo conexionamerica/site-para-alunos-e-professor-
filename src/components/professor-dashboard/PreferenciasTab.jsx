@@ -266,6 +266,7 @@ const PreferenciasTab = ({ dashboardData }) => {
   // FIM DOS NOVOS ESTADOS
 
   const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
+  const [liberatingSlot, setLiberatingSlot] = useState(null); // Para mostrar loading en el slot que se está liberando
   const [purchaseDate, setPurchaseDate] = useState(new Date());
   // Estado para a Data de Fim/Validade (Usado por pacotes padrão e Personalizado)
   const [endDate, setEndDate] = useState(addMonths(new Date(), 1));
@@ -367,6 +368,99 @@ const PreferenciasTab = ({ dashboardData }) => {
       toast({ variant: 'destructive', title: 'Erro ao salvar', description: `Não foi possível salvar as alterações: ${error.message}` });
     } finally {
       setIsSavingSlots(false);
+    }
+  };
+
+  // Función para liberar un horario ocupado
+  const handleLiberateSlot = async (slot) => {
+    const slotKey = `${slot.day_of_week}-${slot.start_time}`;
+
+    try {
+      // 1. Buscar el appointment que está usando este slot
+      const { data: appointments, error: aptError } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          class_datetime,
+          duration_minutes,
+          student_id,
+          student:profiles!student_id(full_name)
+        `)
+        .eq('class_slot_id', slot.id)
+        .gte('class_datetime', new Date().toISOString())
+        .in('status', ['scheduled', 'pending', 'rescheduled'])
+        .order('class_datetime', { ascending: true })
+        .limit(1);
+
+      if (aptError) throw aptError;
+
+      if (!appointments || appointments.length === 0) {
+        // No hay appointment, solo liberar el slot
+        const { error: updateError } = await supabase
+          .from('class_slots')
+          .update({ status: 'active' })
+          .eq('id', slot.id);
+
+        if (updateError) throw updateError;
+
+        toast({
+          title: 'Horário liberado!',
+          description: 'O horário foi liberado com sucesso.'
+        });
+
+        if (onUpdate) onUpdate();
+        return;
+      }
+
+      const appointment = appointments[0];
+      const studentName = appointment.student?.full_name || 'Aluno desconhecido';
+
+      // 2. Confirmar con el usuario
+      if (!window.confirm(
+        `Este horário está ocupado por: ${studentName}\n\n` +
+        `Ao liberar este horário:\n` +
+        `• O agendamento será CANCELADO\n` +
+        `• O horário ficará DISPONÍVEL\n\n` +
+        `Deseja continuar?`
+      )) {
+        return;
+      }
+
+      setLiberatingSlot(slotKey);
+
+      // 3. Cancelar el appointment
+      const { error: cancelError } = await supabase
+        .from('appointments')
+        .update({ status: 'cancelled' })
+        .eq('id', appointment.id);
+
+      if (cancelError) throw cancelError;
+
+      // 4. Liberar el slot
+      const { error: updateError } = await supabase
+        .from('class_slots')
+        .update({ status: 'active' })
+        .eq('id', slot.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: 'Horário liberado!',
+        description: `O horário foi liberado. Agendamento de ${studentName} foi cancelado.`
+      });
+
+      // 5. Recargar datos
+      if (onUpdate) onUpdate();
+
+    } catch (error) {
+      console.error('Error liberating slot:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao liberar horário',
+        description: error.message
+      });
+    } finally {
+      setLiberatingSlot(null);
     }
   };
 
@@ -1121,7 +1215,20 @@ const PreferenciasTab = ({ dashboardData }) => {
                             {slot.start_time.substring(0, 5)}
                           </span>
                           {isFilled ? (
-                            <Lock className="h-4 w-4 text-slate-500" title="Horário agendado" />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs hover:bg-red-100 hover:text-red-700"
+                              onClick={() => handleLiberateSlot(slot)}
+                              disabled={liberatingSlot === `${slot.day_of_week}-${slot.start_time}`}
+                              title="Clique para liberar este horário"
+                            >
+                              {liberatingSlot === `${slot.day_of_week}-${slot.start_time}` ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                'Liberar'
+                              )}
+                            </Button>
                           ) : (
                             <Switch
                               checked={isActive}
