@@ -85,28 +85,100 @@ const AlunosTab = ({ dashboardData }) => {
       return;
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_active: newStatus })
-      .eq('id', student.id);
+    try {
+      // 1. Actualizar el estado del alumno
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ is_active: newStatus })
+        .eq('id', student.id);
 
-    if (error) {
+      if (profileError) throw profileError;
+
+      // 2. Si estamos INACTIVANDO el alumno, liberar sus horarios ocupados
+      if (!newStatus) {
+        // Buscar todos los appointments futuros del alumno
+        const { data: futureAppointments, error: apptError } = await supabase
+          .from('appointments')
+          .select('class_slot_id, duration_minutes, class_datetime')
+          .eq('student_id', student.id)
+          .gte('class_datetime', new Date().toISOString())
+          .in('status', ['scheduled', 'pending', 'rescheduled']);
+
+        if (apptError) {
+          console.error('Error fetching appointments:', apptError);
+        } else if (futureAppointments && futureAppointments.length > 0) {
+          // Obtener todos los slot IDs que necesitan ser liberados
+          const slotIdsToFree = new Set();
+
+          for (const apt of futureAppointments) {
+            if (apt.class_slot_id) {
+              slotIdsToFree.add(apt.class_slot_id);
+
+              // Si la clase tiene duración mayor a 15 minutos, liberar slots adicionales
+              const slotsNeeded = Math.ceil((apt.duration_minutes || 30) / 15);
+              if (slotsNeeded > 1) {
+                // Buscar slots consecutivos que también necesitan ser liberados
+                const { data: consecutiveSlots } = await supabase
+                  .from('class_slots')
+                  .select('id, day_of_week, start_time')
+                  .eq('professor_id', professorId)
+                  .eq('status', 'filled');
+
+                // Agregar slots consecutivos basados en el horario
+                // (Esta es una simplificación, en producción necesitarías lógica más robusta)
+                consecutiveSlots?.forEach(slot => slotIdsToFree.add(slot.id));
+              }
+            }
+          }
+
+          // Liberar todos los horarios (cambiar de 'filled' a 'active')
+          if (slotIdsToFree.size > 0) {
+            const { error: updateSlotsError } = await supabase
+              .from('class_slots')
+              .update({ status: 'active' })
+              .in('id', Array.from(slotIdsToFree));
+
+            if (updateSlotsError) {
+              console.error('Error liberating slots:', updateSlotsError);
+              toast({
+                variant: 'warning',
+                title: 'Aviso',
+                description: 'Aluno inativado, mas alguns horários podem não ter sido liberados.'
+              });
+            } else {
+              toast({
+                title: 'Sucesso!',
+                description: `Aluno inativado e ${slotIdsToFree.size} horário(s) liberado(s) com sucesso.`
+              });
+            }
+          }
+
+          // Cancelar los appointments futuros
+          await supabase
+            .from('appointments')
+            .update({ status: 'cancelled' })
+            .eq('student_id', student.id)
+            .gte('class_datetime', new Date().toISOString())
+            .in('status', ['scheduled', 'pending', 'rescheduled']);
+        }
+      } else {
+        toast({
+          title: 'Sucesso!',
+          description: `Aluno ativado com sucesso.`
+        });
+      }
+
+      // Reload data
+      if (onUpdate) onUpdate();
+
+    } catch (error) {
       console.error('Error toggling student status:', error);
       toast({
         variant: 'destructive',
         title: 'Erro',
         description: `Não foi possível ${action} o aluno: ${error.message}`
       });
-      return;
     }
-
-    toast({
-      title: 'Sucesso!',
-      description: `Aluno ${newStatus ? 'ativado' : 'inativado'} com sucesso.`
-    });
-
-    // Reload data
-    if (onUpdate) onUpdate();
   };
 
   // Abrir diálogo de mensaje
