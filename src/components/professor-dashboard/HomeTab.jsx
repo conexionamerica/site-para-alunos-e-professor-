@@ -318,7 +318,7 @@ const HomeTab = ({ dashboardData }) => {
               <h3 className="text-lg font-bold mt-1">{nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
               <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student.full_name}</p>
               <p className="text-sm"><strong>Nível:</strong> {nextClass.student.spanish_level || 'Não definido'}</p>
-              <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
+              <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
             </>
           ) : (
             <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
