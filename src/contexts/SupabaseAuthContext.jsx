@@ -142,21 +142,11 @@ export const AuthProvider = ({ children }) => {
   }, [handleSession, fetchProfile, navigate, toast]); // createProfessorUser removido
 
   const signUp = useCallback(async (email, password, options) => {
-    // Generar un email único interno para Supabase Auth
-    // mientras guardamos el email real del usuario en los metadatos
-    const timestamp = Date.now();
-    const randomStr = Math.random().toString(36).substring(2, 8);
-    const internalEmail = `student_${timestamp}_${randomStr}@internal.conexionamerica.com.br`;
-
     const { data, error } = await supabase.auth.signUp({
-      email: internalEmail, // Email único para Supabase Auth
+      email,
       password,
       options: {
         ...options,
-        data: {
-          ...options?.data,
-          real_email: email, // Guardamos el email real del usuario
-        },
         emailRedirectTo: undefined
       },
     });
@@ -173,80 +163,25 @@ export const AuthProvider = ({ children }) => {
   }, [toast]);
 
   const signIn = useCallback(async (email, password) => {
-    // Primero, buscar el usuario por su email real en la tabla profiles
-    const { data: profiles, error: searchError } = await supabase
-      .from('profiles')
-      .select('id, email')
-      .eq('real_email', email);
-
-    // Si encontramos usuarios con real_email, intentar login con ellos
-    if (!searchError && profiles && profiles.length > 0) {
-      let lastError = null;
-      for (const profile of profiles) {
-        const { error, data } = await supabase.auth.signInWithPassword({
-          email: profile.email, // Email interno de Supabase
-          password,
-        });
-
-        if (!error) {
-          // Login exitoso
-          return { error: null };
-        }
-        lastError = error;
-      }
-
-      // Si ninguno funcionó con el email interno, continuar con el fallback
-      if (lastError) {
-        // Intentar login directo como fallback para usuarios existentes
-        const { error: directError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (!directError) {
-          return { error: null };
-        }
-      }
-    }
-
-    // FALLBACK: Intentar login directo para usuarios existentes (sin real_email)
-    // Esto mantiene compatibilidad con usuarios creados antes de la migración
-    const { error: directLoginError } = await supabase.auth.signInWithPassword({
+    const { error, data } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (!directLoginError) {
-      // Login exitoso con email directo (usuario existente)
-      return { error: null };
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Falha no Login",
+        description: error.message || "E-mail ou senha inválidos.",
+      });
+      return { error };
     }
 
-    // Si todo falló, mostrar error
-    toast({
-      variant: "destructive",
-      title: "Falha no Login",
-      description: directLoginError?.message || "E-mail ou senha inválidos.",
-    });
-    return { error: directLoginError };
+    return { error: null };
   }, [toast]);
 
   const sendPasswordResetLink = useCallback(async (email) => {
-    // Buscar el email interno del usuario basado en su email real
-    const { data: profiles, error: searchError } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('real_email', email)
-      .limit(1);
-
-    let emailToUse = email; // Por defecto, usar el email ingresado (usuarios existentes)
-
-    // Si encontramos un perfil con real_email, usar el email interno
-    if (!searchError && profiles && profiles.length > 0) {
-      emailToUse = profiles[0].email;
-    }
-
-    // Enviar el link de reset
-    const { error } = await supabase.auth.resetPasswordForEmail(emailToUse, {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/update-password`,
     });
 
