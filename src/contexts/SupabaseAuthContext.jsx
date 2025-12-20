@@ -142,11 +142,21 @@ export const AuthProvider = ({ children }) => {
   }, [handleSession, fetchProfile, navigate, toast]); // createProfessorUser removido
 
   const signUp = useCallback(async (email, password, options) => {
+    // Generar un email único interno para Supabase Auth
+    // mientras guardamos el email real del usuario en los metadatos
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    const internalEmail = `student_${timestamp}_${randomStr}@internal.conexionamerica.com.br`;
+
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: internalEmail, // Email único para Supabase Auth
       password,
       options: {
         ...options,
+        data: {
+          ...options?.data,
+          real_email: email, // Guardamos el email real del usuario
+        },
         emailRedirectTo: undefined
       },
     });
@@ -163,25 +173,73 @@ export const AuthProvider = ({ children }) => {
   }, [toast]);
 
   const signIn = useCallback(async (email, password) => {
-    const { error, data } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // Primero, buscar el usuario por su email real en la tabla profiles
+    const { data: profiles, error: searchError } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .eq('real_email', email);
 
-    if (error) {
+    if (searchError) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao buscar usuário",
+        description: searchError.message || "Não foi possível buscar o usuário.",
+      });
+      return { error: searchError };
+    }
+
+    if (!profiles || profiles.length === 0) {
       toast({
         variant: "destructive",
         title: "Falha no Login",
-        description: error.message || "E-mail ou senha inválidos.",
+        description: "E-mail ou senha inválidos.",
       });
-      return { error };
+      return { error: { message: "User not found" } };
     }
 
-    return { error: null };
+    // Si hay múltiples usuarios con el mismo email real, intentar login con cada uno
+    let lastError = null;
+    for (const profile of profiles) {
+      const { error, data } = await supabase.auth.signInWithPassword({
+        email: profile.email, // Email interno de Supabase
+        password,
+      });
+
+      if (!error) {
+        // Login exitoso
+        return { error: null };
+      }
+      lastError = error;
+    }
+
+    // Si ninguno funcionó, mostrar error
+    toast({
+      variant: "destructive",
+      title: "Falha no Login",
+      description: lastError?.message || "E-mail ou senha inválidos.",
+    });
+    return { error: lastError };
   }, [toast]);
 
   const sendPasswordResetLink = useCallback(async (email) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    // Buscar el email interno del usuario basado en su email real
+    const { data: profiles, error: searchError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('real_email', email)
+      .limit(1);
+
+    if (searchError || !profiles || profiles.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Falha ao redefinir",
+        description: "E-mail não encontrado no sistema."
+      });
+      return { error: searchError || { message: "Email not found" } };
+    }
+
+    const internalEmail = profiles[0].email;
+    const { error } = await supabase.auth.resetPasswordForEmail(internalEmail, {
       redirectTo: `${window.location.origin}/update-password`,
     });
 
