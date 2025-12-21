@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
@@ -14,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Se incluyen los iconos necesarios para la nueva funcionalidad
-import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw } from 'lucide-react';
+import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot } from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
 import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 
@@ -74,6 +75,7 @@ export const HelpWidget = () => (
 const HomePage = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [activeBillings, setActiveBillings] = useState([]);
@@ -586,7 +588,17 @@ const HomePage = () => {
           <TabsContent value="aulas" className="mt-4 space-y-6 bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-bold mb-4">Histórico de Aulas</h2>
             <div className="border rounded-lg overflow-hidden"><Table><TableHeader className="bg-slate-50"><TableRow><TableHead>Data</TableHead><TableHead>Hora</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan="3" className="text-center">Carregando...</TableCell></TableRow> : appointments.length > 0 ? appointments.map(apt => (<TableRow key={apt.id}><TableCell>{format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR })}</TableCell><TableCell>{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell><TableCell><StatusBadge status={apt.status} /></TableCell></TableRow>)) : <TableRow><TableCell colSpan="3" className="text-center p-8 text-slate-500">Nenhuma aula encontrada.</TableCell></TableRow>}</TableBody></Table></div>
-            <div className="fixed bottom-6 right-24 z-50">
+            <div className="fixed bottom-6 right-24 z-50 flex gap-3">
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                <Button
+                  size="icon"
+                  onClick={() => navigate('/spanish-assistant')}
+                  className="rounded-full h-14 w-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
+                  title="Asistente de Español IA"
+                >
+                  <Bot className="h-7 w-7" />
+                </Button>
+              </motion.div>
               <HelpWidget />
             </div>
           </TabsContent>
