@@ -435,6 +435,19 @@ const HomePage = () => {
               <h2 className="text-xl font-bold mb-4">Histórico de Faturas</h2>
               <div className="border rounded-lg overflow-hidden">{loading ? <p className="p-4">Carregando...</p> : pastBillings.length > 0 ? <Table><TableHeader className="bg-slate-50"><TableRow><TableHead>Pacote</TableHead><TableHead>Data da Compra</TableHead><TableHead>Data de Expiração</TableHead></TableRow></TableHeader><TableBody>{pastBillings.map(b => (<TableRow key={b.id}><TableCell>{b.packages.name}</TableCell><TableCell>{format(parseISO(b.purchase_date), 'PPP', { locale: ptBR })}</TableCell><TableCell>{format(parseISO(b.end_date), 'PPP', { locale: ptBR })}</TableCell></TableRow>))}</TableBody></Table> : <p className="p-8 text-center text-slate-500">Nenhum histórico encontrado.</p>}</div>
             </div>
+            <div className="fixed bottom-6 right-24 z-50 flex gap-3">
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                <Button
+                  size="icon"
+                  onClick={() => navigate('/spanish-assistant')}
+                  className="rounded-full h-14 w-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
+                  title="Asistente de Español IA"
+                >
+                  <Bot className="h-7 w-7" />
+                </Button>
+              </motion.div>
+              <HelpWidget />
+            </div>
           </TabsContent>
 
           <TabsContent value="agenda" className="mt-4 space-y-6">
