@@ -268,8 +268,6 @@ const PreferenciasTab = ({ dashboardData }) => {
 
   const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
   const [liberatingSlot, setLiberatingSlot] = useState(null); // Para mostrar loading en el slot que se está liberando
-  const [futureAppointments, setFutureAppointments] = useState([]);
-  const [slotOccupancy, setSlotOccupancy] = useState({});
   const [purchaseDate, setPurchaseDate] = useState(getBrazilDate());
   // Estado para a Data de Fim/Validade (Usado por pacotes padrão e Personalizado)
   const [endDate, setEndDate] = useState(addMonths(getBrazilDate(), 1));
@@ -319,58 +317,6 @@ const PreferenciasTab = ({ dashboardData }) => {
 
     setSlots(mergedSlots);
   }, [classSlots, professorId, loading]); // Depende de classSlots e loading
-
-  // Buscar appointments futuros para marcar slots ocupados
-  useEffect(() => {
-    const fetchFutureAppointments = async () => {
-      if (!professorId) return;
-
-      const { data, error } = await supabase
-        .from('appointments')
-        .select(`
-          id, class_datetime, duration_minutes, status,
-          student:profiles!student_id(full_name)
-        `)
-        .eq('professor_id', professorId)
-        .gte('class_datetime', getBrazilDate().toISOString())
-        .in('status', ['scheduled', 'pending', 'rescheduled']);
-
-      if (error) {
-        console.error('Error fetching future appointments:', error);
-        return;
-      }
-
-      setFutureAppointments(data || []);
-
-      // Mapear appointments para slots
-      const occupancy = {};
-      (data || []).forEach(apt => {
-        const aptDate = parseISO(apt.class_datetime);
-        const dayOfWeek = getDay(aptDate);
-        const time = format(aptDate, 'HH:mm:ss');
-        const duration = apt.duration_minutes || 30;
-        const slotsNeeded = Math.ceil(duration / 15);
-
-        // Marcar slot inicial e consecutivos
-        for (let i = 0; i < slotsNeeded; i++) {
-          const slotTime = add(aptDate, { minutes: i * 15 });
-          const slotTimeStr = format(slotTime, 'HH:mm:ss');
-          const slotKey = `${dayOfWeek}-${slotTimeStr}`;
-
-          occupancy[slotKey] = {
-            appointmentId: apt.id,
-            studentName: apt.student?.full_name,
-            isFirstSlot: i === 0,
-            status: apt.status
-          };
-        }
-      });
-
-      setSlotOccupancy(occupancy);
-    };
-
-    fetchFutureAppointments();
-  }, [professorId, loading]);
 
   const handleSlotToggle = (dayIndex, time) => {
     setSlots(currentSlots =>
@@ -427,51 +373,30 @@ const PreferenciasTab = ({ dashboardData }) => {
   };
 
   // Función para liberar un horario ocupado
-  const handleLiberateSlot = async (slot, occupation) => {
+  const handleLiberateSlot = async (slot) => {
     const slotKey = `${slot.day_of_week}-${slot.start_time}`;
 
     try {
-      // Se há occupation (appointment agendado)
-      if (occupation?.appointmentId) {
-        const studentName = occupation.studentName || 'Aluno desconhecido';
+      // 1. Buscar el appointment que está usando este slot
+      const { data: appointments, error: aptError } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          class_datetime,
+          duration_minutes,
+          student_id,
+          student:profiles!student_id(full_name)
+        `)
+        .eq('class_slot_id', slot.id)
+        .gte('class_datetime', getBrazilDate().toISOString())
+        .in('status', ['scheduled', 'pending', 'rescheduled'])
+        .order('class_datetime', { ascending: true })
+        .limit(1);
 
-        // Confirmar com o usuário
-        if (!window.confirm(
-          `Este horário está ocupado por: ${studentName}\n\n` +
-          `Ao liberar este horário:\n` +
-          `• O agendamento será CANCELADO\n` +
-          `• O horário ficará DISPONÍVEL\n\n` +
-          `Deseja continuar?`
-        )) {
-          return;
-        }
+      if (aptError) throw aptError;
 
-        setLiberatingSlot(slotKey);
-
-        // Cancelar o appointment
-        const { error: cancelError } = await supabase
-          .from('appointments')
-          .update({ status: 'cancelled' })
-          .eq('id', occupation.appointmentId);
-
-        if (cancelError) throw cancelError;
-
-        toast({
-          title: 'Horário liberado!',
-          description: `O horário foi liberado. Agendamento de ${studentName} foi cancelado.`
-        });
-
-      } else {
-        // Liberar slot filled (pacote personalizado)
-        if (!window.confirm(
-          `Deseja liberar este horário?\n\n` +
-          `O horário ficará disponível para novos agendamentos.`
-        )) {
-          return;
-        }
-
-        setLiberatingSlot(slotKey);
-
+      if (!appointments || appointments.length === 0) {
+        // No hay appointment, solo liberar el slot
         const { error: updateError } = await supabase
           .from('class_slots')
           .update({ status: 'active' })
@@ -483,9 +408,49 @@ const PreferenciasTab = ({ dashboardData }) => {
           title: 'Horário liberado!',
           description: 'O horário foi liberado com sucesso.'
         });
+
+        if (onUpdate) onUpdate();
+        return;
       }
 
-      // Recarregar dados
+      const appointment = appointments[0];
+      const studentName = appointment.student?.full_name || 'Aluno desconhecido';
+
+      // 2. Confirmar con el usuario
+      if (!window.confirm(
+        `Este horário está ocupado por: ${studentName}\n\n` +
+        `Ao liberar este horário:\n` +
+        `• O agendamento será CANCELADO\n` +
+        `• O horário ficará DISPONÍVEL\n\n` +
+        `Deseja continuar?`
+      )) {
+        return;
+      }
+
+      setLiberatingSlot(slotKey);
+
+      // 3. Cancelar el appointment
+      const { error: cancelError } = await supabase
+        .from('appointments')
+        .update({ status: 'cancelled' })
+        .eq('id', appointment.id);
+
+      if (cancelError) throw cancelError;
+
+      // 4. Liberar el slot
+      const { error: updateError } = await supabase
+        .from('class_slots')
+        .update({ status: 'active' })
+        .eq('id', slot.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: 'Horário liberado!',
+        description: `O horário foi liberado. Agendamento de ${studentName} foi cancelado.`
+      });
+
+      // 5. Recargar datos
       if (onUpdate) onUpdate();
 
     } catch (error) {
@@ -1237,64 +1202,40 @@ const PreferenciasTab = ({ dashboardData }) => {
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
                     {daySlots?.map(slot => {
-                      const slotKey = `${slot.day_of_week}-${slot.start_time}`;
-                      const occupation = slotOccupancy[slotKey];
                       const isFilled = slot.status === 'filled';
-                      const isOccupied = !!occupation;
                       const isActive = slot.status === 'active';
-                      const isInactive = slot.status === 'inactive';
-
                       return (
                         <div
                           key={slot.start_time}
                           className={cn(
-                            "flex flex-col gap-1 p-2 rounded-md border",
-                            isOccupied ? "bg-sky-100 border-sky-300" :
-                              isFilled ? "bg-sky-100 border-sky-300" :
-                                isInactive ? "bg-slate-200 border-slate-300" :
-                                  "bg-white border-slate-200"
+                            "flex items-center justify-between gap-2 p-2 rounded-md border",
+                            isFilled ? "bg-slate-200" : (isActive ? "bg-sky-50" : "bg-slate-50")
                           )}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className={cn(
-                              "text-sm font-medium",
-                              (isOccupied || isFilled) ? "text-sky-700" :
-                                isInactive ? "text-slate-500" :
-                                  "text-slate-700"
-                            )}>
-                              {slot.start_time.substring(0, 5)}
-                            </span>
-
-                            {!isOccupied && !isFilled && (
-                              <Switch
-                                checked={isActive}
-                                onCheckedChange={() => handleSlotToggle(slot.day_of_week, slot.start_time)}
-                                aria-label={`Ativar/desativar ${slot.start_time}`}
-                                className="h-4 w-7"
-                              />
-                            )}
-                          </div>
-
-                          {(isOccupied || isFilled) && (
-                            <>
-                              <div className="text-xs text-sky-700 font-medium truncate">
-                                {occupation?.studentName || "Ocupado"}
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-xs hover:bg-red-100 hover:text-red-700"
-                                onClick={() => handleLiberateSlot(slot, occupation)}
-                                disabled={liberatingSlot === slotKey}
-                                title="Clique para liberar este horário"
-                              >
-                                {liberatingSlot === slotKey ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  'Liberar'
-                                )}
-                              </Button>
-                            </>
+                          <span className={cn("text-sm font-medium", isFilled ? "text-slate-500" : "text-slate-700")}>
+                            {slot.start_time.substring(0, 5)}
+                          </span>
+                          {isFilled ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs hover:bg-red-100 hover:text-red-700"
+                              onClick={() => handleLiberateSlot(slot)}
+                              disabled={liberatingSlot === `${slot.day_of_week}-${slot.start_time}`}
+                              title="Clique para liberar este horário"
+                            >
+                              {liberatingSlot === `${slot.day_of_week}-${slot.start_time}` ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                'Liberar'
+                              )}
+                            </Button>
+                          ) : (
+                            <Switch
+                              checked={isActive}
+                              onCheckedChange={() => handleSlotToggle(slot.day_of_week, slot.start_time)}
+                              aria-label={`Ativar/desativar ${slot.start_time}`}
+                            />
                           )}
                         </div>
                       );
