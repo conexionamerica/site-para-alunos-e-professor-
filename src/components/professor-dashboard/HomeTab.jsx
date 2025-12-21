@@ -26,6 +26,7 @@ const HomeTab = ({ dashboardData }) => {
   const { toast } = useToast();
   const [updatingRequestId, setUpdatingRequestId] = useState(null);
   const [solicitudes, setSolicitudes] = useState([]);
+  const [next24Hours, setNext24Hours] = useState([]);
 
   // Extração segura das propriedades
   const professorId = dashboardData?.professorId;
@@ -44,6 +45,37 @@ const HomeTab = ({ dashboardData }) => {
       setSolicitudes([]); // Garante que seja um array vazio se o dado for nulo/inválido
     }
   }, [data?.scheduleRequests]);
+
+  // Buscar aulas das próximas 24 horas
+  useEffect(() => {
+    const fetchNext24Hours = async () => {
+      if (!professorId) return;
+
+      const now = getBrazilDate();
+      const next24 = add(now, { hours: 24 });
+
+      const { data: appointments, error } = await supabase
+        .from('appointments')
+        .select(`
+          id, class_datetime, duration_minutes,
+          student:profiles!student_id(full_name)
+        `)
+        .eq('professor_id', professorId)
+        .gte('class_datetime', now.toISOString())
+        .lte('class_datetime', next24.toISOString())
+        .in('status', ['scheduled', 'rescheduled'])
+        .order('class_datetime', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching next 24 hours:', error);
+        return;
+      }
+
+      setNext24Hours(appointments || []);
+    };
+
+    fetchNext24Hours();
+  }, [professorId, loading]);
 
   const handleUpdateRequestStatus = async (solicitudId, newStatus) => {
     setUpdatingRequestId(solicitudId);
@@ -325,6 +357,37 @@ const HomeTab = ({ dashboardData }) => {
                 </>
               ) : (
                 <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
+              )}
+            </div>
+
+            {/* Novo Card: Próximas 24 Horas */}
+            <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm p-4">
+              <h3 className="text-lg font-bold mb-3">Próximas 24 Horas</h3>
+              {loading ? (
+                <p className="text-sm text-slate-500">Carregando...</p>
+              ) : next24Hours.length > 0 ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {next24Hours.map(apt => {
+                    const aptDate = parseISO(apt.class_datetime);
+                    return (
+                      <div key={apt.id} className="flex justify-between items-center p-2 border rounded hover:bg-slate-50">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-800">
+                            {apt.student?.full_name || 'Aluno'}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {format(aptDate, "dd/MM 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                        </div>
+                        <div className="text-xs text-slate-600">
+                          {apt.duration_minutes || 30} min
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-slate-500 text-sm">Nenhuma aula nas próximas 24 horas.</p>
               )}
             </div>
           </div>
