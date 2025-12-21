@@ -935,375 +935,377 @@ const PreferenciasTab = ({ dashboardData }) => {
 
 
   return (
-    <div className="space-y-8">
-      <div className="bg-white p-6 rounded-lg shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">Incluir Aulas para Aluno</h3>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline"><History className="mr-2 h-4 w-4" /> Ver Histórico</Button>
-            </DialogTrigger>
-            {/* Passa a função onDelete que será responsável por fazer a atualização no Supabase */}
-            <AssignedPackagesHistory professorId={professorId} onDelete={handleDeleteLog} />
-          </Dialog>
-        </div>
-        <form onSubmit={handleAssignPackage} className="space-y-4 max-w-2xl">
-          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" role="combobox" aria-expanded={popoverOpen} className="w-full justify-between">
-                {selectedStudent ? selectedStudent.full_name : "Selecione um alumno..."}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-              <Command>
-                <CommandInput placeholder="Buscar alumno..." />
-                <CommandList>
-                  <CommandEmpty>Nenhum alumno encontrado.</CommandEmpty>
-                  <CommandGroup>
-                    {/* CORREÇÃO: Usa students extraído */}
-                    {students.map((student) => (
-                      <CommandItem
-                        key={student.id}
-                        value={student.full_name}
-                        onSelect={() => {
-                          setSelectedStudentId(student.id);
-                          setPopoverOpen(false);
-                        }}
-                      >
-                        <Check className={cn("mr-2 h-4 w-4", selectedStudentId === student.id ? "opacity-100" : "opacity-0")} />
-                        {student.full_name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Select onValueChange={(value) => { setSelectedPackage(value); setCustomClassCount(''); }} value={selectedPackage || ''}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um pacote" />
-              </SelectTrigger>
-              <SelectContent>
-                {packages.map((pkg) => (
-                  <SelectItem key={pkg.id} value={pkg.id.toString()}>{pkg.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Data de Início (Purchase Date) - Visível apenas para pacotes NÃO automáticos */}
-            {!isAutomaticScheduling && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !purchaseDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {purchaseDate ? format(purchaseDate, "PPP", { locale: ptBR }) : <span>Data de Início</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={purchaseDate}
-                    onSelect={setPurchaseDate}
-                    initialFocus
-                    locale={ptBR}
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-
-            {/* Data de Fim (End Date) - OCULTA se for Pacote Personalizado */}
-            {!isAutomaticScheduling && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "PPP", { locale: ptBR }) : <span>Data de Fim</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={setEndDate}
-                    initialFocus
-                    locale={ptBR}
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-
+    <div className="flex justify-center">
+      <div className="w-full max-w-[1400px] space-y-8">
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold">Incluir Aulas para Aluno</h3>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline"><History className="mr-2 h-4 w-4" /> Ver Histórico</Button>
+              </DialogTrigger>
+              {/* Passa a função onDelete que será responsável por fazer a atualização no Supabase */}
+              <AssignedPackagesHistory professorId={professorId} onDelete={handleDeleteLog} />
+            </Dialog>
           </div>
-
-          {/* --- NOVO BLOCO PCKPERSONAL (AGORA 'PERSONALIZADO') --- */}
-          {isAutomaticScheduling ? (
-            <motion.div
-              key="pck-personal-details" // Key is crucial for motion.div to work on unmount/mount
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50"
-            >
-              <h4 className="text-lg font-semibold text-sky-800">Detalhes do Pacote Personalizado</h4>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Preço Pago */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-price">Preço Pago (R$)</Label>
-                  <Input
-                    id="pck-price"
-                    type="number"
-                    placeholder="Ex: 500.00"
-                    value={price || ''}
-                    onChange={(e) => handlePckPersonalChange('price', e.target.value)}
-                    required
-                    min="0"
-                  />
-                </div>
-                {/* Total de Aulas */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-total-classes">Total de Aulas</Label>
-                  <Input
-                    id="pck-total-classes"
-                    type="number"
-                    placeholder="Ex: 12"
-                    value={totalClasses || ''}
-                    onChange={(e) => handlePckPersonalChange('totalClasses', e.target.value)}
-                    required
-                    min="1"
-                  />
-                </div>
-              </div>
-
-              {/* Duração e Horário */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Data de Início do Personalizado */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-start-date">Data de Início</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn("w-full justify-start text-left font-normal")}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(pckStartDate, "PPP", { locale: ptBR })}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={pckStartDate}
-                        onSelect={(date) => handlePckPersonalChange('startDate', date)}
-                        initialFocus
-                        locale={ptBR}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                {/* Duração da Aula */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-duration">Duração (Minutos)</Label>
-                  <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
-                    <SelectTrigger id="pck-duration">
-                      <SelectValue placeholder="Duração" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30 Minutos</SelectItem>
-                      <SelectItem value="45">45 Minutos</SelectItem>
-                      <SelectItem value="60">60 Minutos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Horário de Início */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-time">Horário de Início Fixo</Label>
-                  <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
-                    <SelectTrigger id="pck-time">
-                      <SelectValue placeholder="Horário (Ex: 10:00)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
-                        <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
+          <form onSubmit={handleAssignPackage} className="space-y-4 max-w-2xl">
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={popoverOpen} className="w-full justify-between">
+                  {selectedStudent ? selectedStudent.full_name : "Selecione um alumno..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                <Command>
+                  <CommandInput placeholder="Buscar alumno..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum alumno encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {/* CORREÇÃO: Usa students extraído */}
+                      {students.map((student) => (
+                        <CommandItem
+                          key={student.id}
+                          value={student.full_name}
+                          onSelect={() => {
+                            setSelectedStudentId(student.id);
+                            setPopoverOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", selectedStudentId === student.id ? "opacity-100" : "opacity-0")} />
+                          {student.full_name}
+                        </CommandItem>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {/* Validade do Pacote */}
-                <div className="space-y-2">
-                  <Label>Validade (Término)</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn("w-full justify-start text-left font-normal")}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(pckEndDate, "PPP", { locale: ptBR })}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={pckEndDate}
-                        onSelect={(date) => handlePckPersonalChange('endDate', date)}
-                        initialFocus
-                        locale={ptBR}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
 
-              {/* Dias da Semana */}
-              <div className="space-y-2">
-                <Label>Dias da Semana Fixos</Label>
-                <div className="flex flex-wrap gap-2">
-                  {daysOfWeek.map((day, index) => (
-                    <Button
-                      key={index}
-                      type="button"
-                      variant={days.includes(index) ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => handleDayTogglePckPersonal(index)}
-                    >
-                      {day.substring(0, 3)}
-                    </Button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Select onValueChange={(value) => { setSelectedPackage(value); setCustomClassCount(''); }} value={selectedPackage || ''}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um pacote" />
+                </SelectTrigger>
+                <SelectContent>
+                  {packages.map((pkg) => (
+                    <SelectItem key={pkg.id} value={pkg.id.toString()}>{pkg.name}</SelectItem>
                   ))}
-                </div>
-                {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
-              </div>
-            </motion.div>
-          ) : null}
-          {/* --- FIM DO NOVO BLOCO PCKPERSONAL --- */}
+                </SelectContent>
+              </Select>
 
-          <Textarea placeholder="Observação (motivo da inclusão)" value={observation} onChange={(e) => setObservation(e.target.value)} />
+              {/* Data de Início (Purchase Date) - Visível apenas para pacotes NÃO automáticos */}
+              {!isAutomaticScheduling && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !purchaseDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {purchaseDate ? format(purchaseDate, "PPP", { locale: ptBR }) : <span>Data de Início</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={purchaseDate}
+                      onSelect={setPurchaseDate}
+                      initialFocus
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+              )}
 
-          <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700" disabled={isSubmittingPackage}>
-            {isSubmittingPackage ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Incluindo...</> : 'Incluir Pacote'}
-          </Button>
-        </form>
-      </div>
+              {/* Data de Fim (End Date) - OCULTA se for Pacote Personalizado */}
+              {!isAutomaticScheduling && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !endDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {endDate ? format(endDate, "PPP", { locale: ptBR }) : <span>Data de Fim</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={setEndDate}
+                      initialFocus
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+              )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="text-xl font-bold">Preferências de Horários</h3>
-            <p className="text-sm text-slate-600 mt-1">Ative ou desative os horários de aula para o ciclo semanal.</p>
-          </div>
-          <Button onClick={handleSaveChanges} disabled={isSavingSlots}>
-            {isSavingSlots ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : 'Salvar Alterações'}
-          </Button>
-        </div>
-        <div className="space-y-6 mt-6">
-          {daysOfWeek.map((day, index) => {
-            const daySlots = slots?.filter(s => s.day_of_week === index);
-            const areAllActive = daySlots?.filter(s => s.status !== 'filled').every(s => s.status === 'active');
-            return (
-              <div key={day}>
-                <div className="flex justify-between items-center mb-3 border-b pb-2">
-                  <h4 className="font-semibold text-lg">{day}</h4>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-500">
-                      {areAllActive ? 'Desativar todos' : 'Ativar todos'}
-                    </span>
-                    <Switch
-                      checked={areAllActive}
-                      onCheckedChange={(checked) => handleDayToggle(index, checked)}
-                      aria-label={`Ativar/desativar todos os horários de ${day}`}
+            </div>
+
+            {/* --- NOVO BLOCO PCKPERSONAL (AGORA 'PERSONALIZADO') --- */}
+            {isAutomaticScheduling ? (
+              <motion.div
+                key="pck-personal-details" // Key is crucial for motion.div to work on unmount/mount
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50"
+              >
+                <h4 className="text-lg font-semibold text-sky-800">Detalhes do Pacote Personalizado</h4>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Preço Pago */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-price">Preço Pago (R$)</Label>
+                    <Input
+                      id="pck-price"
+                      type="number"
+                      placeholder="Ex: 500.00"
+                      value={price || ''}
+                      onChange={(e) => handlePckPersonalChange('price', e.target.value)}
+                      required
+                      min="0"
+                    />
+                  </div>
+                  {/* Total de Aulas */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-total-classes">Total de Aulas</Label>
+                    <Input
+                      id="pck-total-classes"
+                      type="number"
+                      placeholder="Ex: 12"
+                      value={totalClasses || ''}
+                      onChange={(e) => handlePckPersonalChange('totalClasses', e.target.value)}
+                      required
+                      min="1"
                     />
                   </div>
                 </div>
-                {loading ? ( // CORREÇÃO: Usa o 'loading' do dashboardData
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                ) : (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
-                    {daySlots?.map(slot => {
-                      const slotKey = `${slot.day_of_week}-${slot.start_time}`;
-                      const occupation = slotOccupancy[slotKey];
-                      const isFilled = slot.status === 'filled';
-                      const isOccupied = !!occupation;
-                      const isActive = slot.status === 'active';
-                      const isInactive = slot.status === 'inactive';
 
-                      return (
-                        <div
-                          key={slot.start_time}
-                          className={cn(
-                            "flex flex-col gap-1 p-2 rounded-md border",
-                            isOccupied ? "bg-sky-100 border-sky-300" :
-                              isFilled ? "bg-sky-100 border-sky-300" :
-                                isInactive ? "bg-slate-200 border-slate-300" :
-                                  "bg-white border-slate-200"
-                          )}
+                {/* Duração e Horário */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Data de Início do Personalizado */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-start-date">Data de Início</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn("w-full justify-start text-left font-normal")}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className={cn(
-                              "text-sm font-medium",
-                              (isOccupied || isFilled) ? "text-sky-700" :
-                                isInactive ? "text-slate-500" :
-                                  "text-slate-700"
-                            )}>
-                              {slot.start_time.substring(0, 5)}
-                            </span>
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(pckStartDate, "PPP", { locale: ptBR })}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={pckStartDate}
+                          onSelect={(date) => handlePckPersonalChange('startDate', date)}
+                          initialFocus
+                          locale={ptBR}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  {/* Duração da Aula */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-duration">Duração (Minutos)</Label>
+                    <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
+                      <SelectTrigger id="pck-duration">
+                        <SelectValue placeholder="Duração" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30 Minutos</SelectItem>
+                        <SelectItem value="45">45 Minutos</SelectItem>
+                        <SelectItem value="60">60 Minutos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-                            {!isOccupied && !isFilled && (
-                              <Switch
-                                checked={isActive}
-                                onCheckedChange={() => handleSlotToggle(slot.day_of_week, slot.start_time)}
-                                aria-label={`Ativar/desativar ${slot.start_time}`}
-                                className="h-4 w-7"
-                              />
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Horário de Início */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-time">Horário de Início Fixo</Label>
+                    <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
+                      <SelectTrigger id="pck-time">
+                        <SelectValue placeholder="Horário (Ex: 10:00)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
+                          <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Validade do Pacote */}
+                  <div className="space-y-2">
+                    <Label>Validade (Término)</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn("w-full justify-start text-left font-normal")}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(pckEndDate, "PPP", { locale: ptBR })}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={pckEndDate}
+                          onSelect={(date) => handlePckPersonalChange('endDate', date)}
+                          initialFocus
+                          locale={ptBR}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                {/* Dias da Semana */}
+                <div className="space-y-2">
+                  <Label>Dias da Semana Fixos</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {daysOfWeek.map((day, index) => (
+                      <Button
+                        key={index}
+                        type="button"
+                        variant={days.includes(index) ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleDayTogglePckPersonal(index)}
+                      >
+                        {day.substring(0, 3)}
+                      </Button>
+                    ))}
+                  </div>
+                  {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
+                </div>
+              </motion.div>
+            ) : null}
+            {/* --- FIM DO NOVO BLOCO PCKPERSONAL --- */}
+
+            <Textarea placeholder="Observação (motivo da inclusão)" value={observation} onChange={(e) => setObservation(e.target.value)} />
+
+            <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700" disabled={isSubmittingPackage}>
+              {isSubmittingPackage ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Incluindo...</> : 'Incluir Pacote'}
+            </Button>
+          </form>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-xl font-bold">Preferências de Horários</h3>
+              <p className="text-sm text-slate-600 mt-1">Ative ou desative os horários de aula para o ciclo semanal.</p>
+            </div>
+            <Button onClick={handleSaveChanges} disabled={isSavingSlots}>
+              {isSavingSlots ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : 'Salvar Alterações'}
+            </Button>
+          </div>
+          <div className="space-y-6 mt-6">
+            {daysOfWeek.map((day, index) => {
+              const daySlots = slots?.filter(s => s.day_of_week === index);
+              const areAllActive = daySlots?.filter(s => s.status !== 'filled').every(s => s.status === 'active');
+              return (
+                <div key={day}>
+                  <div className="flex justify-between items-center mb-3 border-b pb-2">
+                    <h4 className="font-semibold text-lg">{day}</h4>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-500">
+                        {areAllActive ? 'Desativar todos' : 'Ativar todos'}
+                      </span>
+                      <Switch
+                        checked={areAllActive}
+                        onCheckedChange={(checked) => handleDayToggle(index, checked)}
+                        aria-label={`Ativar/desativar todos os horários de ${day}`}
+                      />
+                    </div>
+                  </div>
+                  {loading ? ( // CORREÇÃO: Usa o 'loading' do dashboardData
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+                      {daySlots?.map(slot => {
+                        const slotKey = `${slot.day_of_week}-${slot.start_time}`;
+                        const occupation = slotOccupancy[slotKey];
+                        const isFilled = slot.status === 'filled';
+                        const isOccupied = !!occupation;
+                        const isActive = slot.status === 'active';
+                        const isInactive = slot.status === 'inactive';
+
+                        return (
+                          <div
+                            key={slot.start_time}
+                            className={cn(
+                              "flex flex-col gap-1 p-2 rounded-md border",
+                              isOccupied ? "bg-sky-100 border-sky-300" :
+                                isFilled ? "bg-sky-100 border-sky-300" :
+                                  isInactive ? "bg-slate-200 border-slate-300" :
+                                    "bg-white border-slate-200"
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className={cn(
+                                "text-sm font-medium",
+                                (isOccupied || isFilled) ? "text-sky-700" :
+                                  isInactive ? "text-slate-500" :
+                                    "text-slate-700"
+                              )}>
+                                {slot.start_time.substring(0, 5)}
+                              </span>
+
+                              {!isOccupied && !isFilled && (
+                                <Switch
+                                  checked={isActive}
+                                  onCheckedChange={() => handleSlotToggle(slot.day_of_week, slot.start_time)}
+                                  aria-label={`Ativar/desativar ${slot.start_time}`}
+                                  className="h-4 w-7"
+                                />
+                              )}
+                            </div>
+
+                            {(isOccupied || isFilled) && (
+                              <>
+                                <div className="text-xs text-sky-700 font-medium truncate">
+                                  {occupation?.studentName || "Ocupado"}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs hover:bg-red-100 hover:text-red-700"
+                                  onClick={() => handleLiberateSlot(slot, occupation)}
+                                  disabled={liberatingSlot === slotKey}
+                                  title="Clique para liberar este horário"
+                                >
+                                  {liberatingSlot === slotKey ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    'Liberar'
+                                  )}
+                                </Button>
+                              </>
                             )}
                           </div>
-
-                          {(isOccupied || isFilled) && (
-                            <>
-                              <div className="text-xs text-sky-700 font-medium truncate">
-                                {occupation?.studentName || "Ocupado"}
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-xs hover:bg-red-100 hover:text-red-700"
-                                onClick={() => handleLiberateSlot(slot, occupation)}
-                                disabled={liberatingSlot === slotKey}
-                                title="Clique para liberar este horário"
-                              >
-                                {liberatingSlot === slotKey ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  'Liberar'
-                                )}
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

@@ -296,7 +296,7 @@ const HomeTab = ({ dashboardData }) => {
   return (
     <div className="flex justify-center">
       <div className="w-full max-w-[1400px]">
-        // CORREÇÃO DE LAYOUT: Aplica padding horizontal aqui para alinhar com o cabeçalho.
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8 px-4 lg:px-8">
           <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
             <h3 className="font-bold mb-4">Solicitações de Agendamento ({solicitudes.length})</h3>

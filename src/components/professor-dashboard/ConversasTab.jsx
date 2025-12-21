@@ -94,38 +94,42 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm flex flex-col h-[75vh]">
-      <header className="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-10">
-        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
-        <Avatar><AvatarImage src={activeChat.alumno_avatar_url} /><AvatarFallback>{activeChat.alumno_full_name?.[0] || 'A'}</AvatarFallback></Avatar>
-        <h3 className="font-bold">{activeChat.alumno_full_name}</h3>
-      </header>
-      <main className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-4">
-        {loadingMessages ? <div className="flex justify-center items-center h-full"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div> : messages.length > 0 ? messages.map((msg) => {
-          const isSender = msg.remitente_id === professorId;
-          return (
-            <div key={msg.mensaje_id} className={cn("flex", isSender ? "justify-end" : "justify-start")}>
-              <div className={cn("rounded-lg px-4 py-2 max-w-[80%]", isSender ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-800")}>
-                <p className="text-sm">{msg.contenido}</p>
+    <div className="flex justify-center">
+      <div className="w-full max-w-[1400px]">
+        <div className="bg-white rounded-lg shadow-sm flex flex-col h-[75vh]">
+          <header className="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-10">
+            <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
+            <Avatar><AvatarImage src={activeChat.alumno_avatar_url} /><AvatarFallback>{activeChat.alumno_full_name?.[0] || 'A'}</AvatarFallback></Avatar>
+            <h3 className="font-bold">{activeChat.alumno_full_name}</h3>
+          </header>
+          <main className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-4">
+            {loadingMessages ? <div className="flex justify-center items-center h-full"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div> : messages.length > 0 ? messages.map((msg) => {
+              const isSender = msg.remitente_id === professorId;
+              return (
+                <div key={msg.mensaje_id} className={cn("flex", isSender ? "justify-end" : "justify-start")}>
+                  <div className={cn("rounded-lg px-4 py-2 max-w-[80%]", isSender ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-800")}>
+                    <p className="text-sm">{msg.contenido}</p>
+                  </div>
+                </div>
+              )
+            }) : (
+              <div className="flex flex-col items-center justify-center h-full text-center text-slate-400">
+                <p>Nenhuma mensagem nesta conversa ainda.</p>
+                <p className="text-sm">Envie a primeira mensagem para começar.</p>
               </div>
-            </div>
-          )
-        }) : (
-          <div className="flex flex-col items-center justify-center h-full text-center text-slate-400">
-            <p>Nenhuma mensagem nesta conversa ainda.</p>
-            <p className="text-sm">Envie a primeira mensagem para começar.</p>
-          </div>
-        )}
-        <div ref={chatEndRef} />
-      </main>
-      <footer className="p-4 border-t bg-white">
-        <form onSubmit={handleSendMessage} className="flex gap-2">
-          <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Digite sua mensagem..." autoComplete="off" disabled={sending} />
-          <Button type="submit" disabled={sending || !newMessage.trim()}>
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </Button>
-        </form>
-      </footer>
+            )}
+            <div ref={chatEndRef} />
+          </main>
+          <footer className="p-4 border-t bg-white">
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+              <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Digite sua mensagem..." autoComplete="off" disabled={sending} />
+              <Button type="submit" disabled={sending || !newMessage.trim()}>
+                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </form>
+          </footer>
+        </div>
+      </div>
     </div>
   );
 };

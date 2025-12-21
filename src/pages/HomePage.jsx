@@ -23,6 +23,7 @@ import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MessageSquare as MessageIcon, BarChart3, Star, MessageCircle, ChevronRight, User } from 'lucide-react';
 
 
 const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
@@ -98,6 +99,18 @@ const HomePage = () => {
   const [singleSelectedDate, setSingleSelectedDate] = useState(null);
   const [singleSelectedTime, setSingleSelectedTime] = useState(null);
 
+  // NOVOS ESTADOS PARA DASHBOARD E CHAT
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [chat, setChat] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newChatMessage, setNewChatMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const chatEndRef = React.useRef(null);
+  const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(scrollToBottom, [chatMessages]);
+
   const latestActiveBilling = activeBillings[0];
   const classesPerWeek = latestActiveBilling?.packages?.classes_per_week || 0;
   const classDuration = latestActiveBilling?.packages?.class_duration_minutes || 30;
@@ -115,13 +128,15 @@ const HomePage = () => {
       if (!currentProfessorId) { setLoading(false); return; }
       setProfessorId(currentProfessorId);
 
-      const [appointmentsRes, activeBillingsRes, pastBillingsRes, assignedLogsRes, pendingReqRes, nextClassRes] = await Promise.all([
-        supabase.from('appointments').select('*').eq('student_id', user.id).order('class_datetime', { ascending: false }),
+      const [appointmentsRes, activeBillingsRes, pastBillingsRes, assignedLogsRes, pendingReqRes, nextClassRes, feedbacksRes, chatRes] = await Promise.all([
+        supabase.from('appointments').select('*').eq('student_id', user.id).order('class_datetime', { ascending: true }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).gte('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).lt('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
         supabase.from('assigned_packages_log').select('assigned_classes, package_id, status').eq('student_id', user.id), // Fetch status here
         supabase.from('solicitudes_clase').select('solicitud_id, is_recurring').eq('alumno_id', user.id).eq('status', 'Pendiente').maybeSingle(),
         supabase.from('appointments').select(`*, student:profiles!student_id(full_name, spanish_level)`).eq('student_id', user.id).eq('status', 'scheduled').gte('class_datetime', today).order('class_datetime', { ascending: true }).limit(1).maybeSingle(),
+        supabase.from('class_feedback').select(`*, appointment:appointments(class_datetime)`).eq('student_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('chats').select('*').eq('alumno_id', user.id).maybeSingle(),
       ]);
 
       const errors = [appointmentsRes.error, activeBillingsRes.error, pastBillingsRes.error, assignedLogsRes.error, pendingReqRes.error, nextClassRes.error].filter(Boolean).filter(e => e.code !== 'PGRST116');
@@ -135,6 +150,15 @@ const HomePage = () => {
       const assignedLogsData = assignedLogsRes.data || [];
       setActiveBillings(activeBillingsData);
       setPastBillings(pastBillingsRes.data || []);
+      setFeedbacks(feedbacksRes.data || []);
+
+      if (chatRes.data) {
+        setChat(chatRes.data);
+        fetchChatMessages(chatRes.data.chat_id);
+      } else if (professorId) {
+        // Se não existir chat, tenta encontrar/criar? 
+        // Por agora, apenas se existir no banco.
+      }
 
       const latestBilling = activeBillingsData[0]; // The most recent active billing
       const currentClassesPerWeek = latestBilling?.packages?.classes_per_week || 0;
@@ -194,6 +218,66 @@ const HomePage = () => {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [fetchData, user, professorId]);
+
+  const fetchChatMessages = async (chatId) => {
+    setChatLoading(true);
+    const { data, error } = await supabase
+      .from('mensajes')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('enviado_en', { ascending: true });
+
+    if (!error) setChatMessages(data || []);
+    setChatLoading(false);
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newChatMessage.trim() || !chat) return;
+
+    setIsSendingMessage(true);
+    const tempMessage = {
+      mensaje_id: `temp-${Date.now()}`,
+      remitente_id: user.id,
+      contenido: newChatMessage,
+      enviado_en: new Date().toISOString()
+    };
+    setChatMessages(prev => [...prev, tempMessage]);
+    const messageToSend = newChatMessage;
+    setNewChatMessage('');
+
+    const { error } = await supabase.from('mensajes').insert({
+      chat_id: chat.chat_id,
+      remitente_id: user.id,
+      contenido: messageToSend
+    });
+
+    if (error) {
+      toast({ variant: 'destructive', title: 'Erro ao enviar', description: error.message });
+      setChatMessages(prev => prev.filter(m => m.mensaje_id !== tempMessage.mensaje_id));
+      setNewChatMessage(messageToSend);
+    }
+    setIsSendingMessage(false);
+  };
+
+  const performanceStats = useMemo(() => {
+    if (feedbacks.length === 0) return null;
+    const dimensions = ['fala', 'leitura', 'escrita', 'compreensao', 'audicao', 'gramatica', 'pronuncia', 'vocabulario'];
+    const sums = {};
+    dimensions.forEach(d => sums[d] = 0);
+
+    feedbacks.forEach(f => {
+      dimensions.forEach(d => {
+        sums[d] += (f[d] || 0);
+      });
+    });
+
+    return dimensions.map(d => ({
+      name: d.charAt(0).toUpperCase() + d.slice(1).replace('_', ' '),
+      key: d,
+      average: (sums[d] / feedbacks.length).toFixed(1)
+    }));
+  }, [feedbacks]);
 
 
   // FUNÇÃO MODIFICADA: Agora se chama para agendamento pontual se houver créditos reagendados
@@ -407,10 +491,12 @@ const HomePage = () => {
         <StudentMessagesWidget />
 
         <Tabs defaultValue="agenda" className="w-full mt-8">
-          <TabsList className="grid w-full grid-cols-3 bg-slate-200">
-            <TabsTrigger value="faturas"><FileText className="mr-2 h-4 w-4 hidden sm:block" />Faturas</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 bg-slate-200">
             <TabsTrigger value="agenda"><Package className="mr-2 h-4 w-4 hidden sm:block" />Agenda</TabsTrigger>
             <TabsTrigger value="aulas"><BookOpen className="mr-2 h-4 w-4 hidden sm:block" />Aulas</TabsTrigger>
+            <TabsTrigger value="conversas"><MessageIcon className="mr-2 h-4 w-4 hidden sm:block" />Conversas</TabsTrigger>
+            <TabsTrigger value="desempenho"><BarChart3 className="mr-2 h-4 w-4 hidden sm:block" />Desempenho</TabsTrigger>
+            <TabsTrigger value="faturas"><FileText className="mr-2 h-4 w-4 hidden sm:block" />Faturas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="faturas" className="mt-4 space-y-6">
@@ -435,19 +521,7 @@ const HomePage = () => {
               <h2 className="text-xl font-bold mb-4">Histórico de Faturas</h2>
               <div className="border rounded-lg overflow-hidden">{loading ? <p className="p-4">Carregando...</p> : pastBillings.length > 0 ? <Table><TableHeader className="bg-slate-50"><TableRow><TableHead>Pacote</TableHead><TableHead>Data da Compra</TableHead><TableHead>Data de Expiração</TableHead></TableRow></TableHeader><TableBody>{pastBillings.map(b => (<TableRow key={b.id}><TableCell>{b.packages.name}</TableCell><TableCell>{format(parseISO(b.purchase_date), 'PPP', { locale: ptBR })}</TableCell><TableCell>{format(parseISO(b.end_date), 'PPP', { locale: ptBR })}</TableCell></TableRow>))}</TableBody></Table> : <p className="p-8 text-center text-slate-500">Nenhum histórico encontrado.</p>}</div>
             </div>
-            <div className="fixed bottom-6 right-24 z-50 flex gap-3">
-              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                <Button
-                  size="icon"
-                  onClick={() => navigate('/spanish-assistant')}
-                  className="rounded-full h-14 w-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
-                  title="Asistente de Español IA"
-                >
-                  <Bot className="h-7 w-7" />
-                </Button>
-              </motion.div>
-              <HelpWidget />
-            </div>
+
           </TabsContent>
 
           <TabsContent value="agenda" className="mt-4 space-y-6">
@@ -599,23 +673,185 @@ const HomePage = () => {
             </div>
           </TabsContent>
           <TabsContent value="aulas" className="mt-4 space-y-6 bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="text-xl font-bold mb-4">Histórico de Aulas</h2>
-            <div className="border rounded-lg overflow-hidden"><Table><TableHeader className="bg-slate-50"><TableRow><TableHead>Data</TableHead><TableHead>Hora</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan="3" className="text-center">Carregando...</TableCell></TableRow> : appointments.length > 0 ? appointments.map(apt => (<TableRow key={apt.id}><TableCell>{format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR })}</TableCell><TableCell>{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell><TableCell><StatusBadge status={apt.status} /></TableCell></TableRow>)) : <TableRow><TableCell colSpan="3" className="text-center p-8 text-slate-500">Nenhuma aula encontrada.</TableCell></TableRow>}</TableBody></Table></div>
-            <div className="fixed bottom-6 right-24 z-50 flex gap-3">
-              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                <Button
-                  size="icon"
-                  onClick={() => navigate('/spanish-assistant')}
-                  className="rounded-full h-14 w-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
-                  title="Asistente de Español IA"
-                >
-                  <Bot className="h-7 w-7" />
+            <h2 className="text-xl font-bold mb-4">Minhas Aulas</h2>
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Hora</TableHead>
+                    <TableHead>Duração</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow><TableCell colSpan="4" className="text-center">Carregando...</TableCell></TableRow>
+                  ) : appointments.length > 0 ? (
+                    appointments.map(apt => (
+                      <TableRow key={apt.id}>
+                        <TableCell className="font-medium">{format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR })}</TableCell>
+                        <TableCell>{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell>
+                        <TableCell>{apt.duration_minutes || 30} min</TableCell>
+                        <TableCell><StatusBadge status={apt.status} /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow><TableCell colSpan="4" className="text-center p-8 text-slate-500">Nenhuma aula encontrada.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="conversas" className="mt-4">
+            <div className="bg-white rounded-lg shadow-sm flex flex-col h-[600px] border overflow-hidden">
+              <header className="p-4 border-b bg-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-sky-100 flex items-center justify-center text-sky-600">
+                    <User className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold">Chat com Professor</h3>
+                    <p className="text-xs text-slate-500">Tire suas dúvidas em tempo real</p>
+                  </div>
+                </div>
+              </header>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+                {chatLoading ? (
+                  <div className="flex justify-center items-center h-full"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div>
+                ) : chatMessages.length > 0 ? (
+                  chatMessages.map((msg, idx) => {
+                    const isMe = msg.remitente_id === user.id;
+                    return (
+                      <div key={msg.mensaje_id || idx} className={cn("flex", isMe ? "justify-end" : "justify-start")}>
+                        <div className={cn("max-w-[80%] rounded-2xl px-4 py-2 shadow-sm", isMe ? "bg-sky-600 text-white rounded-tr-none" : "bg-white text-slate-800 rounded-tl-none border")}>
+                          <p className="text-sm">{msg.contenido}</p>
+                          <p className={cn("text-[10px] mt-1 text-right", isMe ? "text-sky-100" : "text-slate-400")}>
+                            {format(parseISO(msg.enviado_en), 'HH:mm')}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                    <MessageCircle className="h-12 w-12 mb-2 opacity-20" />
+                    <p>Inicie uma conversa com seu professor!</p>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              <form onSubmit={handleSendMessage} className="p-4 border-t bg-white flex gap-2">
+                <input
+                  value={newChatMessage}
+                  onChange={(e) => setNewChatMessage(e.target.value)}
+                  placeholder="Escreva sua mensagem..."
+                  className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                  disabled={isSendingMessage}
+                />
+                <Button type="submit" size="icon" className="rounded-full bg-sky-600 h-10 w-10 shrink-0" disabled={isSendingMessage || !newChatMessage.trim()}>
+                  {isSendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
-              </motion.div>
-              <HelpWidget />
+              </form>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="desempenho" className="mt-4 space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <h2 className="text-xl font-bold mb-6">Meu Desempenho</h2>
+              {!performanceStats ? (
+                <div className="text-center py-12 text-slate-500">
+                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                  <p>Ainda não há avaliações disponíveis para gerar seu dashboard.</p>
+                  <p className="text-sm">As notas aparecerão aqui após suas aulas serem avaliadas pelo professor.</p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Gráfico de Barras Customizado */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                      {performanceStats.map(stat => (
+                        <div key={stat.key} className="space-y-1">
+                          <div className="flex justify-between text-sm font-medium">
+                            <span>{stat.name}</span>
+                            <span className="text-sky-600">{stat.average} / 5.0</span>
+                          </div>
+                          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(parseFloat(stat.average) / 5) * 100}%` }}
+                              transition={{ duration: 1, ease: "easeOut" }}
+                              className="h-full bg-gradient-to-r from-sky-400 to-sky-600 rounded-full"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 flex flex-col justify-center items-center text-center">
+                      <div className="mb-4 p-4 bg-white rounded-full shadow-sm">
+                        <Star className="h-10 w-10 text-yellow-400 fill-yellow-400" />
+                      </div>
+                      <h3 className="text-lg font-bold">Média Geral</h3>
+                      <p className="text-4xl font-black text-sky-600 my-2">
+                        {(performanceStats.reduce((acc, curr) => acc + parseFloat(curr.average), 0) / performanceStats.length).toFixed(1)}
+                      </p>
+                      <p className="text-sm text-slate-500">Sua evolução constante é o caminho para a fluência!</p>
+                    </div>
+                  </div>
+
+                  {/* Histórico de Feedbacks */}
+                  <div className="pt-6 border-t">
+                    <h3 className="text-lg font-bold mb-4">Comentários e Feedbacks</h3>
+                    <div className="space-y-4">
+                      {feedbacks.map((f, idx) => (
+                        <div key={f.id} className="p-4 rounded-lg bg-slate-50 border group hover:border-sky-200 transition-colors">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-slate-400" />
+                              <span className="text-sm font-semibold text-slate-700">
+                                {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'PPP', { locale: ptBR }) : 'Aula'}
+                              </span>
+                            </div>
+                            <div className="flex gap-1">
+                              {[1, 2, 3, 4, 5].map(s => (
+                                <Star key={s} className={cn("h-3 w-3", s <= Math.round(Object.values(f).filter(v => typeof v === 'number').reduce((a, b) => a + b, 0) / 8) ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                              ))}
+                            </div>
+                          </div>
+                          <p className="text-sm text-slate-600 italic">"{f.comment || 'Sem comentário adicional do professor.'}"</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Badge variant="secondary" className="bg-white text-[10px] py-0 px-2">Fala: {f.fala}</Badge>
+                            <Badge variant="secondary" className="bg-white text-[10px] py-0 px-2">Gramática: {f.gramatica}</Badge>
+                            <Badge variant="secondary" className="bg-white text-[10px] py-0 px-2">Pronúncia: {f.pronuncia}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Botões Flutuantes Globais */}
+        <div className="fixed bottom-6 right-24 z-50 flex gap-3">
+          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+            <Button
+              size="icon"
+              onClick={() => navigate('/spanish-assistant')}
+              className="rounded-full h-14 w-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
+              title="Asistente de Español IA"
+            >
+              <Bot className="h-7 w-7" />
+            </Button>
+          </motion.div>
+          <HelpWidget />
+        </div>
       </div>
     </motion.div>
   );
