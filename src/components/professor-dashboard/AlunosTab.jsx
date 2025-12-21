@@ -399,10 +399,12 @@ const AlunosTab = ({ dashboardData }) => {
             ).length;
 
             const availableClasses = totalClasses - usedClasses;
+            const scheduledClasses = scheduledAppointments.length;
 
             return {
                 ...student,
                 availableClasses: Math.max(0, availableClasses),
+                scheduledClasses, // Quantidade de aulas agendadas
                 daySchedules, // { dayIndex: time }
                 scheduledAppointments
             };
@@ -589,7 +591,7 @@ const AlunosTab = ({ dashboardData }) => {
                             <TableHead>Idade</TableHead>
                             <TableHead>Nível</TableHead>
                             <TableHead>Dias de Aula</TableHead>
-                            <TableHead>Aulas Disponíveis</TableHead>
+                            <TableHead>Aulas Agendadas</TableHead>
                             <TableHead>Estado</TableHead>
                             <TableHead>Membro Desde</TableHead>
                             <TableHead className="text-right">Ações</TableHead>
@@ -631,7 +633,7 @@ const AlunosTab = ({ dashboardData }) => {
                                     <TableCell>
                                         <div className="flex items-center gap-2 font-semibold">
                                             <Package className="h-4 w-4 text-sky-500" />
-                                            {student.availableClasses}
+                                            {student.scheduledClasses}
                                         </div>
                                     </TableCell>
                                     <TableCell>
