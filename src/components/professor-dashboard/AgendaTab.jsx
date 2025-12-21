@@ -121,7 +121,7 @@ const AgendaTab = ({ dashboardData }) => {
     // Renderizar bloque de aula
     const renderAppointmentBlock = (apt) => {
         const isSpanish = apt.student?.spanish_level;
-        const bgColor = apt.status === 'completed' ? 'bg-blue-100 border-blue-300' :
+        const bgColor = apt.status === 'completed' ? 'bg-green-100 border-green-300' :
             apt.status === 'rescheduled' ? 'bg-blue-200 border-blue-400' :
                 apt.status === 'missed' ? 'bg-red-100 border-red-300' :
                     'bg-blue-50 border-blue-200';
@@ -332,7 +332,7 @@ const AgendaTab = ({ dashboardData }) => {
                             <div className="space-y-2">
                                 {appointments.map(apt => {
                                     const aptDate = parseISO(apt.class_datetime);
-                                    const bgColor = apt.status === 'completed' ? 'bg-blue-100 border-blue-300' :
+                                    const bgColor = apt.status === 'completed' ? 'bg-green-100 border-green-300' :
                                         apt.status === 'rescheduled' ? 'bg-blue-200 border-blue-400' :
                                             apt.status === 'missed' ? 'bg-red-100 border-red-300' :
                                                 'bg-blue-50 border-blue-200';
