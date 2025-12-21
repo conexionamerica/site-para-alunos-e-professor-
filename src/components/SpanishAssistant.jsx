@@ -5,7 +5,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Send, Bot, User, Sparkles, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -92,7 +91,7 @@ const SpanishAssistant = ({ className }) => {
 
             <CardContent className="p-0">
                 {/* Área de mensajes */}
-                <ScrollArea ref={scrollRef} className="h-[500px] p-4">
+                <div ref={scrollRef} className="h-[500px] p-4 overflow-y-auto bg-slate-50">
                     <div className="space-y-4">
                         {messages.map((message, index) => (
                             <div
@@ -162,7 +161,7 @@ const SpanishAssistant = ({ className }) => {
                             </div>
                         )}
                     </div>
-                </ScrollArea>
+                </div>
 
                 {/* Sugerencias */}
                 {suggestions.length > 0 && (
