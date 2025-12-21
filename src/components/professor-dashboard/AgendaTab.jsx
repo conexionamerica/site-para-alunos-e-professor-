@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { getBrazilDate, getTodayBrazil } from '@/lib/dateUtils';
 
 const daysOfWeekMap = {
     0: 'Domingo',
@@ -26,8 +27,8 @@ const daysOfWeekMap = {
 const AgendaTab = ({ dashboardData }) => {
     // Extrai professorId do objeto de dados
     const professorId = dashboardData?.professorId;
-    
-    const today = useMemo(() => new Date(), []);
+
+    const today = useMemo(() => getBrazilDate(), []);
     const todayDayOfWeek = useMemo(() => getDay(today), [today]); // 0 (Dom) a 6 (Sáb)
 
     // CORREÇÃO: Renomeado 'loading' para 'isLoadingTab' e inicializado com base no dashboardData
@@ -35,9 +36,9 @@ const AgendaTab = ({ dashboardData }) => {
     const [appointments, setAppointments] = useState([]);
     const [selectedDate, setSelectedDate] = useState(today);
     // Inicia com o dia da semana atual selecionado visualmente
-    const [selectedDayOfWeek, setSelectedDayOfWeek] = useState(todayDayOfWeek); 
+    const [selectedDayOfWeek, setSelectedDayOfWeek] = useState(todayDayOfWeek);
     const [loadingDay, setLoadingDay] = useState(false);
-    
+
     // Controla o filtro principal
     const [quickFilter, setQuickFilter] = useState('TODAY');
 
@@ -45,7 +46,7 @@ const AgendaTab = ({ dashboardData }) => {
         if (!professorId) return;
 
         setLoadingDay(true);
-        
+
         let query = supabase
             .from('appointments')
             .select(`
@@ -56,7 +57,7 @@ const AgendaTab = ({ dashboardData }) => {
 
         let dateStringStart;
         let dateStringEnd;
-        
+
         // 1. LÓGICA DE FILTROS RÁPIDOS
         if (currentQuickFilter === 'ALL') {
             // Busca todas as aulas
@@ -80,7 +81,7 @@ const AgendaTab = ({ dashboardData }) => {
             dateStringStart = format(dateToFilter, 'yyyy-MM-dd');
             dateStringEnd = dateStringStart;
         }
-        
+
         // Aplica filtros de data para Hoje/Amanhã/Calendário Individual
         if (dateStringStart) {
             query = query
@@ -97,7 +98,7 @@ const AgendaTab = ({ dashboardData }) => {
             setAppointments([]);
         } else {
             let filteredData = data || [];
-            
+
             // FILTRAGEM FINAL POR DIA DA SEMANA (Apenas se o filtro semanal estiver ativo)
             if (dayFilter !== null && currentQuickFilter === null) {
                 filteredData = filteredData.filter(apt => {
@@ -118,22 +119,22 @@ const AgendaTab = ({ dashboardData }) => {
             fetchAppointments(selectedDate, selectedDayOfWeek, quickFilter);
         }
     }, [fetchAppointments, selectedDate, selectedDayOfWeek, quickFilter, professorId]);
-    
+
     // Handler para os botões de filtro de dia da semana (Antiga lógica semanal)
     const handleDayFilter = (dayIndex) => {
-        
+
         // 1. Desativa o filtro rápido, forçando o modo semanal
         setQuickFilter(null);
-        
+
         if (selectedDayOfWeek === dayIndex) {
             // Clicou no dia já ativo (no modo semanal) -> Desativa o semanal e volta para o quick filter 'TODAY'
-            setSelectedDayOfWeek(null); 
-            setSelectedDate(today); 
+            setSelectedDayOfWeek(null);
+            setSelectedDate(today);
             setQuickFilter('TODAY');
         } else {
             // Ativa o modo semanal no dia selecionado
             setSelectedDayOfWeek(dayIndex);
-            
+
             const currentDayIndex = getDay(today);
             const diff = dayIndex - currentDayIndex;
             const newDate = new Date(today);
@@ -141,16 +142,16 @@ const AgendaTab = ({ dashboardData }) => {
             setSelectedDate(newDate);
         }
     };
-    
+
     // Handler para os novos filtros rápidos
     const handleQuickFilter = (filterType) => {
-        
+
         // 1. Zera o filtro semanal
-        setSelectedDayOfWeek(null); 
-        
+        setSelectedDayOfWeek(null);
+
         // 2. Define o filtro rápido
         setQuickFilter(filterType);
-        
+
         // 3. Define a data base para os filtros
         if (filterType === 'TODAY') {
             setSelectedDate(today);
@@ -158,13 +159,13 @@ const AgendaTab = ({ dashboardData }) => {
         } else if (filterType === 'TOMORROW') {
             setSelectedDate(addDays(today, 1));
         } else if (filterType === 'ALL') {
-            setSelectedDate(today); 
+            setSelectedDate(today);
         }
     };
 
 
     const StatusBadge = ({ status }) => {
-        switch(status) {
+        switch (status) {
             case 'scheduled': return <Badge className="bg-sky-500 hover:bg-sky-600 text-white">Agendada</Badge>;
             case 'completed': return <Badge className="bg-green-500 hover:bg-green-600 text-white">Realizada</Badge>;
             case 'canceled': return <Badge variant="destructive">Cancelada</Badge>;
@@ -182,14 +183,14 @@ const AgendaTab = ({ dashboardData }) => {
         if (quickFilter === 'TODAY') return 'Aulas de Hoje';
         if (quickFilter === 'TOMORROW') return 'Aulas de Amanhã';
         if (quickFilter === 'ALL') return 'Todas as Aulas (Histórico Completo)';
-        
+
         if (selectedDayOfWeek !== null) {
             return `${daysOfWeekMap[selectedDayOfWeek]}, Semana de ${format(startOfWeek(selectedDate, { weekStartsOn: 0 }), 'dd/MM/yyyy')}`;
         }
-        
+
         return `${format(selectedDate, 'PPP', { locale: ptBR })}`;
     }, [quickFilter, selectedDate, selectedDayOfWeek]);
-        
+
     // A navegação semanal só aparece se o quickFilter for null (modo de filtro semanal/individual)
     const showWeekNavigation = selectedDayOfWeek !== null && quickFilter === null;
 
@@ -202,10 +203,10 @@ const AgendaTab = ({ dashboardData }) => {
             // Ao navegar na semana, desativa o filtro rápido (já está implícito pelo quickFilter === null)
         }
     };
-    
+
     // CORRIGIDO: O calendário fica desabilitado APENAS se o filtro for 'ALL'.
     const isCalendarDisabled = quickFilter === 'ALL';
-    
+
     // Renderização de carregamento mais robusta (usa o estado do tab e o ID do professor)
     // O dashboardData?.loading não está disponível neste componente, mas a verificação do ID é suficiente para evitar falhas.
     if (!professorId) {
@@ -216,18 +217,18 @@ const AgendaTab = ({ dashboardData }) => {
     return (
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm space-y-4 sm:space-y-6">
             <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Minha Agenda</h2>
-            
+
             {/* FILTROS DE DIA DA SEMANA */}
             <div className="flex flex-wrap gap-2 items-center border-b pb-4">
                 <Filter className="h-5 w-5 text-sky-600 mr-2 flex-shrink-0" />
                 {Object.entries(daysOfWeekMap).map(([index, day]) => {
                     const dayIndex = parseInt(index);
-                    
+
                     // O botão está ativo se estiver selecionado NO MODO SEMANAL (quickFilter === null)
                     // OU se estiver no modo rápido 'TODAY' E for o dia atual
                     const isActive = (selectedDayOfWeek === dayIndex && quickFilter === null) || (quickFilter === 'TODAY' && isCurrentWeekDay(dayIndex));
                     const isToday = isCurrentWeekDay(dayIndex);
-                    
+
                     return (
                         <Button
                             key={dayIndex}
@@ -242,7 +243,7 @@ const AgendaTab = ({ dashboardData }) => {
                         </Button>
                     );
                 })}
-                 {selectedDayOfWeek !== null && quickFilter === null && (
+                {selectedDayOfWeek !== null && quickFilter === null && (
                     <Button variant="ghost" size="icon" onClick={() => handleDayFilter(null)} className="ml-0 sm:ml-2">
                         <X className="h-5 w-5 text-red-500" />
                     </Button>
@@ -252,13 +253,13 @@ const AgendaTab = ({ dashboardData }) => {
             {/* BARRA DE NAVEGAÇÃO / FILTROS RÁPIDOS */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 p-3 rounded-lg border space-y-3 sm:space-y-0">
                 <div className="flex flex-wrap items-center space-x-3 w-full sm:w-auto">
-                    
+
                     {/* BOTÃO DE CALENDÁRIO */}
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button variant={"outline"} disabled={isCalendarDisabled} className={cn(
-                                    "w-auto justify-start text-left font-semibold",
-                                )}
+                                "w-auto justify-start text-left font-semibold",
+                            )}
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {/* Exibe a data do dia selecionado */}
@@ -273,7 +274,7 @@ const AgendaTab = ({ dashboardData }) => {
                                 onSelect={(date) => {
                                     setSelectedDate(date);
                                     // Desativa filtros rápidos e semanais ao usar o calendário
-                                    setSelectedDayOfWeek(null); 
+                                    setSelectedDayOfWeek(null);
                                     setQuickFilter(null);
                                 }}
                                 initialFocus
@@ -281,36 +282,36 @@ const AgendaTab = ({ dashboardData }) => {
                             />
                         </PopoverContent>
                     </Popover>
-                    
+
                     {/* BOTÕES DE FILTRO RÁPIDO */}
-                    <Button 
-                        variant={quickFilter === 'TODAY' ? 'default' : 'outline'} 
+                    <Button
+                        variant={quickFilter === 'TODAY' ? 'default' : 'outline'}
                         onClick={() => handleQuickFilter('TODAY')}
                         className={cn(quickFilter === 'TODAY' && "bg-sky-600 hover:bg-sky-700")}
                     >
                         Hoje
                     </Button>
-                    <Button 
-                        variant={quickFilter === 'TOMORROW' ? 'default' : 'outline'} 
+                    <Button
+                        variant={quickFilter === 'TOMORROW' ? 'default' : 'outline'}
                         onClick={() => handleQuickFilter('TOMORROW')}
                         className={cn(quickFilter === 'TOMORROW' && "bg-sky-600 hover:bg-sky-700")}
                     >
                         Amanhã
                     </Button>
-                    <Button 
-                        variant={quickFilter === 'ALL' ? 'default' : 'outline'} 
+                    <Button
+                        variant={quickFilter === 'ALL' ? 'default' : 'outline'}
                         onClick={() => handleQuickFilter('ALL')}
                         className={cn(quickFilter === 'ALL' && "bg-sky-600 hover:bg-sky-700")}
                     >
                         Todas
                     </Button>
                 </div>
-                
+
                 {/* TÍTULO CENTRALIZADO */}
                 <span className="font-semibold text-sky-700 w-full sm:w-auto mt-2 sm:mt-0 text-center sm:text-left">
                     {displayDate}
                 </span>
-                
+
                 {/* NAVEGAÇÃO SEMANAL (Aparece apenas se o filtro semanal estiver ativo) */}
                 <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
                     {showWeekNavigation && (

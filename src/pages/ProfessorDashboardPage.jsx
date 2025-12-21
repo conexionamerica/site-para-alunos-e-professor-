@@ -17,10 +17,11 @@ import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
+import { getBrazilDate } from '@/lib/dateUtils';
 
 // Função de busca de dados
 const fetchProfessorDashboardData = async (professorId) => {
-    const today = new Date().toISOString();
+    const today = getBrazilDate().toISOString();
 
     // 1. Fetch del perfil del profesor (solo nombre)
     const { data: professorProfile, error: profProfileError } = await supabase

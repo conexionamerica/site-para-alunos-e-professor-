@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { add, format, parseISO, getDay, parse, isFuture, formatDistanceToNowStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getBrazilDate, getTodayBrazil } from '@/lib/dateUtils';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
@@ -105,7 +106,7 @@ const HomePage = () => {
     if (!user || !profile?.age) return;
     setLoading(true);
     try {
-      const today = new Date().toISOString();
+      const today = getBrazilDate().toISOString();
       const { data: profData, error: profError } = await supabase.from('profiles').select('id').eq('role', 'professor').limit(1).single();
       if (profError && profError.code !== 'PGRST116') throw profError;
       const currentProfessorId = profData?.id;

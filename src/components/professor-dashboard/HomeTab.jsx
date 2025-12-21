@@ -5,6 +5,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { format, formatDistanceToNowStrict, parseISO, getDay, add, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getBrazilDate } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, isAfter } from 'lucide-react';
@@ -83,7 +84,7 @@ const HomeTab = ({ dashboardData }) => {
         const { data: billingData, error: billingError } = await supabase
           .from('billing').select('end_date, packages(number_of_classes, class_duration_minutes)')
           .eq('user_id', studentId)
-          .gte('end_date', new Date().toISOString())
+          .gte('end_date', getBrazilDate().toISOString())
           .order('purchase_date', { ascending: false }).limit(1).single();
 
         if (billingError || !billingData) throw new Error("Fatura ativa do aluno não encontrada.");
@@ -180,7 +181,7 @@ const HomeTab = ({ dashboardData }) => {
           .from('billing')
           .select('packages(class_duration_minutes)')
           .eq('user_id', studentId)
-          .gte('end_date', new Date().toISOString())
+          .gte('end_date', getBrazilDate().toISOString())
           .order('purchase_date', { ascending: false })
           .limit(1)
           .single();

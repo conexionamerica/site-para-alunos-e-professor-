@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
+import { getBrazilDate } from '@/lib/dateUtils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -101,7 +102,7 @@ const AlunosTab = ({ dashboardData }) => {
           .from('appointments')
           .select('class_slot_id, duration_minutes, class_datetime')
           .eq('student_id', student.id)
-          .gte('class_datetime', new Date().toISOString())
+          .gte('class_datetime', getBrazilDate().toISOString())
           .in('status', ['scheduled', 'pending', 'rescheduled']);
 
         if (apptError) {
@@ -158,7 +159,7 @@ const AlunosTab = ({ dashboardData }) => {
             .from('appointments')
             .update({ status: 'cancelled' })
             .eq('student_id', student.id)
-            .gte('class_datetime', new Date().toISOString())
+            .gte('class_datetime', getBrazilDate().toISOString())
             .in('status', ['scheduled', 'pending', 'rescheduled']);
         }
       } else {

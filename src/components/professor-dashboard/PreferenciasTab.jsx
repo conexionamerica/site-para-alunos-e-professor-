@@ -15,6 +15,7 @@ import { ChevronsUpDown, Check, History, Loader2, Calendar as CalendarIcon, Lock
 import { cn } from '@/lib/utils';
 import { format, parseISO, addMonths, parse, getDay, add } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getBrazilDate } from '@/lib/dateUtils';
 import { Input } from '@/components/ui/input';
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
@@ -246,8 +247,8 @@ const PreferenciasTab = ({ dashboardData }) => {
     time: ALL_TIMES[0].substring(0, 5),
     days: [],
     price: '',
-    startDate: new Date(), // NOVA: Data de Início do Customizado
-    endDate: addMonths(new Date(), 1), // Default validity
+    startDate: getBrazilDate(), // NOVA: Data de Início do Customizado
+    endDate: addMonths(getBrazilDate(), 1), // Default validity
   });
   // Usamos 'custom' para compatibilidade com o fluxo original que só precisava de customClassCount.
   // Agora, usaremos pckPersonalData para a maioria dos inputs.
@@ -267,9 +268,9 @@ const PreferenciasTab = ({ dashboardData }) => {
 
   const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
   const [liberatingSlot, setLiberatingSlot] = useState(null); // Para mostrar loading en el slot que se está liberando
-  const [purchaseDate, setPurchaseDate] = useState(new Date());
+  const [purchaseDate, setPurchaseDate] = useState(getBrazilDate());
   // Estado para a Data de Fim/Validade (Usado por pacotes padrão e Personalizado)
-  const [endDate, setEndDate] = useState(addMonths(new Date(), 1));
+  const [endDate, setEndDate] = useState(addMonths(getBrazilDate(), 1));
 
   const selectedStudent = students.find(s => s.id === selectedStudentId); // Usa students extraído
 
@@ -387,7 +388,7 @@ const PreferenciasTab = ({ dashboardData }) => {
           student:profiles!student_id(full_name)
         `)
         .eq('class_slot_id', slot.id)
-        .gte('class_datetime', new Date().toISOString())
+        .gte('class_datetime', getBrazilDate().toISOString())
         .in('status', ['scheduled', 'pending', 'rescheduled'])
         .order('class_datetime', { ascending: true })
         .limit(1);
@@ -492,7 +493,7 @@ const PreferenciasTab = ({ dashboardData }) => {
         .select('id')
         .eq('user_id', studentId)
         .eq('package_id', packageId)
-        .gte('end_date', format(new Date(), 'yyyy-MM-dd'))
+        .gte('end_date', format(getBrazilDate(), 'yyyy-MM-dd'))
         .order('purchase_date', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -513,7 +514,7 @@ const PreferenciasTab = ({ dashboardData }) => {
         .from('appointments')
         .delete({ count: 'exact' })
         .eq('student_id', studentId)
-        .gte('class_datetime', new Date().toISOString())
+        .gte('class_datetime', getBrazilDate().toISOString())
         .in('status', ['scheduled', 'pending', 'rescheduled']);
 
       if (aptDeleteError) throw aptDeleteError;
@@ -734,7 +735,7 @@ const PreferenciasTab = ({ dashboardData }) => {
           .from('appointments')
           .select('class_datetime, duration_minutes')
           .eq('professor_id', professorId)
-          .gte('class_datetime', format(new Date(), 'yyyy-MM-dd'))
+          .gte('class_datetime', format(getBrazilDate(), 'yyyy-MM-dd'))
           .in('status', ['scheduled', 'rescheduled']);
 
         if (aptError) console.error("Error checking for appointments:", aptError);
@@ -880,9 +881,9 @@ const PreferenciasTab = ({ dashboardData }) => {
       setSelectedPackage(null);
       setCustomClassCount('');
       setObservation('');
-      setPurchaseDate(new Date());
-      setEndDate(addMonths(new Date(), 1));
-      setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0].substring(0, 5), days: [], price: '', startDate: new Date(), endDate: addMonths(new Date(), 1) });
+      setPurchaseDate(getBrazilDate());
+      setEndDate(addMonths(getBrazilDate(), 1));
+      setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0].substring(0, 5), days: [], price: '', startDate: getBrazilDate(), endDate: addMonths(getBrazilDate(), 1) });
 
       if (onUpdate) onUpdate();
     }
