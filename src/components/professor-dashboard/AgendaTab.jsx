@@ -332,11 +332,17 @@ const AgendaTab = ({ dashboardData }) => {
                             <div className="space-y-2">
                                 {appointments.map(apt => {
                                     const aptDate = parseISO(apt.class_datetime);
+                                    const bgColor = apt.status === 'completed' ? 'bg-blue-100 border-blue-300' :
+                                        apt.status === 'rescheduled' ? 'bg-blue-200 border-blue-400' :
+                                            apt.status === 'missed' ? 'bg-red-100 border-red-300' :
+                                                'bg-blue-50 border-blue-200';
+                                    const textColor = apt.status === 'missed' ? 'text-red-800' : 'text-slate-800';
+
                                     return (
-                                        <div key={apt.id} className="p-4 border rounded-lg hover:bg-slate-50">
+                                        <div key={apt.id} className={`p-4 border-2 rounded-lg hover:shadow-md transition-shadow ${bgColor}`}>
                                             <div className="flex justify-between items-start">
                                                 <div>
-                                                    <div className="font-semibold text-slate-800">
+                                                    <div className={`font-semibold ${textColor}`}>
                                                         {apt.student?.full_name || 'Sin nombre'}
                                                     </div>
                                                     <div className="text-sm text-slate-600">
@@ -344,7 +350,7 @@ const AgendaTab = ({ dashboardData }) => {
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <div className="text-sm font-medium text-slate-700">
+                                                    <div className={`text-sm font-medium ${textColor}`}>
                                                         {format(aptDate, 'dd/MM/yyyy')}
                                                     </div>
                                                     <div className="text-sm text-slate-600">
