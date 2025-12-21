@@ -1,5 +1,5 @@
 // Archivo: src/components/professor-dashboard/AlunosTab.jsx
-// Versión actualizada con columna "Dias de Aula" y herramienta para cambiar horarios
+// Versión con horarios individuales por día de la semana
 
 import React, { useState, useMemo } from 'react';
 import { format, getDay, parseISO } from 'date-fns';
@@ -53,55 +53,87 @@ const generateTimeOptions = () => {
 
 const TIME_OPTIONS = generateTimeOptions();
 
-// Dialog para cambiar días y horarios de aulas
+// Dialog para cambiar días y horarios de aulas (con horarios individuales por día)
 const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId, scheduledAppointments }) => {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [selectedDays, setSelectedDays] = useState([]);
-    const [selectedTime, setSelectedTime] = useState('');
+    // Estructura: { dayIndex: { enabled: boolean, time: string } }
+    const [daySchedules, setDaySchedules] = useState({
+        0: { enabled: false, time: '08:00' },
+        1: { enabled: false, time: '08:00' },
+        2: { enabled: false, time: '08:00' },
+        3: { enabled: false, time: '08:00' },
+        4: { enabled: false, time: '08:00' },
+        5: { enabled: false, time: '08:00' },
+        6: { enabled: false, time: '08:00' }
+    });
 
-    // Obtener días y horario actual del alumno
+    // Obtener días y horarios actuales del alumno
     useMemo(() => {
         if (scheduledAppointments && scheduledAppointments.length > 0) {
-            const days = new Set();
-            let commonTime = null;
+            const schedules = {};
 
+            // Inicializar todos los días como deshabilitados
+            for (let i = 0; i < 7; i++) {
+                schedules[i] = { enabled: false, time: '08:00' };
+            }
+
+            // Agrupar appointments por día y obtener el horario más común para cada día
             scheduledAppointments.forEach(apt => {
                 const aptDate = parseISO(apt.class_datetime);
                 const dayOfWeek = getDay(aptDate);
-                days.add(dayOfWeek);
-
                 const time = format(aptDate, 'HH:mm');
-                if (!commonTime) commonTime = time;
+
+                if (!schedules[dayOfWeek].enabled) {
+                    schedules[dayOfWeek] = { enabled: true, time };
+                }
             });
 
-            setSelectedDays(Array.from(days));
-            setSelectedTime(commonTime || '');
+            setDaySchedules(schedules);
         }
     }, [scheduledAppointments]);
 
     const handleDayToggle = (dayIndex) => {
-        setSelectedDays(prev =>
-            prev.includes(dayIndex)
-                ? prev.filter(d => d !== dayIndex)
-                : [...prev, dayIndex]
-        );
+        setDaySchedules(prev => ({
+            ...prev,
+            [dayIndex]: {
+                ...prev[dayIndex],
+                enabled: !prev[dayIndex].enabled
+            }
+        }));
+    };
+
+    const handleTimeChange = (dayIndex, time) => {
+        setDaySchedules(prev => ({
+            ...prev,
+            [dayIndex]: {
+                ...prev[dayIndex],
+                time
+            }
+        }));
     };
 
     const handleSubmit = async () => {
-        if (selectedDays.length === 0 || !selectedTime) {
+        // Validar que al menos un día esté seleccionado
+        const enabledDays = Object.entries(daySchedules).filter(([_, schedule]) => schedule.enabled);
+
+        if (enabledDays.length === 0) {
             toast({
                 variant: 'destructive',
                 title: 'Campos obrigatórios',
-                description: 'Selecione pelo menos um dia e um horário.'
+                description: 'Selecione pelo menos um dia da semana.'
             });
             return;
         }
 
+        // Crear resumen para confirmación
+        const scheduleText = enabledDays
+            .map(([day, schedule]) => `${daysOfWeekFull[day]} às ${schedule.time}`)
+            .join('\n');
+
         if (!window.confirm(
             `Tem certeza que deseja alterar o horário das aulas de ${student.full_name}?\n\n` +
-            `Novos dias: ${selectedDays.map(d => daysOfWeekFull[d]).join(', ')}\n` +
-            `Novo horário: ${selectedTime}\n\n` +
+            `Novos horários:\n${scheduleText}\n\n` +
             `Isso afetará ${scheduledAppointments.length} aulas agendadas.`
         )) {
             return;
@@ -114,14 +146,14 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
             const appointmentsByWeek = {};
             scheduledAppointments.forEach(apt => {
                 const aptDate = parseISO(apt.class_datetime);
-                const weekKey = format(aptDate, 'yyyy-ww'); // Año-semana
+                const weekKey = format(aptDate, 'yyyy-ww');
                 if (!appointmentsByWeek[weekKey]) {
                     appointmentsByWeek[weekKey] = [];
                 }
                 appointmentsByWeek[weekKey].push(apt);
             });
 
-            // 2. Para cada semana, reorganizar las aulas según los nuevos días
+            // 2. Para cada semana, reorganizar las aulas según los nuevos días y horarios
             const updates = [];
 
             for (const [weekKey, weekAppointments] of Object.entries(appointmentsByWeek)) {
@@ -130,7 +162,7 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                     new Date(a.class_datetime) - new Date(b.class_datetime)
                 );
 
-                // Obtener la fecha de inicio de la semana (primer appointment)
+                // Obtener la fecha de inicio de la semana
                 const firstApt = weekAppointments[0];
                 const firstDate = parseISO(firstApt.class_datetime);
 
@@ -139,17 +171,21 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                 const weekStart = new Date(firstDate);
                 weekStart.setDate(weekStart.getDate() - dayOfWeek);
 
-                // Crear nuevas fechas para los días seleccionados
-                const newDates = selectedDays.map(dayIndex => {
+                // Crear nuevas fechas para los días seleccionados con sus horarios específicos
+                const newDates = [];
+                enabledDays.forEach(([dayIndex, schedule]) => {
                     const newDate = new Date(weekStart);
-                    newDate.setDate(newDate.getDate() + dayIndex);
+                    newDate.setDate(newDate.getDate() + parseInt(dayIndex));
 
-                    // Establecer el horario
-                    const [hours, minutes] = selectedTime.split(':').map(Number);
+                    // Establecer el horario específico de este día
+                    const [hours, minutes] = schedule.time.split(':').map(Number);
                     newDate.setHours(hours, minutes, 0, 0);
 
-                    return newDate;
-                }).sort((a, b) => a - b);
+                    newDates.push(newDate);
+                });
+
+                // Ordenar las nuevas fechas cronológicamente
+                newDates.sort((a, b) => a - b);
 
                 // Asignar las nuevas fechas a los appointments
                 weekAppointments.forEach((apt, index) => {
@@ -178,9 +214,12 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                 if (error) throw error;
             }
 
+            const updatedCount = updates.filter(u => !u.status).length;
+            const cancelledCount = updates.filter(u => u.status).length;
+
             toast({
                 title: 'Horários atualizados!',
-                description: `${updates.filter(u => !u.status).length} aulas foram reagendadas.`
+                description: `${updatedCount} aulas reagendadas${cancelledCount > 0 ? ` e ${cancelledCount} canceladas` : ''}.`
             });
 
             onUpdate();
@@ -199,13 +238,15 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
 
     if (!student) return null;
 
+    const enabledDays = Object.entries(daySchedules).filter(([_, schedule]) => schedule.enabled);
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Alterar Dias e Horários</DialogTitle>
                     <DialogDescription>
-                        Alterar os dias da semana e horário das aulas agendadas de {student.full_name}
+                        Alterar os dias da semana e horários das aulas agendadas de {student.full_name}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -218,56 +259,60 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         </p>
                     </div>
 
-                    {/* Selección de días */}
-                    <div className="space-y-2">
-                        <Label>Dias da Semana</Label>
-                        <div className="grid grid-cols-4 gap-2">
+                    {/* Selección de días con horarios individuales */}
+                    <div className="space-y-3">
+                        <Label className="text-base font-semibold">Dias da Semana e Horários</Label>
+                        <div className="space-y-2">
                             {Object.entries(daysOfWeekFull).map(([dayIndex, dayName]) => {
                                 const idx = parseInt(dayIndex);
-                                const isSelected = selectedDays.includes(idx);
+                                const schedule = daySchedules[idx];
+
                                 return (
-                                    <div key={idx} className="flex items-center space-x-2">
+                                    <div key={idx} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-slate-50">
                                         <Checkbox
                                             id={`day-${idx}`}
-                                            checked={isSelected}
+                                            checked={schedule.enabled}
                                             onCheckedChange={() => handleDayToggle(idx)}
                                         />
                                         <label
                                             htmlFor={`day-${idx}`}
-                                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
                                         >
-                                            {daysOfWeekMap[idx]}
+                                            {dayName}
                                         </label>
+                                        <Select
+                                            value={schedule.time}
+                                            onValueChange={(time) => handleTimeChange(idx, time)}
+                                            disabled={!schedule.enabled}
+                                        >
+                                            <SelectTrigger className={`w-[120px] ${!schedule.enabled && 'opacity-50'}`}>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-60">
+                                                {TIME_OPTIONS.map(time => (
+                                                    <SelectItem key={time} value={time}>
+                                                        {time}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
 
-                    {/* Selección de horario */}
-                    <div className="space-y-2">
-                        <Label htmlFor="time">Horário</Label>
-                        <Select value={selectedTime} onValueChange={setSelectedTime}>
-                            <SelectTrigger id="time">
-                                <SelectValue placeholder="Selecione o horário" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-60">
-                                {TIME_OPTIONS.map(time => (
-                                    <SelectItem key={time} value={time}>
-                                        {time}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
                     {/* Preview */}
-                    {selectedDays.length > 0 && selectedTime && (
-                        <div className="bg-blue-50 p-3 rounded-lg">
-                            <p className="text-sm font-medium text-blue-900 mb-1">Novo horário:</p>
-                            <p className="text-sm text-blue-700">
-                                {selectedDays.map(d => daysOfWeekMap[d]).join(', ')} às {selectedTime}
-                            </p>
+                    {enabledDays.length > 0 && (
+                        <div className="bg-blue-50 p-4 rounded-lg">
+                            <p className="text-sm font-medium text-blue-900 mb-2">Novos horários:</p>
+                            <div className="space-y-1">
+                                {enabledDays.map(([day, schedule]) => (
+                                    <p key={day} className="text-sm text-blue-700">
+                                        • {daysOfWeekFull[day]} às {schedule.time}
+                                    </p>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -278,7 +323,7 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                     </Button>
                     <Button
                         onClick={handleSubmit}
-                        disabled={isSubmitting || selectedDays.length === 0 || !selectedTime}
+                        disabled={isSubmitting || enabledDays.length === 0}
                         className="bg-sky-600 hover:bg-sky-700"
                     >
                         {isSubmitting ? (
@@ -325,20 +370,20 @@ const AlunosTab = ({ dashboardData }) => {
             // Aulas agendadas (solo scheduled)
             const scheduledAppointments = studentAppointments.filter(a => a.status === 'scheduled');
 
-            // Obtener días de la semana de las aulas agendadas
-            const weekDays = new Set();
-            let commonTime = null;
+            // Obtener días de la semana con sus horarios específicos
+            const daySchedules = {};
 
             scheduledAppointments.forEach(apt => {
                 const aptDate = parseISO(apt.class_datetime);
                 const dayOfWeek = getDay(aptDate);
-                weekDays.add(dayOfWeek);
-
                 const time = format(aptDate, 'HH:mm');
-                if (!commonTime) commonTime = time;
+
+                if (!daySchedules[dayOfWeek]) {
+                    daySchedules[dayOfWeek] = time;
+                }
             });
 
-            // Filtra logs ativos (não cancelados) e pertencentes ao aluno
+            // Filtra logs ativos
             const studentLogs = assignedLogs.filter(l =>
                 l.student_id === student.id && l.status !== 'Cancelado'
             );
@@ -348,7 +393,7 @@ const AlunosTab = ({ dashboardData }) => {
                 return acc + (log.assigned_classes || 0);
             }, 0);
 
-            // Clases usadas/agendadas: scheduled, completed, missed
+            // Clases usadas/agendadas
             const usedClasses = studentAppointments.filter(a =>
                 ['scheduled', 'completed', 'missed'].includes(a.status)
             ).length;
@@ -358,8 +403,7 @@ const AlunosTab = ({ dashboardData }) => {
             return {
                 ...student,
                 availableClasses: Math.max(0, availableClasses),
-                weekDays: Array.from(weekDays).sort(),
-                classTime: commonTime,
+                daySchedules, // { dayIndex: time }
                 scheduledAppointments
             };
         });
@@ -564,21 +608,21 @@ const AlunosTab = ({ dashboardData }) => {
                                     <TableCell>{student.age || 'N/A'}</TableCell>
                                     <TableCell>{student.spanish_level || 'N/A'}</TableCell>
                                     <TableCell>
-                                        {student.weekDays.length > 0 ? (
+                                        {Object.keys(student.daySchedules).length > 0 ? (
                                             <div className="flex flex-col gap-1">
-                                                <div className="flex gap-1 flex-wrap">
-                                                    {student.weekDays.map(day => (
-                                                        <Badge key={day} variant="outline" className="text-xs">
-                                                            {daysOfWeekMap[day]}
-                                                        </Badge>
+                                                {Object.entries(student.daySchedules)
+                                                    .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                                                    .map(([day, time]) => (
+                                                        <div key={day} className="flex items-center gap-2">
+                                                            <Badge variant="outline" className="text-xs">
+                                                                {daysOfWeekMap[day]}
+                                                            </Badge>
+                                                            <span className="text-xs text-slate-600">
+                                                                <Clock className="inline h-3 w-3 mr-1" />
+                                                                {time}
+                                                            </span>
+                                                        </div>
                                                     ))}
-                                                </div>
-                                                {student.classTime && (
-                                                    <span className="text-xs text-slate-500">
-                                                        <Clock className="inline h-3 w-3 mr-1" />
-                                                        {student.classTime}
-                                                    </span>
-                                                )}
                                             </div>
                                         ) : (
                                             <span className="text-xs text-slate-400">Sem aulas</span>
