@@ -84,9 +84,11 @@ const AgendaTab = ({ dashboardData }) => {
 
         // Aplica filtros de data para Hoje/Amanhã/Calendário Individual
         if (dateStringStart) {
+            // CORRECCIÓN: Usar el offset de Brasil (UTC-3) para las comparaciones
+            // En lugar de usar Z (UTC), usamos -03:00 para Brasil
             query = query
-                .gte('class_datetime', `${dateStringStart}T00:00:00Z`)
-                .lte('class_datetime', `${dateStringEnd}T23:59:59Z`);
+                .gte('class_datetime', `${dateStringStart}T00:00:00-03:00`)
+                .lte('class_datetime', `${dateStringEnd}T23:59:59-03:00`);
         }
 
 

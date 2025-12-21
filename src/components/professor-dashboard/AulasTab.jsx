@@ -207,8 +207,8 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
             // CORREÇÃO: Usa professorId da prop estendida
             .eq('professor_id', appointment.professorId)
             .in('status', ['scheduled', 'rescheduled', 'pending'])
-            .gte('class_datetime', `${dayString}T00:00:00Z`)
-            .lte('class_datetime', `${dayString}T23:59:59Z`);
+            .gte('class_datetime', `${dayString}T00:00:00-03:00`)
+            .lte('class_datetime', `${dayString}T23:59:59-03:00`);
 
         if (aptError) {
             console.error("Error fetching day appointments:", aptError);
