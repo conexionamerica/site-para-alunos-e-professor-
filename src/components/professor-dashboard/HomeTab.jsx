@@ -262,68 +262,72 @@ const HomeTab = ({ dashboardData }) => {
   };
 
   return (
-    // CORREÇÃO DE LAYOUT: Aplica padding horizontal aqui para alinhar com o cabeçalho.
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8 px-4 lg:px-8">
-      <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
-        <h3 className="font-bold mb-4">Solicitações de Agendamento ({solicitudes.length})</h3>
-        {loading ? <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin" /></div> :
-          solicitudes.length > 0 ? (
-            <div className="space-y-4">
-              {solicitudes.map(req => (
-                <div key={req.solicitud_id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 rounded-lg border">
-                  <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                    <Avatar><AvatarImage src={req.profile?.avatar_url} /><AvatarFallback>{req.profile?.full_name?.[0]}</AvatarFallback></Avatar>
-                    <div>
-                      <p className="font-semibold">{req.profile?.full_name}</p>
-                      {renderHorarios(req.horarios_propuestos)}
+    <div className="flex justify-center">
+      <div className="w-full max-w-[1400px]">
+        // CORREÇÃO DE LAYOUT: Aplica padding horizontal aqui para alinhar com o cabeçalho.
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8 px-4 lg:px-8">
+          <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+            <h3 className="font-bold mb-4">Solicitações de Agendamento ({solicitudes.length})</h3>
+            {loading ? <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin" /></div> :
+              solicitudes.length > 0 ? (
+                <div className="space-y-4">
+                  {solicitudes.map(req => (
+                    <div key={req.solicitud_id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 rounded-lg border">
+                      <div className="flex items-center gap-4 mb-3 sm:mb-0">
+                        <Avatar><AvatarImage src={req.profile?.avatar_url} /><AvatarFallback>{req.profile?.full_name?.[0]}</AvatarFallback></Avatar>
+                        <div>
+                          <p className="font-semibold">{req.profile?.full_name}</p>
+                          {renderHorarios(req.horarios_propuestos)}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-3 sm:mt-0 self-end sm:self-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
+                          onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Aceita')}
+                          disabled={updatingRequestId === req.solicitud_id}
+                        >
+                          {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Rejeitada')}
+                          disabled={updatingRequestId === req.solicitud_id}
+                        >
+                          {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2 mt-3 sm:mt-0 self-end sm:self-center">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
-                      onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Aceita')}
-                      disabled={updatingRequestId === req.solicitud_id}
-                    >
-                      {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
-                      onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Rejeitada')}
-                      disabled={updatingRequestId === req.solicitud_id}
-                    >
-                      {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                    </Button>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              ) :
+                <div className="text-center py-10 text-slate-500">
+                  <CalendarHeart className="w-12 h-12 mx-auto mb-2 text-slate-400" />
+                  <p className="font-semibold">Nenhuma solicitação pendente.</p>
+                  <p className="text-sm">Quando um aluno solicitar uma aula, aparecerá aqui.</p>
+                </div>}
+          </div>
+          <div className="space-y-4 lg:space-y-8">
+            <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
+              <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
+              {loading ? (
+                <p>Carregando...</p>
+              ) : nextClass ? (
+                <>
+                  <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
+                  <h3 className="text-lg font-bold mt-1">{nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
+                  <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student.full_name}</p>
+                  <p className="text-sm"><strong>Nível:</strong> {nextClass.student.spanish_level || 'Não definido'}</p>
+                  <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
+                </>
+              ) : (
+                <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
+              )}
             </div>
-          ) :
-            <div className="text-center py-10 text-slate-500">
-              <CalendarHeart className="w-12 h-12 mx-auto mb-2 text-slate-400" />
-              <p className="font-semibold">Nenhuma solicitação pendente.</p>
-              <p className="text-sm">Quando um aluno solicitar uma aula, aparecerá aqui.</p>
-            </div>}
-      </div>
-      <div className="space-y-4 lg:space-y-8">
-        <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
-          <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
-          {loading ? (
-            <p>Carregando...</p>
-          ) : nextClass ? (
-            <>
-              <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
-              <h3 className="text-lg font-bold mt-1">{nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
-              <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student.full_name}</p>
-              <p className="text-sm"><strong>Nível:</strong> {nextClass.student.spanish_level || 'Não definido'}</p>
-              <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
-            </>
-          ) : (
-            <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
-          )}
+          </div>
         </div>
       </div>
     </div>

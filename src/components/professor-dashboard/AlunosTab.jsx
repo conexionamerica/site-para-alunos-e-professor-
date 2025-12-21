@@ -575,181 +575,185 @@ const AlunosTab = ({ dashboardData }) => {
     };
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="font-bold mb-4">Gerenciar Alunos ({students.length})</h3>
-            <div className="flex justify-between items-center mb-4">
-                <div className="relative w-full max-w-sm">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                    <Input placeholder="Buscar por nome..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
-                </div>
-            </div>
-            <div className="border rounded-lg overflow-hidden">
-                <Table>
-                    <TableHeader className="bg-slate-50">
-                        <TableRow>
-                            <TableHead>Nome</TableHead>
-                            <TableHead>Idade</TableHead>
-                            <TableHead>Nível</TableHead>
-                            <TableHead>Dias de Aula</TableHead>
-                            <TableHead>Aulas Agendadas</TableHead>
-                            <TableHead>Estado</TableHead>
-                            <TableHead>Membro Desde</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? <TableRow><TableCell colSpan="8" className="text-center"><Loader2 className="mx-auto my-4 h-6 w-6 animate-spin" /></TableCell></TableRow> :
-                            filteredStudents.length > 0 ? filteredStudents.map(student => (
-                                <TableRow key={student.id}>
-                                    <TableCell className="font-medium">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={student.avatar_url} /><AvatarFallback>{student.full_name?.[0] || 'A'}</AvatarFallback></Avatar>
-                                            {student.full_name}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{student.age || 'N/A'}</TableCell>
-                                    <TableCell>{student.spanish_level || 'N/A'}</TableCell>
-                                    <TableCell>
-                                        {Object.keys(student.daySchedules).length > 0 ? (
-                                            <div className="flex flex-col gap-1">
-                                                {Object.entries(student.daySchedules)
-                                                    .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                                                    .map(([day, time]) => (
-                                                        <div key={day} className="flex items-center gap-2">
-                                                            <Badge variant="outline" className="text-xs">
-                                                                {daysOfWeekMap[day]}
-                                                            </Badge>
-                                                            <span className="text-xs text-slate-600">
-                                                                <Clock className="inline h-3 w-3 mr-1" />
-                                                                {time}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-slate-400">Sem aulas</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2 font-semibold">
-                                            <Package className="h-4 w-4 text-sky-500" />
-                                            {student.scheduledClasses}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        {student.is_active !== false ? (
-                                            <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Ativo</Badge>
-                                        ) : (
-                                            <Badge variant="destructive">Inativo</Badge>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>{format(new Date(student.created_at), 'dd/MM/yyyy')}</TableCell>
-                                    <TableCell className="text-right">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreVertical className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                {student.scheduledAppointments.length > 0 && (
-                                                    <>
-                                                        <DropdownMenuItem onClick={() => handleOpenScheduleDialog(student)}>
-                                                            <Calendar className="mr-2 h-4 w-4 text-blue-600" />
-                                                            Alterar Dias/Horários
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                    </>
-                                                )}
-                                                <DropdownMenuItem onClick={() => handleToggleActive(student)}>
-                                                    {student.is_active !== false ? (
-                                                        <><UserX className="mr-2 h-4 w-4 text-orange-600" /> Inativar Aluno</>
-                                                    ) : (
-                                                        <><UserCheck className="mr-2 h-4 w-4 text-green-600" /> Ativar Aluno</>
-                                                    )}
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem onClick={() => handleOpenMessageDialog(student)}>
-                                                    <MessageSquare className="mr-2 h-4 w-4 text-sky-600" />
-                                                    Enviar Mensagem
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
-                            )) : <TableRow><TableCell colSpan="8" className="text-center py-8 text-slate-500">Nenhum aluno encontrado.</TableCell></TableRow>}
-                    </TableBody>
-                </Table>
-            </div>
-
-            {/* Dialog de Mensaje */}
-            <Dialog open={isMessageDialogOpen} onOpenChange={setIsMessageDialogOpen}>
-                <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                        <DialogTitle>Enviar Mensagem para {selectedStudent?.full_name}</DialogTitle>
-                        <DialogDescription>
-                            A mensagem aparecerá no painel do aluno como um aviso importante.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="title">Título da Mensagem</Label>
-                            <Input
-                                id="title"
-                                placeholder="Ex: Tarefa da próxima aula"
-                                value={messageTitle}
-                                onChange={(e) => setMessageTitle(e.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="message">Mensagem</Label>
-                            <Textarea
-                                id="message"
-                                placeholder="Digite sua mensagem..."
-                                value={messageContent}
-                                onChange={(e) => setMessageContent(e.target.value)}
-                                rows={5}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="priority">Prioridade</Label>
-                            <Select value={messagePriority} onValueChange={setMessagePriority}>
-                                <SelectTrigger id="priority">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="normal">Normal</SelectItem>
-                                    <SelectItem value="important">Importante</SelectItem>
-                                    <SelectItem value="urgent">Urgente</SelectItem>
-                                </SelectContent>
-                            </Select>
+        <div className="flex justify-center">
+            <div className="w-full max-w-[1400px]">
+                <div className="bg-white p-6 rounded-lg shadow-sm">
+                    <h3 className="font-bold mb-4">Gerenciar Alunos ({students.length})</h3>
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="relative w-full max-w-sm">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                            <Input placeholder="Buscar por nome..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
                         </div>
                     </div>
-                    <DialogFooter>
-                        <Button
-                            onClick={handleSendMessage}
-                            disabled={isSubmitting}
-                            className="bg-sky-500 hover:bg-sky-600"
-                        >
-                            {isSubmitting ? (
-                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
-                            ) : (
-                                <><Send className="mr-2 h-4 w-4" /> Enviar Mensagem</>
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                            <TableHeader className="bg-slate-50">
+                                <TableRow>
+                                    <TableHead>Nome</TableHead>
+                                    <TableHead>Idade</TableHead>
+                                    <TableHead>Nível</TableHead>
+                                    <TableHead>Dias de Aula</TableHead>
+                                    <TableHead>Aulas Agendadas</TableHead>
+                                    <TableHead>Estado</TableHead>
+                                    <TableHead>Membro Desde</TableHead>
+                                    <TableHead className="text-right">Ações</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {loading ? <TableRow><TableCell colSpan="8" className="text-center"><Loader2 className="mx-auto my-4 h-6 w-6 animate-spin" /></TableCell></TableRow> :
+                                    filteredStudents.length > 0 ? filteredStudents.map(student => (
+                                        <TableRow key={student.id}>
+                                            <TableCell className="font-medium">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-8 w-8"><AvatarImage src={student.avatar_url} /><AvatarFallback>{student.full_name?.[0] || 'A'}</AvatarFallback></Avatar>
+                                                    {student.full_name}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{student.age || 'N/A'}</TableCell>
+                                            <TableCell>{student.spanish_level || 'N/A'}</TableCell>
+                                            <TableCell>
+                                                {Object.keys(student.daySchedules).length > 0 ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        {Object.entries(student.daySchedules)
+                                                            .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                                                            .map(([day, time]) => (
+                                                                <div key={day} className="flex items-center gap-2">
+                                                                    <Badge variant="outline" className="text-xs">
+                                                                        {daysOfWeekMap[day]}
+                                                                    </Badge>
+                                                                    <span className="text-xs text-slate-600">
+                                                                        <Clock className="inline h-3 w-3 mr-1" />
+                                                                        {time}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-slate-400">Sem aulas</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2 font-semibold">
+                                                    <Package className="h-4 w-4 text-sky-500" />
+                                                    {student.scheduledClasses}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                {student.is_active !== false ? (
+                                                    <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Ativo</Badge>
+                                                ) : (
+                                                    <Badge variant="destructive">Inativo</Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>{format(new Date(student.created_at), 'dd/MM/yyyy')}</TableCell>
+                                            <TableCell className="text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon">
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        {student.scheduledAppointments.length > 0 && (
+                                                            <>
+                                                                <DropdownMenuItem onClick={() => handleOpenScheduleDialog(student)}>
+                                                                    <Calendar className="mr-2 h-4 w-4 text-blue-600" />
+                                                                    Alterar Dias/Horários
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                            </>
+                                                        )}
+                                                        <DropdownMenuItem onClick={() => handleToggleActive(student)}>
+                                                            {student.is_active !== false ? (
+                                                                <><UserX className="mr-2 h-4 w-4 text-orange-600" /> Inativar Aluno</>
+                                                            ) : (
+                                                                <><UserCheck className="mr-2 h-4 w-4 text-green-600" /> Ativar Aluno</>
+                                                            )}
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem onClick={() => handleOpenMessageDialog(student)}>
+                                                            <MessageSquare className="mr-2 h-4 w-4 text-sky-600" />
+                                                            Enviar Mensagem
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    )) : <TableRow><TableCell colSpan="8" className="text-center py-8 text-slate-500">Nenhum aluno encontrado.</TableCell></TableRow>}
+                            </TableBody>
+                        </Table>
+                    </div>
 
-            {/* Dialog de Cambiar Horarios */}
-            <ChangeScheduleDialog
-                student={selectedStudent}
-                isOpen={isScheduleDialogOpen}
-                onClose={() => setIsScheduleDialogOpen(false)}
-                onUpdate={onUpdate}
-                professorId={professorId}
-                scheduledAppointments={selectedStudent?.scheduledAppointments || []}
-            />
+                    {/* Dialog de Mensaje */}
+                    <Dialog open={isMessageDialogOpen} onOpenChange={setIsMessageDialogOpen}>
+                        <DialogContent className="sm:max-w-[500px]">
+                            <DialogHeader>
+                                <DialogTitle>Enviar Mensagem para {selectedStudent?.full_name}</DialogTitle>
+                                <DialogDescription>
+                                    A mensagem aparecerá no painel do aluno como um aviso importante.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="title">Título da Mensagem</Label>
+                                    <Input
+                                        id="title"
+                                        placeholder="Ex: Tarefa da próxima aula"
+                                        value={messageTitle}
+                                        onChange={(e) => setMessageTitle(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="message">Mensagem</Label>
+                                    <Textarea
+                                        id="message"
+                                        placeholder="Digite sua mensagem..."
+                                        value={messageContent}
+                                        onChange={(e) => setMessageContent(e.target.value)}
+                                        rows={5}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="priority">Prioridade</Label>
+                                    <Select value={messagePriority} onValueChange={setMessagePriority}>
+                                        <SelectTrigger id="priority">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="normal">Normal</SelectItem>
+                                            <SelectItem value="important">Importante</SelectItem>
+                                            <SelectItem value="urgent">Urgente</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button
+                                    onClick={handleSendMessage}
+                                    disabled={isSubmitting}
+                                    className="bg-sky-500 hover:bg-sky-600"
+                                >
+                                    {isSubmitting ? (
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
+                                    ) : (
+                                        <><Send className="mr-2 h-4 w-4" /> Enviar Mensagem</>
+                                    )}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Dialog de Cambiar Horarios */}
+                    <ChangeScheduleDialog
+                        student={selectedStudent}
+                        isOpen={isScheduleDialogOpen}
+                        onClose={() => setIsScheduleDialogOpen(false)}
+                        onUpdate={onUpdate}
+                        professorId={professorId}
+                        scheduledAppointments={selectedStudent?.scheduledAppointments || []}
+                    />
+                </div>
+            </div>
         </div>
     );
 };
