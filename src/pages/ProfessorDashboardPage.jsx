@@ -139,6 +139,7 @@ const ProfessorDashboardPage = () => {
     const [dashboardData, setDashboardData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
+    const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
     const handleLogout = async () => {
         await signOut();
@@ -244,6 +245,60 @@ const ProfessorDashboardPage = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // Buscar mensagens não lidas
+    useEffect(() => {
+        const checkUnreadMessages = async () => {
+            if (!user?.id) return;
+
+            const { count, error } = await supabase
+                .from('student_messages')
+                .select('id', { count: 'exact', head: true })
+                .eq('professor_id', user.id)
+                .eq('read', false);
+
+            if (!error) {
+                setHasUnreadMessages(count > 0);
+            }
+        };
+
+        checkUnreadMessages();
+
+        // Realtime para atualizar quando novas mensagens chegam
+        const messagesChannel = supabase
+            .channel('messages-changes')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'student_messages',
+                filter: `professor_id=eq.${user?.id}`
+            }, () => {
+                checkUnreadMessages();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(messagesChannel);
+        };
+    }, [user?.id]);
+
+    // Marcar mensagens como lidas quando abrir a aba Conversas
+    useEffect(() => {
+        if (activeTab === 'conversas' && hasUnreadMessages && user?.id) {
+            // Dar um pequeno delay para garantir que o usuário realmente abriu a aba
+            const timer = setTimeout(async () => {
+                await supabase
+                    .from('student_messages')
+                    .update({ read: true })
+                    .eq('professor_id', user.id)
+                    .eq('read', false);
+
+                setHasUnreadMessages(false);
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [activeTab, hasUnreadMessages, user?.id]);
+
     const navItems = [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
@@ -281,12 +336,19 @@ const ProfessorDashboardPage = () => {
                             }}
                             className={`w-full justify-start text-lg px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id
                                 ? 'bg-blue-600 text-white shadow-lg'
-                                : 'text-gray-300 hover:bg-gray-800'
+                                : item.id === 'conversas' && hasUnreadMessages
+                                    ? 'text-blue-800 font-bold hover:bg-gray-800'
+                                    : 'text-gray-300 hover:bg-gray-800'
                                 }`}
                             disabled={isLoading}
                         >
                             <item.icon className="h-5 w-5 mr-3" />
                             {item.label}
+                            {item.id === 'conversas' && hasUnreadMessages && (
+                                <span className="ml-auto bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
+                                    Nova
+                                </span>
+                            )}
                         </TabsTrigger>
                     ))}
                 </TabsList>
@@ -398,11 +460,18 @@ const ProfessorDashboardPage = () => {
                                             className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-none transition-all duration-200 border-b-2 border-transparent 
                                                 ${activeTab === item.id
                                                     ? 'text-sky-600 border-sky-600 font-semibold'
-                                                    : 'text-gray-600 hover:text-gray-800'
+                                                    : item.id === 'conversas' && hasUnreadMessages
+                                                        ? 'text-blue-800 font-bold hover:text-blue-900'
+                                                        : 'text-gray-600 hover:text-gray-800'
                                                 }`}
                                         >
                                             <item.icon className="h-5 w-5 mr-2" />
                                             {item.label}
+                                            {item.id === 'conversas' && hasUnreadMessages && (
+                                                <span className="ml-2 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">
+                                                    Nova
+                                                </span>
+                                            )}
                                         </TabsTrigger>
                                     ))}
                                 </TabsList>
