@@ -40,12 +40,12 @@ const fetchProfessorDashboardData = async (professorId) => {
         .order('solicitud_id', { ascending: true });
     if (reqError) throw reqError;
 
-    // 3. Fetch de Próxima Aula (para HomeTab)
+    // 3. Fetch de Próxima Aula (para HomeTab) - Inclui aulas reagendadas
     const { data: nextClass, error: nextClassError } = await supabase
         .from('appointments')
         .select(`*, student:profiles!student_id(full_name, spanish_level)`)
         .eq('professor_id', professorId)
-        .eq('status', 'scheduled')
+        .in('status', ['scheduled', 'rescheduled'])
         .gte('class_datetime', today)
         .order('class_datetime', { ascending: true })
         .limit(1)
@@ -250,14 +250,33 @@ const ProfessorDashboardPage = () => {
         const checkUnreadMessages = async () => {
             if (!user?.id) return;
 
-            const { count, error } = await supabase
-                .from('student_messages')
-                .select('id', { count: 'exact', head: true })
-                .eq('professor_id', user.id)
-                .eq('read', false);
+            try {
+                // 1. Buscar os IDs dos chats que pertencem a este professor
+                const { data: chats, error: chatsError } = await supabase
+                    .from('chats')
+                    .select('chat_id')
+                    .eq('profesor_id', user.id);
 
-            if (!error) {
+                if (chatsError) throw chatsError;
+                if (!chats || chats.length === 0) {
+                    setHasUnreadMessages(false);
+                    return;
+                }
+
+                const chatIds = chats.map(c => c.chat_id);
+
+                // 2. Contar mensagens não lidas nesses chats (que não foram enviadas pelo professor)
+                const { count, error: msgError } = await supabase
+                    .from('mensajes')
+                    .select('mensaje_id', { count: 'exact', head: true })
+                    .in('chat_id', chatIds)
+                    .neq('remitente_id', user.id)
+                    .eq('leido', false);
+
+                if (msgError) throw msgError;
                 setHasUnreadMessages(count > 0);
+            } catch (err) {
+                console.error('Erro ao verificar mensagens não lidas:', err);
             }
         };
 
@@ -269,8 +288,7 @@ const ProfessorDashboardPage = () => {
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
-                table: 'student_messages',
-                filter: `professor_id=eq.${user?.id}`
+                table: 'mensajes'
             }, () => {
                 checkUnreadMessages();
             })
@@ -286,13 +304,29 @@ const ProfessorDashboardPage = () => {
         if (activeTab === 'conversas' && hasUnreadMessages && user?.id) {
             // Dar um pequeno delay para garantir que o usuário realmente abriu a aba
             const timer = setTimeout(async () => {
-                await supabase
-                    .from('student_messages')
-                    .update({ read: true })
-                    .eq('professor_id', user.id)
-                    .eq('read', false);
+                try {
+                    // 1. Buscar os IDs dos chats que pertencem a este professor
+                    const { data: chats } = await supabase
+                        .from('chats')
+                        .select('chat_id')
+                        .eq('profesor_id', user.id);
 
-                setHasUnreadMessages(false);
+                    if (chats && chats.length > 0) {
+                        const chatIds = chats.map(c => c.chat_id);
+
+                        // 2. Marcar mensagens não lidas desses chats como lidas
+                        await supabase
+                            .from('mensajes')
+                            .update({ leido: true })
+                            .in('chat_id', chatIds)
+                            .neq('remitente_id', user.id)
+                            .eq('leido', false);
+                    }
+
+                    setHasUnreadMessages(false);
+                } catch (err) {
+                    console.error('Erro ao marcar mensagens como lidas:', err);
+                }
             }, 1000);
 
             return () => clearTimeout(timer);
