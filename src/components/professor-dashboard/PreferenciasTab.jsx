@@ -15,11 +15,11 @@ import { ChevronsUpDown, Check, History, Loader2, Calendar as CalendarIcon, Lock
 import { cn } from '@/lib/utils';
 import { format, parseISO, addMonths, parse, getDay, add } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Input } from '@/components/ui/input'; 
+import { Input } from '@/components/ui/input';
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'framer-motion';
-import { Label } from '@/components/ui/label'; 
+import { Label } from '@/components/ui/label';
 
 
 const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
@@ -53,38 +53,38 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
       setLoading(false);
       return;
     }
-    
+
     // 2. Fetch Billing (para Datas e Preço Pago)
     const studentIds = [...new Set(logs.map(log => log.student_id))];
     const { data: billings, error: billingError } = await supabase
-        .from('billing')
-        // CORREÇÃO: Incluído amount_paid na busca
-        .select(`id, user_id, package_id, purchase_date, end_date, amount_paid`) 
-        .in('user_id', studentIds);
-        
+      .from('billing')
+      // CORREÇÃO: Incluído amount_paid na busca
+      .select(`id, user_id, package_id, purchase_date, end_date, amount_paid`)
+      .in('user_id', studentIds);
+
     if (billingError) {
       console.error("Error fetching billings:", billingError);
     }
 
     // 3. Merge Logs com Datas de Billing
     const mergedHistory = logs.map(log => {
-        const matchingBilling = (billings || [])
-            .filter(b => 
-                b.user_id === log.student_id && 
-                b.package_id === log.package_id && 
-                // A fatura deve ter sido comprada antes ou no momento da atribuição
-                (new Date(b.purchase_date) <= new Date(log.assigned_at)) 
-            )
-            // Ordem decrescente de purchase_date para pegar a fatura mais relevante/recente
-            .sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date))[0]; 
-        
-        return {
-            ...log,
-            start_date: matchingBilling?.purchase_date || null,
-            end_date: matchingBilling?.end_date || null,
-            total_classes_sent: log.assigned_classes, 
-            amount_paid: matchingBilling?.amount_paid || 0, // Incluído o preço pago
-        };
+      const matchingBilling = (billings || [])
+        .filter(b =>
+          b.user_id === log.student_id &&
+          b.package_id === log.package_id &&
+          // A fatura deve ter sido comprada antes ou no momento da atribuição
+          (new Date(b.purchase_date) <= new Date(log.assigned_at))
+        )
+        // Ordem decrescente de purchase_date para pegar a fatura mais relevante/recente
+        .sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date))[0];
+
+      return {
+        ...log,
+        start_date: matchingBilling?.purchase_date || null,
+        end_date: matchingBilling?.end_date || null,
+        total_classes_sent: log.assigned_classes,
+        amount_paid: matchingBilling?.amount_paid || 0, // Incluído o preço pago
+      };
     });
 
     setHistory(mergedHistory || []);
@@ -98,30 +98,38 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
       .subscribe();
-      
+
     return () => supabase.removeChannel(channel);
   }, [fetchHistory, professorId]);
 
   const handleDeleteWrapper = async (log) => {
-    // 1. Otimização: Atualizar o estado local imediatamente
-    setHistory(prevHistory => prevHistory.map(item => 
-        item.id === log.id 
-            ? { ...item, status: 'Cancelado' } // <--- Esta linha atualiza o estado
-            : item
-    ));
+    // 1. Confirmação do usuário ANTES de qualquer alteração
+    if (!window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. CANCELAR a fatura ativa mais recente.\n3. EXCLUIR TODAS AS AULAS FUTURAS agendadas.\n4. LIBERAR OS HORÁRIOS RECORRENTES (slots).\n\nConfirma a operação?")) {
+      return; // Usuário cancelou, não fazer nada
+    }
 
     // 2. Chama a ação principal no pai (que atualiza o DB e o Dashboard principal)
-    await onDelete(log);
+    // Passa um flag indicando que a confirmação já foi feita
+    const success = await onDelete(log, true);
+
+    // 3. Só atualiza o estado local se a operação foi bem-sucedida
+    if (success) {
+      setHistory(prevHistory => prevHistory.map(item =>
+        item.id === log.id
+          ? { ...item, status: 'Cancelado' }
+          : item
+      ));
+    }
   };
 
   const StatusBadge = ({ status }) => {
-    const isCanceled = status === 'Cancelado'; 
+    const isCanceled = status === 'Cancelado';
     const isSpecial = status === 'missed' || status === 'completed' || status === 'rescheduled_credit';
-    
+
     let variant = 'default';
     if (isCanceled) variant = 'destructive';
     if (isSpecial) variant = 'secondary';
-    
+
     let label = status;
     if (isCanceled) label = 'Desfeito';
     if (status === 'missed') label = 'Falta';
@@ -129,18 +137,18 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
     if (status === 'rescheduled_credit') label = 'Crédito Ativo';
 
     return (
-        <Badge variant={variant}>
-            {label}
-        </Badge>
+      <Badge variant={variant}>
+        {label}
+      </Badge>
     );
   };
-  
+
   const formatCurrency = (value) => {
     // Garante que valores nulos ou indefinidos sejam tratados como zero
-    const numericValue = value || 0; 
+    const numericValue = value || 0;
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numericValue);
   };
-    
+
   return (
     <DialogContent className="max-w-5xl"> {/* Aumentado o max-w para caber as novas colunas */}
       <DialogHeader>
@@ -173,7 +181,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
                 <TableRow key={log.id} className={log.status === 'Cancelado' ? 'opacity-60 bg-slate-50' : ''}>
                   <TableCell>{log.student?.full_name || 'N/A'}</TableCell>
                   <TableCell>{log.package?.name || 'Pacote não encontrado'}</TableCell>
-                  
+
                   {/* DADOS DE AULAS/PREÇO */}
                   <TableCell>{log.total_classes_sent || 'N/A'}</TableCell>
                   <TableCell>{formatCurrency(log.amount_paid)}</TableCell> {/* EXIBIÇÃO DO PREÇO */}
@@ -182,7 +190,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
                   {/* Verifica se as datas existem antes de formatar. */}
                   <TableCell>{log.start_date ? format(parseISO(log.start_date), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                   <TableCell>{log.end_date ? format(parseISO(log.end_date), 'dd/MM/yyyy') : 'N/A'}</TableCell>
-                  
+
                   <TableCell>{format(parseISO(log.assigned_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}</TableCell>
                   <TableCell>
                     <StatusBadge status={log.status} />
@@ -227,23 +235,23 @@ const PreferenciasTab = ({ dashboardData }) => {
   const packages = data.packages || [];
   const classSlots = data.classSlots || [];
   const onUpdate = dashboardData?.onUpdate; // Para forçar a recarga no pai
-    
+
   const [slots, setSlots] = useState([]);
   const [isSavingSlots, setIsSavingSlots] = useState(false);
 
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [selectedPackage, setSelectedPackage] = useState(null);
-  
+
   // ESTADOS PARA O PACOTE PADRÃO 'PERSONALIZADO' (agora usado para a nova função)
   const [customClassCount, setCustomClassCount] = useState('');
   const [observation, setObservation] = useState('');
-  
+
   // NOVOS ESTADOS PARA DETALHES DO AGENDAMENTO (usaremos para 'Personalizado')
   const [pckPersonalData, setPckPersonalData] = useState({
     totalClasses: '',
     duration: '30', // Default duration
-    time: ALL_TIMES[0].substring(0, 5), 
+    time: ALL_TIMES[0].substring(0, 5),
     days: [],
     price: '',
     startDate: new Date(), // NOVA: Data de Início do Customizado
@@ -252,15 +260,15 @@ const PreferenciasTab = ({ dashboardData }) => {
   // Usamos 'custom' para compatibilidade com o fluxo original que só precisava de customClassCount.
   // Agora, usaremos pckPersonalData para a maioria dos inputs.
   const { totalClasses, duration, time, days, price, endDate: pckEndDate, startDate: pckStartDate } = pckPersonalData;
-  
+
   const handlePckPersonalChange = (field, value) => {
     setPckPersonalData(prev => ({ ...prev, [field]: value }));
   };
   const handleDayTogglePckPersonal = (dayIndex) => {
-    handlePckPersonalChange('days', 
-        days.includes(dayIndex) 
-            ? days.filter(d => d !== dayIndex) 
-            : [...days, dayIndex]
+    handlePckPersonalChange('days',
+      days.includes(dayIndex)
+        ? days.filter(d => d !== dayIndex)
+        : [...days, dayIndex]
     );
   };
   // FIM DOS NOVOS ESTADOS
@@ -271,16 +279,16 @@ const PreferenciasTab = ({ dashboardData }) => {
   const [endDate, setEndDate] = useState(addMonths(new Date(), 1));
 
   const selectedStudent = students.find(s => s.id === selectedStudentId); // Usa students extraído
-  
+
   // Determina o pacote selecionado e se é customizado/pckpersonal
   const selectedPackageData = packages.find(p => p.id === parseInt(selectedPackage));
-  
+
   // CORREÇÃO: Usar isCustomPackageSelected (o nome 'Personalizado') para mostrar o bloco de agendamento flexível
-  const isCustomPackageSelected = selectedPackageData?.name === 'Personalizado'; 
-  
+  const isCustomPackageSelected = selectedPackageData?.name === 'Personalizado';
+
   // A lógica do agendamento automático será ativada se for o pacote 'Personalizado'
-  const isAutomaticScheduling = isCustomPackageSelected; 
-  
+  const isAutomaticScheduling = isCustomPackageSelected;
+
 
 
   // CORREÇÃO: Usa 'classSlots' extraído do dashboardData
@@ -344,21 +352,21 @@ const PreferenciasTab = ({ dashboardData }) => {
 
     const slotsToUpsert = slots.map(s => {
       // Remove campos desnecessários ou que causam conflito
-      const { id, created_at, ...rest } = s; 
+      const { id, created_at, ...rest } = s;
       return { ...rest, professor_id: professorId };
     });
 
     try {
       // CORREÇÃO: Verifica se professorId existe antes de chamar a API
       if (!professorId) throw new Error("ID do Professor não está disponível.");
-      
+
       const { error } = await supabase.from('class_slots').upsert(slotsToUpsert, {
         onConflict: 'professor_id, day_of_week, start_time'
       });
 
       if (error) throw error;
       toast({ variant: 'default', title: 'Sucesso!', description: 'Suas preferências de horário foram salvas.' });
-      
+
       // Chama onUpdate para recarregar os dados no Dashboard principal
       if (onUpdate) onUpdate();
 
@@ -371,22 +379,42 @@ const PreferenciasTab = ({ dashboardData }) => {
   };
 
   // Funções de exclusão e reversão (esta função DEVE fazer o update no banco de dados)
-  const handleDeleteLog = useCallback(async (log) => {
+  const handleDeleteLog = useCallback(async (log, skipConfirmation = false) => {
     const { id: logId, student_id: studentId, package_id: packageId } = log;
-    
-    if (!window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. CANCELAR a fatura ativa mais recente.\n3. EXCLUIR TODAS AS AULAS FUTURAS agendadas.\n4. LIBERAR OS HORÁRIOS RECORRENTES (slots).\n\nConfirma a operação?")) {
-      return;
+
+    // DEBUG: Log para verificar el ID y el objeto log completo
+    console.log("=== DEBUG handleDeleteLog ===");
+    console.log("Log ID a actualizar:", logId);
+    console.log("Objeto log completo:", log);
+    console.log("Student ID:", studentId);
+    console.log("Package ID:", packageId);
+
+    // Se a confirmação já foi feita (skipConfirmation = true), não exibe novamente
+    if (!skipConfirmation && !window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. CANCELAR a fatura ativa mais recente.\n3. EXCLUIR TODAS AS AULAS FUTURAS agendadas.\n4. LIBERAR OS HORÁRIOS RECORRENTES (slots).\n\nConfirma a operação?")) {
+      return false;
     }
 
     try {
-      // Step 1: Mark as Cancelado
-      const { error: updateError } = await supabase
+      // Step 1: Mark as Cancelado - IMPORTANTE: Verificar que el update realmente fue exitoso
+      const { data: updateData, error: updateError, count } = await supabase
         .from('assigned_packages_log')
-        .update({ status: 'Cancelado' }) 
-        .eq('id', logId);
-      
-      if (updateError) throw updateError;
-      
+        .update({ status: 'Cancelado' })
+        .eq('id', logId)
+        .select(); // Agregar .select() para obtener el registro actualizado
+
+      if (updateError) {
+        console.error("Error updating status:", updateError);
+        throw updateError;
+      }
+
+      // Verificar que realmente se actualizó un registro
+      if (!updateData || updateData.length === 0) {
+        console.error("No se encontró el registro para actualizar, logId:", logId);
+        throw new Error("No se pudo encontrar el registro para actualizar. Verifique que el ID existe.");
+      }
+
+      console.log("Status actualizado correctamente:", updateData);
+
       // ... Resto da lógica de exclusão no Supabase (omitida para brevidade, mas está no arquivo original) ...
 
       let billingRemoved = false;
@@ -402,9 +430,9 @@ const PreferenciasTab = ({ dashboardData }) => {
         .order('purchase_date', { ascending: false })
         .limit(1)
         .maybeSingle();
-      
+
       if (billingFetchError && billingFetchError.code !== 'PGRST116') throw billingFetchError;
-      
+
       if (latestBilling) {
         const { error: billingDeleteError } = await supabase
           .from('billing')
@@ -421,7 +449,7 @@ const PreferenciasTab = ({ dashboardData }) => {
         .eq('student_id', studentId)
         .gte('class_datetime', new Date().toISOString())
         .in('status', ['scheduled', 'pending', 'rescheduled']);
-      
+
       if (aptDeleteError) throw aptDeleteError;
 
       // Step 4: Revert slots
@@ -434,7 +462,7 @@ const PreferenciasTab = ({ dashboardData }) => {
         .order('solicitud_id', { ascending: false })
         .limit(1)
         .maybeSingle();
-      
+
       if (reqFetchError && reqFetchError.code !== 'PGRST116') throw reqFetchError;
 
       if (recurringReq) {
@@ -448,26 +476,26 @@ const PreferenciasTab = ({ dashboardData }) => {
               .in('day_of_week', horarios.days)
               .gte('start_time', horarios.time)
               .eq('status', 'filled');
-            
+
             if (slotsFetchError) throw slotsFetchError;
-            
+
             if (slotsToRevert && slotsToRevert.length > 0) {
               const slotIds = slotsToRevert.map(s => s.id);
               const { error: slotUpdateError, count: revertedSlotsCount } = await supabase
                 .from('class_slots')
                 .update({ status: 'active' }, { count: 'exact' })
                 .in('id', slotIds);
-              
+
               if (slotUpdateError) throw slotUpdateError;
               slotsReverted = revertedSlotsCount > 0;
             }
           }
-          
+
           const { error: reqDeleteError } = await supabase
             .from('solicitudes_clase')
             .delete()
             .eq('solicitud_id', recurringReq.solicitud_id);
-          
+
           if (reqDeleteError) console.warn("Erro ao deletar solicitação:", reqDeleteError);
         } catch (e) {
           console.warn("Could not parse or revert slots:", e);
@@ -485,37 +513,40 @@ const PreferenciasTab = ({ dashboardData }) => {
       // Chama onUpdate para recarregar o histórico e a lista de alunos
       if (onUpdate) onUpdate();
 
+      return true; // Operação bem-sucedida
+
     } catch (error) {
       console.error("Error in handleDeleteLog:", error);
-      toast({ 
-        variant: 'destructive', 
-        title: 'Erro ao desfazer pacote', 
-        description: `Ocorreu um erro: ${error.message}` 
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao desfazer pacote',
+        description: `Ocorreu um erro: ${error.message}`
       });
+      return false; // Operação falhou
     }
   }, [professorId, toast, onUpdate]);
 
   const handleAssignPackage = async (e) => {
     e.preventDefault();
-    
+
     // --- VARIÁVEIS COMUNS ---
     if (!selectedStudentId || !selectedPackage) {
       toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione aluno e pacote.' });
       return;
     }
-    
+
     // --- VALIDAÇÃO PCKPERSONAL (AGORA USADO POR 'PERSONALIZADO') ---
     if (isAutomaticScheduling) {
-        if (!totalClasses || !duration || !time || days.length === 0 || !price || !pckEndDate || !pckStartDate) {
-            toast({ variant: 'destructive', title: 'Campos do Pacote Personalizado obrigatórios', description: 'Por favor, preencha todos os detalhes do agendamento (aulas, duração, horário, dias, preço, data de início e validade).' });
-            setIsSubmittingPackage(false);
-            return;
-        }
+      if (!totalClasses || !duration || !time || days.length === 0 || !price || !pckEndDate || !pckStartDate) {
+        toast({ variant: 'destructive', title: 'Campos do Pacote Personalizado obrigatórios', description: 'Por favor, preencha todos os detalhes do agendamento (aulas, duração, horário, dias, preço, data de início e validade).' });
+        setIsSubmittingPackage(false);
+        return;
+      }
     }
     // --- VALIDAÇÃO GERAL ---
     else if (!endDate || !purchaseDate) {
-        toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione a data de início e de validade.' });
-        return;
+      toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione a data de início e de validade.' });
+      return;
     }
 
 
@@ -525,13 +556,13 @@ const PreferenciasTab = ({ dashboardData }) => {
       return;
     }
     if (!professorId) {
-        toast({ variant: 'destructive', title: 'Erro de Autenticação', description: 'ID do Professor não está disponível.' });
-        setIsSubmittingPackage(false);
-        return;
+      toast({ variant: 'destructive', title: 'Erro de Autenticação', description: 'ID do Professor não está disponível.' });
+      setIsSubmittingPackage(false);
+      return;
     }
 
     setIsSubmittingPackage(true);
-    
+
     // VARIÁVEIS DE ATRIBUIÇÃO E FATURA
     let priceToRegister = 0;
     let classesToRegister = 0;
@@ -539,15 +570,15 @@ const PreferenciasTab = ({ dashboardData }) => {
     let finalPurchaseDate = purchaseDate; // Usado para data_início/purchase_date
 
     if (isAutomaticScheduling) {
-        priceToRegister = parseFloat(price);
-        classesToRegister = parseInt(totalClasses, 10);
-        finalEndDate = pckEndDate;
-        finalPurchaseDate = pckStartDate; // Usa a data de início do bloco personalizado
+      priceToRegister = parseFloat(price);
+      classesToRegister = parseInt(totalClasses, 10);
+      finalEndDate = pckEndDate;
+      finalPurchaseDate = pckStartDate; // Usa a data de início do bloco personalizado
     } else {
-        classesToRegister = selectedPackageData.number_of_classes;
-        priceToRegister = selectedPackageData.price;
+      classesToRegister = selectedPackageData.number_of_classes;
+      priceToRegister = selectedPackageData.price;
     }
-    
+
     // --- 1. CRIAÇÃO DA FATURA (BILLING) ---
     const { error: billingError } = await supabase.from('billing').insert({
       user_id: selectedStudentId,
@@ -562,7 +593,7 @@ const PreferenciasTab = ({ dashboardData }) => {
       setIsSubmittingPackage(false);
       return;
     }
-    
+
     // --- 2. REGISTRO NO LOG (assigned_packages_log) ---
     const { error: logError } = await supabase.from('assigned_packages_log').insert({
       professor_id: professorId,
@@ -572,127 +603,127 @@ const PreferenciasTab = ({ dashboardData }) => {
       assigned_classes: classesToRegister,
       status: 'Ativo'
     });
-    
+
     // --- 3. AGENDAMENTO AUTOMÁTICO (SE FOR PACOTE DE AGENDAMENTO AUTOMÁTICO) ---
     if (isAutomaticScheduling && !billingError) {
-        try {
-            const totalClassesToSchedule = classesToRegister;
-            const classDurationMinutes = parseInt(duration, 10);
-            const slotsPerClass = Math.ceil(classDurationMinutes / 15);
-            const studentId = selectedStudentId;
+      try {
+        const totalClassesToSchedule = classesToRegister;
+        const classDurationMinutes = parseInt(duration, 10);
+        const slotsPerClass = Math.ceil(classDurationMinutes / 15);
+        const studentId = selectedStudentId;
 
-            // Fetch all active class slots for the professor (used for ID lookup)
-            const { data: allSlots, error: slotsError } = await supabase
-                .from('class_slots')
-                .select('id, day_of_week, start_time, status')
-                .eq('professor_id', professorId);
+        // Fetch all active class slots for the professor (used for ID lookup)
+        const { data: allSlots, error: slotsError } = await supabase
+          .from('class_slots')
+          .select('id, day_of_week, start_time, status')
+          .eq('professor_id', professorId);
 
-            if (slotsError) throw slotsError;
+        if (slotsError) throw slotsError;
 
-            const appointmentInserts = [];
-            let currentDate = new Date(finalPurchaseDate); 
-            let classesScheduled = 0;
-            
-            // Fetch existing appointments to prevent dynamic conflicts
-            const { data: existingAppointments, error: aptError } = await supabase
-                .from('appointments')
-                .select('class_datetime, duration_minutes')
-                .eq('professor_id', professorId)
-                .gte('class_datetime', format(new Date(), 'yyyy-MM-dd'))
-                .in('status', ['scheduled', 'rescheduled']);
-            
-            if (aptError) console.error("Error checking for appointments:", aptError);
+        const appointmentInserts = [];
+        let currentDate = new Date(finalPurchaseDate);
+        let classesScheduled = 0;
 
+        // Fetch existing appointments to prevent dynamic conflicts
+        const { data: existingAppointments, error: aptError } = await supabase
+          .from('appointments')
+          .select('class_datetime, duration_minutes')
+          .eq('professor_id', professorId)
+          .gte('class_datetime', format(new Date(), 'yyyy-MM-dd'))
+          .in('status', ['scheduled', 'rescheduled']);
 
-            // INÍCIO DO LOOP DE AGENDAMENTO CORRIGIDO
-            while (classesScheduled < totalClassesToSchedule && currentDate <= finalEndDate) {
-                const dayOfWeek = getDay(currentDate);
-
-                if (days.includes(dayOfWeek)) {
-                    const startTime = time; 
-                    const startTimeFull = `${startTime}:00`; 
-                    const startTimeObj = parse(startTimeFull, 'HH:mm:ss', currentDate);
-
-                    let canBook = true;
-                    
-                    for (let i = 0; i < slotsPerClass; i++) {
-                        const slotTime = format(add(startTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
-                        
-                        // Check 1: Slot must exist in the professor's configured general slots (just for ID reference)
-                        const matchingSlotInProfPrefs = allSlots.find(s => 
-                            s.day_of_week === dayOfWeek && s.start_time === slotTime
-                        );
-
-                        // If the slot is not defined in the professor's preferences AT ALL, we cannot book it.
-                        // For custom packages, we allow booking even if status is inactive, but it MUST exist.
-                        if (!matchingSlotInProfPrefs) {
-                            canBook = false;
-                            break;
-                        }
-
-                        // Check 2: Dynamic conflict against actual booked appointments
-                        const newSlotStart = add(currentDate, { hours: startTimeObj.getHours(), minutes: startTimeObj.getMinutes() + i * 15 });
-                        
-                        if ((existingAppointments || []).some(apt => {
-                            const aptStart = parseISO(apt.class_datetime);
-                            const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
-                            
-                            // Check if new slot time overlaps with existing appointment
-                            return newSlotStart >= aptStart && newSlotStart < aptEnd;
-                        })) {
-                            canBook = false;
-                            break;
-                        }
-                    }
-
-                    if (canBook) {
-                        const [hour, minute] = startTime.split(':').map(Number);
-                        const classDateTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour, minute, 0); 
-                        
-                        // Find the primary slot ID for the INSERT:
-                        const primarySlot = allSlots.find(s => 
-                            s.day_of_week === dayOfWeek && s.start_time === startTimeFull
-                        );
+        if (aptError) console.error("Error checking for appointments:", aptError);
 
 
-                        appointmentInserts.push({
-                            student_id: studentId,
-                            professor_id: professorId,
-                            class_datetime: classDateTime.toISOString(),
-                            class_slot_id: primarySlot.id, // Use the starting slot ID
-                            status: 'scheduled',
-                            duration_minutes: classDurationMinutes,
-                        });
-                        
-                        classesScheduled++;
-                    }
-                }
-                
-                // AVANÇA PARA O PRÓXIMO DIA
-                currentDate = add(currentDate, { days: 1 });
-            }
-            // FIM DO LOOP DE AGENDAMENTO CORRIGIDO
+        // INÍCIO DO LOOP DE AGENDAMENTO CORRIGIDO
+        while (classesScheduled < totalClassesToSchedule && currentDate <= finalEndDate) {
+          const dayOfWeek = getDay(currentDate);
 
-            if (appointmentInserts.length > 0) {
-                // Insere as aulas agendadas (sem lock permanente nos slots)
-                const { error: insertError } = await supabase.from('appointments').insert(appointmentInserts);
-                if (insertError) throw new Error(`Falha ao criar aulas agendadas. Se houver conflitos de horário, parte do agendamento pode ter sido ignorada. Detalhes: ${insertError.message}`);
-                
-                toast({ variant: 'info', title: 'Agendamento Automático!', description: `${appointmentInserts.length} aulas foram agendadas.` });
-            } else {
-                 toast({ variant: 'warning', title: 'Agendamento Falhou', description: 'Nenhum horário disponível encontrado dentro do período para este pacote.' });
+          if (days.includes(dayOfWeek)) {
+            const startTime = time;
+            const startTimeFull = `${startTime}:00`;
+            const startTimeObj = parse(startTimeFull, 'HH:mm:ss', currentDate);
+
+            let canBook = true;
+
+            for (let i = 0; i < slotsPerClass; i++) {
+              const slotTime = format(add(startTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
+
+              // Check 1: Slot must exist in the professor's configured general slots (just for ID reference)
+              const matchingSlotInProfPrefs = allSlots.find(s =>
+                s.day_of_week === dayOfWeek && s.start_time === slotTime
+              );
+
+              // If the slot is not defined in the professor's preferences AT ALL, we cannot book it.
+              // For custom packages, we allow booking even if status is inactive, but it MUST exist.
+              if (!matchingSlotInProfPrefs) {
+                canBook = false;
+                break;
+              }
+
+              // Check 2: Dynamic conflict against actual booked appointments
+              const newSlotStart = add(currentDate, { hours: startTimeObj.getHours(), minutes: startTimeObj.getMinutes() + i * 15 });
+
+              if ((existingAppointments || []).some(apt => {
+                const aptStart = parseISO(apt.class_datetime);
+                const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
+
+                // Check if new slot time overlaps with existing appointment
+                return newSlotStart >= aptStart && newSlotStart < aptEnd;
+              })) {
+                canBook = false;
+                break;
+              }
             }
 
-        } catch (e) {
-            toast({ variant: 'destructive', title: 'Erro de Agendamento Automático', description: e.message });
+            if (canBook) {
+              const [hour, minute] = startTime.split(':').map(Number);
+              const classDateTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour, minute, 0);
+
+              // Find the primary slot ID for the INSERT:
+              const primarySlot = allSlots.find(s =>
+                s.day_of_week === dayOfWeek && s.start_time === startTimeFull
+              );
+
+
+              appointmentInserts.push({
+                student_id: studentId,
+                professor_id: professorId,
+                class_datetime: classDateTime.toISOString(),
+                class_slot_id: primarySlot.id, // Use the starting slot ID
+                status: 'scheduled',
+                duration_minutes: classDurationMinutes,
+              });
+
+              classesScheduled++;
+            }
+          }
+
+          // AVANÇA PARA O PRÓXIMO DIA
+          currentDate = add(currentDate, { days: 1 });
         }
+        // FIM DO LOOP DE AGENDAMENTO CORRIGIDO
+
+        if (appointmentInserts.length > 0) {
+          // Insere as aulas agendadas (sem lock permanente nos slots)
+          const { error: insertError } = await supabase.from('appointments').insert(appointmentInserts);
+          if (insertError) throw new Error(`Falha ao criar aulas agendadas. Se houver conflitos de horário, parte do agendamento pode ter sido ignorada. Detalhes: ${insertError.message}`);
+
+          toast({ variant: 'info', title: 'Agendamento Automático!', description: `${appointmentInserts.length} aulas foram agendadas.` });
+        } else {
+          toast({ variant: 'warning', title: 'Agendamento Falhou', description: 'Nenhum horário disponível encontrado dentro do período para este pacote.' });
+        }
+
+      } catch (e) {
+        toast({ variant: 'destructive', title: 'Erro de Agendamento Automático', description: e.message });
+      }
     }
-    
+
     // --- 4. NOTIFICAÇÃO E LIMPEZA ---
     await supabase.from('notifications').insert({
       user_id: selectedStudentId,
       type: 'new_package',
-      content: { 
+      content: {
         message: `Você recebeu um novo pacote: ${selectedPackageData.name}`,
         packageName: selectedPackageData.name,
         classCount: classesToRegister
@@ -703,7 +734,7 @@ const PreferenciasTab = ({ dashboardData }) => {
       toast({ variant: 'destructive', title: 'Erro ao registrar', description: `Pacote atribuído, mas falha ao registrar no histórico: ${logError.message}` });
     } else {
       toast({ variant: 'default', title: 'Paquete incluído!', description: `Paquete "${selectedPackageData.name}" (${classesToRegister} aulas) fue incluido para ${selectedStudent.full_name}.` });
-      
+
       // Limpar estados
       setSelectedStudentId(null);
       setSelectedPackage(null);
@@ -712,17 +743,17 @@ const PreferenciasTab = ({ dashboardData }) => {
       setPurchaseDate(new Date());
       setEndDate(addMonths(new Date(), 1));
       setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0].substring(0, 5), days: [], price: '', startDate: new Date(), endDate: addMonths(new Date(), 1) });
-      
+
       if (onUpdate) onUpdate();
     }
     setIsSubmittingPackage(false);
   };
-  
+
   // Atualiza a data de fim ao alterar a data de início (padrão de 1 mês)
   useEffect(() => {
     // Apenas para pacotes que NÃO usam agendamento automático
     if (!isAutomaticScheduling) {
-        setEndDate(addMonths(purchaseDate, 1));
+      setEndDate(addMonths(purchaseDate, 1));
     }
   }, [purchaseDate, isAutomaticScheduling]);
 
@@ -788,206 +819,206 @@ const PreferenciasTab = ({ dashboardData }) => {
 
             {/* Data de Início (Purchase Date) - Visível apenas para pacotes NÃO automáticos */}
             {!isAutomaticScheduling && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !purchaseDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {purchaseDate ? format(purchaseDate, "PPP", { locale: ptBR }) : <span>Data de Início</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={purchaseDate}
-                      onSelect={setPurchaseDate}
-                      initialFocus
-                      locale={ptBR}
-                    />
-                  </PopoverContent>
-                </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !purchaseDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {purchaseDate ? format(purchaseDate, "PPP", { locale: ptBR }) : <span>Data de Início</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={purchaseDate}
+                    onSelect={setPurchaseDate}
+                    initialFocus
+                    locale={ptBR}
+                  />
+                </PopoverContent>
+              </Popover>
             )}
-            
+
             {/* Data de Fim (End Date) - OCULTA se for Pacote Personalizado */}
             {!isAutomaticScheduling && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !endDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {endDate ? format(endDate, "PPP", { locale: ptBR }) : <span>Data de Fim</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      initialFocus
-                      locale={ptBR}
-                    />
-                  </PopoverContent>
-                </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "PPP", { locale: ptBR }) : <span>Data de Fim</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={setEndDate}
+                    initialFocus
+                    locale={ptBR}
+                  />
+                </PopoverContent>
+              </Popover>
             )}
-            
+
           </div>
-          
+
           {/* --- NOVO BLOCO PCKPERSONAL (AGORA 'PERSONALIZADO') --- */}
           {isAutomaticScheduling ? (
-              <motion.div 
-                  key="pck-personal-details" // Key is crucial for motion.div to work on unmount/mount
-                  initial={{ opacity: 0, height: 0 }} 
-                  animate={{ opacity: 1, height: 'auto' }} 
-                  exit={{ opacity: 0, height: 0 }} 
-                  transition={{ duration: 0.3 }}
-                  className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50"
-              >
-                  <h4 className="text-lg font-semibold text-sky-800">Detalhes do Pacote Personalizado</h4>
+            <motion.div
+              key="pck-personal-details" // Key is crucial for motion.div to work on unmount/mount
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50"
+            >
+              <h4 className="text-lg font-semibold text-sky-800">Detalhes do Pacote Personalizado</h4>
 
-                  <div className="grid grid-cols-2 gap-4">
-                      {/* Preço Pago */}
-                      <div className="space-y-2">
-                          <Label htmlFor="pck-price">Preço Pago (R$)</Label>
-                          <Input
-                              id="pck-price"
-                              type="number"
-                              placeholder="Ex: 500.00"
-                              value={price || ''} 
-                              onChange={(e) => handlePckPersonalChange('price', e.target.value)}
-                              required
-                              min="0"
-                          />
-                      </div>
-                      {/* Total de Aulas */}
-                      <div className="space-y-2">
-                          <Label htmlFor="pck-total-classes">Total de Aulas</Label>
-                          <Input
-                              id="pck-total-classes"
-                              type="number"
-                              placeholder="Ex: 12"
-                              value={totalClasses || ''} 
-                              onChange={(e) => handlePckPersonalChange('totalClasses', e.target.value)}
-                              required
-                              min="1"
-                          />
-                      </div>
-                  </div>
-                  
-                  {/* Duração e Horário */}
-                  <div className="grid grid-cols-2 gap-4">
-                      {/* Data de Início do Personalizado */}
-                      <div className="space-y-2">
-                          <Label htmlFor="pck-start-date">Data de Início</Label>
-                          <Popover>
-                              <PopoverTrigger asChild>
-                                  <Button
-                                      variant={"outline"}
-                                      className={cn("w-full justify-start text-left font-normal")}
-                                  >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {format(pckStartDate, "PPP", { locale: ptBR })}
-                                  </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                  <Calendar
-                                      mode="single"
-                                      selected={pckStartDate}
-                                      onSelect={(date) => handlePckPersonalChange('startDate', date)}
-                                      initialFocus
-                                      locale={ptBR}
-                                  />
-                              </PopoverContent>
-                          </Popover>
-                      </div>
-                      {/* Duração da Aula */}
-                      <div className="space-y-2">
-                          <Label htmlFor="pck-duration">Duração (Minutos)</Label>
-                          <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
-                              <SelectTrigger id="pck-duration">
-                                  <SelectValue placeholder="Duração" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  <SelectItem value="30">30 Minutos</SelectItem>
-                                  <SelectItem value="45">45 Minutos</SelectItem>
-                                  <SelectItem value="60">60 Minutos</SelectItem>
-                              </SelectContent>
-                          </Select>
-                      </div>
-                  </div>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Preço Pago */}
+                <div className="space-y-2">
+                  <Label htmlFor="pck-price">Preço Pago (R$)</Label>
+                  <Input
+                    id="pck-price"
+                    type="number"
+                    placeholder="Ex: 500.00"
+                    value={price || ''}
+                    onChange={(e) => handlePckPersonalChange('price', e.target.value)}
+                    required
+                    min="0"
+                  />
+                </div>
+                {/* Total de Aulas */}
+                <div className="space-y-2">
+                  <Label htmlFor="pck-total-classes">Total de Aulas</Label>
+                  <Input
+                    id="pck-total-classes"
+                    type="number"
+                    placeholder="Ex: 12"
+                    value={totalClasses || ''}
+                    onChange={(e) => handlePckPersonalChange('totalClasses', e.target.value)}
+                    required
+                    min="1"
+                  />
+                </div>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                      {/* Horário de Início */}
-                      <div className="space-y-2">
-                          <Label htmlFor="pck-time">Horário de Início Fixo</Label>
-                          <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
-                              <SelectTrigger id="pck-time">
-                                  <SelectValue placeholder="Horário (Ex: 10:00)" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
-                                      <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
-                                  ))}
-                              </SelectContent>
-                          </Select>
-                      </div>
-                      {/* Validade do Pacote */}
-                      <div className="space-y-2">
-                          <Label>Validade (Término)</Label>
-                          <Popover>
-                              <PopoverTrigger asChild>
-                                  <Button
-                                      variant={"outline"}
-                                      className={cn("w-full justify-start text-left font-normal")}
-                                  >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {format(pckEndDate, "PPP", { locale: ptBR })}
-                                  </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                  <Calendar
-                                      mode="single"
-                                      selected={pckEndDate}
-                                      onSelect={(date) => handlePckPersonalChange('endDate', date)}
-                                      initialFocus
-                                      locale={ptBR}
-                                  />
-                              </PopoverContent>
-                          </Popover>
-                      </div>
-                  </div>
+              {/* Duração e Horário */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Data de Início do Personalizado */}
+                <div className="space-y-2">
+                  <Label htmlFor="pck-start-date">Data de Início</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn("w-full justify-start text-left font-normal")}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(pckStartDate, "PPP", { locale: ptBR })}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={pckStartDate}
+                        onSelect={(date) => handlePckPersonalChange('startDate', date)}
+                        initialFocus
+                        locale={ptBR}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                {/* Duração da Aula */}
+                <div className="space-y-2">
+                  <Label htmlFor="pck-duration">Duração (Minutos)</Label>
+                  <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
+                    <SelectTrigger id="pck-duration">
+                      <SelectValue placeholder="Duração" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="30">30 Minutos</SelectItem>
+                      <SelectItem value="45">45 Minutos</SelectItem>
+                      <SelectItem value="60">60 Minutos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-                  {/* Dias da Semana */}
-                  <div className="space-y-2">
-                      <Label>Dias da Semana Fixos</Label>
-                      <div className="flex flex-wrap gap-2">
-                          {daysOfWeek.map((day, index) => (
-                              <Button
-                                  key={index}
-                                  type="button"
-                                  variant={days.includes(index) ? 'default' : 'outline'}
-                                  size="sm"
-                                  onClick={() => handleDayTogglePckPersonal(index)}
-                              >
-                                  {day.substring(0, 3)}
-                              </Button>
-                          ))}
-                      </div>
-                      {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
-                  </div>
-              </motion.div>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Horário de Início */}
+                <div className="space-y-2">
+                  <Label htmlFor="pck-time">Horário de Início Fixo</Label>
+                  <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
+                    <SelectTrigger id="pck-time">
+                      <SelectValue placeholder="Horário (Ex: 10:00)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
+                        <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Validade do Pacote */}
+                <div className="space-y-2">
+                  <Label>Validade (Término)</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn("w-full justify-start text-left font-normal")}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(pckEndDate, "PPP", { locale: ptBR })}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={pckEndDate}
+                        onSelect={(date) => handlePckPersonalChange('endDate', date)}
+                        initialFocus
+                        locale={ptBR}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              {/* Dias da Semana */}
+              <div className="space-y-2">
+                <Label>Dias da Semana Fixos</Label>
+                <div className="flex flex-wrap gap-2">
+                  {daysOfWeek.map((day, index) => (
+                    <Button
+                      key={index}
+                      type="button"
+                      variant={days.includes(index) ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handleDayTogglePckPersonal(index)}
+                    >
+                      {day.substring(0, 3)}
+                    </Button>
+                  ))}
+                </div>
+                {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
+              </div>
+            </motion.div>
           ) : null}
           {/* --- FIM DO NOVO BLOCO PCKPERSONAL --- */}
-          
+
           <Textarea placeholder="Observação (motivo da inclusão)" value={observation} onChange={(e) => setObservation(e.target.value)} />
 
           <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700" disabled={isSubmittingPackage}>

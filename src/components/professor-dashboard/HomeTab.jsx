@@ -32,8 +32,9 @@ const HomeTab = ({ dashboardData }) => {
   const loading = dashboardData?.loading || false;
   const onUpdate = dashboardData?.onUpdate;
 
-  // Extrair as coleções de dados
-  const nextClass = data.nextClass;
+  // Extrair as coleções de dados - Agora busca TODAS as próximas aulas
+  const upcomingClasses = data.upcomingClasses || [];
+  const nextClass = upcomingClasses.length > 0 ? upcomingClasses[0] : null;
 
   // CORREÇÃO: Sincroniza as solicitações do pai, mas agora com a verificação de array
   useEffect(() => {
@@ -308,6 +309,7 @@ const HomeTab = ({ dashboardData }) => {
             </div>}
       </div>
       <div className="space-y-4 lg:space-y-8">
+        {/* Card da Próxima Aula (destaque) */}
         <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
           <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
           {loading ? (
@@ -315,13 +317,57 @@ const HomeTab = ({ dashboardData }) => {
           ) : nextClass ? (
             <>
               <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
-              <h3 className="text-lg font-bold mt-1">{nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
-              <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student.full_name}</p>
-              <p className="text-sm"><strong>Nível:</strong> {nextClass.student.spanish_level || 'Não definido'}</p>
-              <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
+              <p className="text-sm font-medium mt-1">{format(new Date(nextClass.class_datetime), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}</p>
+              <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student?.full_name}</p>
+              <p className="text-sm"><strong>Nível:</strong> {nextClass.student?.spanish_level || 'Não definido'}</p>
+              <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
             </>
           ) : (
             <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
+          )}
+        </div>
+
+        {/* Card de Todas as Próximas Aulas Agendadas */}
+        <div className="bg-white rounded-lg border-l-4 border-emerald-500 shadow-sm p-4">
+          <h3 className="text-lg font-bold mb-2">Todas as Aulas Agendadas ({upcomingClasses.length})</h3>
+          {loading ? (
+            <p>Carregando...</p>
+          ) : upcomingClasses.length > 0 ? (
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {upcomingClasses.map((classItem, index) => (
+                <div
+                  key={classItem.id}
+                  className={cn(
+                    "p-3 rounded-lg border transition-all",
+                    index === 0 ? "bg-sky-50 border-sky-200" : "bg-slate-50 border-slate-200"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-xs text-slate-500">
+                        {formatDistanceToNowStrict(new Date(classItem.class_datetime), { locale: ptBR, addSuffix: true })}
+                      </p>
+                      <p className="text-sm font-medium">
+                        {format(new Date(classItem.class_datetime), "EEE, dd/MM 'às' HH:mm", { locale: ptBR })}
+                      </p>
+                      <p className="text-xs text-slate-600 mt-1">
+                        <strong>Aluno:</strong> {classItem.student?.full_name || 'N/A'}
+                      </p>
+                    </div>
+                    {index === 0 && (
+                      <span className="text-xs bg-sky-500 text-white px-2 py-1 rounded-full font-medium">
+                        Próxima
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-slate-500">
+              <CalendarDays className="w-10 h-10 mx-auto mb-2 text-slate-400" />
+              <p className="text-sm">Nenhuma aula agendada no momento.</p>
+            </div>
           )}
         </div>
       </div>

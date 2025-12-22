@@ -39,17 +39,15 @@ const fetchProfessorDashboardData = async (professorId) => {
         .order('solicitud_id', { ascending: true });
     if (reqError) throw reqError;
 
-    // 3. Fetch de Próxima Aula (para HomeTab)
-    const { data: nextClass, error: nextClassError } = await supabase
+    // 3. Fetch de TODAS as Próximas Aulas agendadas (para HomeTab)
+    const { data: upcomingClasses, error: upcomingClassesError } = await supabase
         .from('appointments')
         .select(`*, student:profiles!student_id(full_name, spanish_level)`)
         .eq('professor_id', professorId)
         .eq('status', 'scheduled')
         .gte('class_datetime', today)
-        .order('class_datetime', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-    if (nextClassError && nextClassError.code !== 'PGRST116') throw nextClassError;
+        .order('class_datetime', { ascending: true });
+    if (upcomingClassesError && upcomingClassesError.code !== 'PGRST116') throw upcomingClassesError;
 
     // 4. Fetch de TODOS los Perfiles (para AdmTab y AlunosTab)
     const { data: allProfiles, error: allProfilesError } = await supabase
@@ -108,7 +106,7 @@ const fetchProfessorDashboardData = async (professorId) => {
         professorId,
         professorName: professorProfile?.full_name || 'Professor(a)',
         scheduleRequests: scheduleRequests || [],
-        nextClass: nextClass,
+        upcomingClasses: upcomingClasses || [],
         students: students || [],
         allProfiles: allProfiles || [],
         packages: packages || [],
