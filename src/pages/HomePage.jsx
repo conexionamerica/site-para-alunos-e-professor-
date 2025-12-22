@@ -23,7 +23,7 @@ import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare as MessageIcon, BarChart3, Star, MessageCircle, ChevronRight, User } from 'lucide-react';
+import { MessageSquare as MessageIcon, BarChart3, Star, MessageCircle, ChevronRight, User, TrendingUp, TrendingDown, Minus, Calendar as CalendarIcon } from 'lucide-react';
 
 
 const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
@@ -135,7 +135,7 @@ const HomePage = () => {
         supabase.from('assigned_packages_log').select('assigned_classes, package_id, status').eq('student_id', user.id), // Fetch status here
         supabase.from('solicitudes_clase').select('solicitud_id, is_recurring').eq('alumno_id', user.id).eq('status', 'Pendiente').maybeSingle(),
         supabase.from('appointments').select(`*, student:profiles!student_id(full_name, spanish_level)`).eq('student_id', user.id).eq('status', 'scheduled').gte('class_datetime', today).order('class_datetime', { ascending: true }).limit(1).maybeSingle(),
-        supabase.from('class_feedback').select(`*, appointment:appointments(class_datetime)`).eq('student_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('class_feedback').select(`*, appointment:appointments!fk_appointment(class_datetime)`).eq('student_id', user.id).order('created_at', { ascending: false }),
         supabase.from('chats').select('*').eq('alumno_id', user.id).maybeSingle(),
       ]);
 
@@ -263,20 +263,74 @@ const HomePage = () => {
   const performanceStats = useMemo(() => {
     if (feedbacks.length === 0) return null;
     const dimensions = ['fala', 'leitura', 'escrita', 'compreensao', 'audicao', 'gramatica', 'pronuncia', 'vocabulario'];
-    const sums = {};
-    dimensions.forEach(d => sums[d] = 0);
+
+    // Calcular somas gerais
+    const sumsAll = {};
+    dimensions.forEach(d => sumsAll[d] = 0);
 
     feedbacks.forEach(f => {
       dimensions.forEach(d => {
-        sums[d] += (f[d] || 0);
+        sumsAll[d] += (f[d] || 0);
       });
     });
 
-    return dimensions.map(d => ({
+    // Filtrar feedbacks dos últimos 30 dias
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentFeedbacks = feedbacks.filter(f => {
+      const feedbackDate = f.appointment?.class_datetime
+        ? new Date(f.appointment.class_datetime)
+        : new Date(f.created_at);
+      return feedbackDate >= thirtyDaysAgo;
+    });
+
+    // Calcular somas dos últimos 30 dias
+    const sumsRecent = {};
+    dimensions.forEach(d => sumsRecent[d] = 0);
+
+    recentFeedbacks.forEach(f => {
+      dimensions.forEach(d => {
+        sumsRecent[d] += (f[d] || 0);
+      });
+    });
+
+    // Criar estatísticas por dimensão
+    const stats = dimensions.map(d => ({
       name: d.charAt(0).toUpperCase() + d.slice(1).replace('_', ' '),
       key: d,
-      average: (sums[d] / feedbacks.length).toFixed(1)
+      average: (sumsAll[d] / feedbacks.length).toFixed(1),
+      recentAverage: recentFeedbacks.length > 0 ? (sumsRecent[d] / recentFeedbacks.length).toFixed(1) : null
     }));
+
+    // Calcular média geral (todas as dimensões, todo o histórico)
+    const overallAverage = stats.reduce((acc, curr) => acc + parseFloat(curr.average), 0) / stats.length;
+    const overallAveragePercent = ((overallAverage / 5) * 100).toFixed(0);
+
+    // Calcular média dos últimos 30 dias
+    let recentAveragePercent = null;
+    let trendPercent = null;
+    let trendDirection = null;
+
+    if (recentFeedbacks.length > 0) {
+      const recentOverallAverage = stats.reduce((acc, curr) => acc + parseFloat(curr.recentAverage || 0), 0) / stats.length;
+      recentAveragePercent = ((recentOverallAverage / 5) * 100).toFixed(0);
+
+      // Calcular diferença entre média recente e geral
+      const difference = parseFloat(recentAveragePercent) - parseFloat(overallAveragePercent);
+      trendPercent = Math.abs(difference).toFixed(0);
+      trendDirection = difference >= 0 ? 'up' : 'down';
+    }
+
+    return {
+      dimensions: stats,
+      overallAveragePercent,
+      recentAveragePercent,
+      trendPercent,
+      trendDirection,
+      totalFeedbacks: feedbacks.length,
+      recentFeedbacksCount: recentFeedbacks.length
+    };
   }, [feedbacks]);
 
 
@@ -770,66 +824,251 @@ const HomePage = () => {
                 </div>
               ) : (
                 <div className="space-y-8">
-                  {/* Gráfico de Barras Customizado */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                      {performanceStats.map(stat => (
-                        <div key={stat.key} className="space-y-1">
-                          <div className="flex justify-between text-sm font-medium">
-                            <span>{stat.name}</span>
-                            <span className="text-sky-600">{stat.average} / 5.0</span>
-                          </div>
-                          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: `${(parseFloat(stat.average) / 5) * 100}%` }}
-                              transition={{ duration: 1, ease: "easeOut" }}
-                              className="h-full bg-gradient-to-r from-sky-400 to-sky-600 rounded-full"
-                            />
-                          </div>
+                  {/* Três Indicadores KPI */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Indicador 1: Média Geral */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0 }}
+                      className="bg-gradient-to-br from-sky-500 to-sky-600 p-6 rounded-xl text-white shadow-lg"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sky-100 text-sm font-medium">Média Geral</span>
+                        <div className="p-2 bg-white/20 rounded-lg">
+                          <Star className="h-5 w-5 text-white" />
                         </div>
-                      ))}
-                    </div>
-
-                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 flex flex-col justify-center items-center text-center">
-                      <div className="mb-4 p-4 bg-white rounded-full shadow-sm">
-                        <Star className="h-10 w-10 text-yellow-400 fill-yellow-400" />
                       </div>
-                      <h3 className="text-lg font-bold">Média Geral</h3>
-                      <p className="text-4xl font-black text-sky-600 my-2">
-                        {(performanceStats.reduce((acc, curr) => acc + parseFloat(curr.average), 0) / performanceStats.length).toFixed(1)}
+                      <p className="text-4xl font-black">{performanceStats.overallAveragePercent}%</p>
+                      <p className="text-sky-100 text-xs mt-1">Baseado em {performanceStats.totalFeedbacks} avaliações</p>
+                    </motion.div>
+
+                    {/* Indicador 2: Média 30 Dias */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.1 }}
+                      className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-xl text-white shadow-lg"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-emerald-100 text-sm font-medium">Últimos 30 Dias</span>
+                        <div className="p-2 bg-white/20 rounded-lg">
+                          <CalendarIcon className="h-5 w-5 text-white" />
+                        </div>
+                      </div>
+                      <p className="text-4xl font-black">
+                        {performanceStats.recentAveragePercent ? `${performanceStats.recentAveragePercent}%` : 'N/A'}
                       </p>
-                      <p className="text-sm text-slate-500">Sua evolução constante é o caminho para a fluência!</p>
+                      <p className="text-emerald-100 text-xs mt-1">
+                        {performanceStats.recentFeedbacksCount > 0
+                          ? `${performanceStats.recentFeedbacksCount} avaliações recentes`
+                          : 'Sem avaliações neste período'
+                        }
+                      </p>
+                    </motion.div>
+
+                    {/* Indicador 3: Tendência */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.2 }}
+                      className={cn(
+                        "p-6 rounded-xl text-white shadow-lg",
+                        performanceStats.trendDirection === 'up'
+                          ? "bg-gradient-to-br from-green-500 to-green-600"
+                          : performanceStats.trendDirection === 'down'
+                            ? "bg-gradient-to-br from-orange-500 to-orange-600"
+                            : "bg-gradient-to-br from-slate-500 to-slate-600"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={cn(
+                          "text-sm font-medium",
+                          performanceStats.trendDirection === 'up' ? "text-green-100"
+                            : performanceStats.trendDirection === 'down' ? "text-orange-100"
+                              : "text-slate-100"
+                        )}>Tendência</span>
+                        <div className="p-2 bg-white/20 rounded-lg">
+                          {performanceStats.trendDirection === 'up' ? (
+                            <TrendingUp className="h-5 w-5 text-white" />
+                          ) : performanceStats.trendDirection === 'down' ? (
+                            <TrendingDown className="h-5 w-5 text-white" />
+                          ) : (
+                            <Minus className="h-5 w-5 text-white" />
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-4xl font-black flex items-center gap-2">
+                        {performanceStats.trendPercent ? (
+                          <>
+                            {performanceStats.trendDirection === 'up' ? '+' : performanceStats.trendDirection === 'down' ? '-' : ''}
+                            {performanceStats.trendPercent}%
+                          </>
+                        ) : 'N/A'}
+                      </p>
+                      <p className={cn(
+                        "text-xs mt-1",
+                        performanceStats.trendDirection === 'up' ? "text-green-100"
+                          : performanceStats.trendDirection === 'down' ? "text-orange-100"
+                            : "text-slate-100"
+                      )}>
+                        {performanceStats.trendDirection === 'up'
+                          ? 'Você está evoluindo!'
+                          : performanceStats.trendDirection === 'down'
+                            ? 'Hora de focar mais!'
+                            : 'Sem dados suficientes'
+                        }
+                      </p>
+                    </motion.div>
+                  </div>
+
+                  {/* Gráfico de Barras Verticais */}
+                  <div className="bg-slate-50 p-6 rounded-xl border border-slate-100">
+                    <h3 className="text-lg font-bold mb-6 text-slate-800">Desempenho por Competência</h3>
+                    <div className="flex items-end justify-between gap-2 h-64 px-4">
+                      {performanceStats.dimensions.map((stat, index) => {
+                        const heightPercent = (parseFloat(stat.average) / 5) * 100;
+                        const getBarColor = (percent) => {
+                          if (percent >= 80) return 'from-emerald-400 to-emerald-600';
+                          if (percent >= 60) return 'from-sky-400 to-sky-600';
+                          if (percent >= 40) return 'from-yellow-400 to-yellow-600';
+                          return 'from-orange-400 to-orange-600';
+                        };
+                        return (
+                          <div key={stat.key} className="flex flex-col items-center flex-1 group">
+                            <div className="relative w-full flex flex-col items-center">
+                              {/* Valor acima da barra */}
+                              <motion.span
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.5 + index * 0.1 }}
+                                className="text-xs font-bold text-slate-700 mb-1"
+                              >
+                                {stat.average}
+                              </motion.span>
+                              {/* Container da barra */}
+                              <div className="w-full h-48 bg-slate-200 rounded-t-lg overflow-hidden flex items-end">
+                                <motion.div
+                                  initial={{ height: 0 }}
+                                  animate={{ height: `${heightPercent}%` }}
+                                  transition={{ duration: 1, delay: index * 0.1, ease: "easeOut" }}
+                                  className={cn(
+                                    "w-full rounded-t-lg bg-gradient-to-t shadow-inner",
+                                    getBarColor(heightPercent)
+                                  )}
+                                />
+                              </div>
+                            </div>
+                            {/* Label abaixo */}
+                            <span className="text-[10px] font-medium text-slate-600 mt-2 text-center leading-tight">
+                              {stat.name}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Legenda */}
+                    <div className="flex justify-center gap-6 mt-6 pt-4 border-t border-slate-200">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" />
+                        <span className="text-xs text-slate-600">Excelente (≥80%)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-sky-400 to-sky-600" />
+                        <span className="text-xs text-slate-600">Bom (60-79%)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600" />
+                        <span className="text-xs text-slate-600">Regular (40-59%)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-400 to-orange-600" />
+                        <span className="text-xs text-slate-600">A melhorar (&lt;40%)</span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Histórico de Feedbacks */}
                   <div className="pt-6 border-t">
-                    <h3 className="text-lg font-bold mb-4">Comentários e Feedbacks</h3>
-                    <div className="space-y-4">
-                      {feedbacks.map((f, idx) => (
-                        <div key={f.id} className="p-4 rounded-lg bg-slate-50 border group hover:border-sky-200 transition-colors">
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4 text-slate-400" />
-                              <span className="text-sm font-semibold text-slate-700">
-                                {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'PPP', { locale: ptBR }) : 'Aula'}
-                              </span>
-                            </div>
-                            <div className="flex gap-1">
-                              {[1, 2, 3, 4, 5].map(s => (
-                                <Star key={s} className={cn("h-3 w-3", s <= Math.round(Object.values(f).filter(v => typeof v === 'number').reduce((a, b) => a + b, 0) / 8) ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
-                              ))}
-                            </div>
-                          </div>
-                          <p className="text-sm text-slate-600 italic">"{f.comment || 'Sem comentário adicional do professor.'}"</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Badge variant="secondary" className="bg-white text-[10px] py-0 px-2">Fala: {f.fala}</Badge>
-                            <Badge variant="secondary" className="bg-white text-[10px] py-0 px-2">Gramática: {f.gramatica}</Badge>
-                            <Badge variant="secondary" className="bg-white text-[10px] py-0 px-2">Pronúncia: {f.pronuncia}</Badge>
-                          </div>
-                        </div>
-                      ))}
+                    <h3 className="text-lg font-bold mb-4">Comentários e Feedbacks do Professor</h3>
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                      {feedbacks.length === 0 ? (
+                        <p className="text-center text-slate-500 py-8">Nenhum feedback encontrado.</p>
+                      ) : (
+                        feedbacks.map((f) => {
+                          const dimensions = ['fala', 'leitura', 'escrita', 'compreensao', 'audicao', 'gramatica', 'pronuncia', 'vocabulario'];
+                          const avgScore = dimensions.reduce((sum, d) => sum + (f[d] || 0), 0) / dimensions.length;
+                          const avgPercent = ((avgScore / 5) * 100).toFixed(0);
+
+                          return (
+                            <motion.div
+                              key={f.id}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              className="p-5 rounded-xl bg-white border-2 border-slate-100 hover:border-sky-200 hover:shadow-md transition-all"
+                            >
+                              <div className="flex justify-between items-start mb-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 bg-sky-100 rounded-lg">
+                                    <CalendarIcon className="h-4 w-4 text-sky-600" />
+                                  </div>
+                                  <div>
+                                    <span className="text-sm font-bold text-slate-800">
+                                      {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'PPP', { locale: ptBR }) : 'Aula'}
+                                    </span>
+                                    <p className="text-xs text-slate-500">
+                                      {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'HH:mm') : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex gap-0.5">
+                                    {[1, 2, 3, 4, 5].map(s => (
+                                      <Star key={s} className={cn("h-4 w-4", s <= Math.round(avgScore) ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                                    ))}
+                                  </div>
+                                  <Badge variant="outline" className={cn(
+                                    "text-xs font-bold",
+                                    parseInt(avgPercent) >= 80 ? "border-emerald-300 bg-emerald-50 text-emerald-700" :
+                                      parseInt(avgPercent) >= 60 ? "border-sky-300 bg-sky-50 text-sky-700" :
+                                        parseInt(avgPercent) >= 40 ? "border-yellow-300 bg-yellow-50 text-yellow-700" :
+                                          "border-orange-300 bg-orange-50 text-orange-700"
+                                  )}>
+                                    {avgPercent}%
+                                  </Badge>
+                                </div>
+                              </div>
+
+                              {/* Comentário do professor */}
+                              <div className="bg-slate-50 p-4 rounded-lg mb-4">
+                                <p className="text-sm text-slate-700 italic leading-relaxed">
+                                  "{f.comment || 'Sem comentário adicional do professor.'}"
+                                </p>
+                              </div>
+
+                              {/* Notas por competência */}
+                              <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+                                {dimensions.map(d => (
+                                  <div key={d} className="text-center p-2 bg-white border rounded-lg">
+                                    <p className="text-[10px] text-slate-500 font-medium truncate">
+                                      {d.charAt(0).toUpperCase() + d.slice(1)}
+                                    </p>
+                                    <p className={cn(
+                                      "text-sm font-bold mt-1",
+                                      f[d] >= 4 ? "text-emerald-600" :
+                                        f[d] >= 3 ? "text-sky-600" :
+                                          f[d] >= 2 ? "text-yellow-600" :
+                                            "text-orange-600"
+                                    )}>
+                                      {f[d]}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </motion.div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
                 </div>

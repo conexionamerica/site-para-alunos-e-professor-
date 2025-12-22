@@ -8,7 +8,7 @@ import { ptBR } from 'date-fns/locale';
 import { getBrazilDate } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, isAfter } from 'lucide-react';
+import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { TabsContent } from "@/components/ui/tabs";
