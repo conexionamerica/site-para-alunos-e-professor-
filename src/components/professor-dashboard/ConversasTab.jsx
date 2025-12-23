@@ -35,12 +35,18 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
       setMessages(data || []);
 
       // Marcar mensagens do aluno como lidas
-      await supabase
+      const { error: updateError, count } = await supabase
         .from('mensajes')
         .update({ leido: true })
         .eq('chat_id', activeChat.chat_id)
         .neq('remitente_id', professorId)
         .eq('leido', false);
+
+      if (updateError) {
+        console.error('Erro ao marcar mensagens como lidas:', updateError);
+      } else if (count > 0) {
+        console.log(`${count} mensagens marcadas como lidas`);
+      }
     }
     setLoadingMessages(false);
   }, [activeChat, toast, professorId]);
@@ -232,8 +238,15 @@ const ConversasTab = ({ dashboardData }) => {
     }
   }, [chatList, fetchUnreadCounts]);
 
+  // Handler para voltar do chat e atualizar contagens
+  const handleBackFromChat = useCallback(() => {
+    setActiveChat(null);
+    // Forçar atualização das contagens de mensagens não lidas
+    fetchUnreadCounts();
+  }, [fetchUnreadCounts]);
+
   if (activeChat) {
-    return <ChatInterface activeChat={activeChat} professorId={professorId} professorName={professorName} onBack={() => setActiveChat(null)} />;
+    return <ChatInterface activeChat={activeChat} professorId={professorId} professorName={professorName} onBack={handleBackFromChat} />;
   }
 
   return (
