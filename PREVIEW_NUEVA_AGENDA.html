@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preview - Nueva Vista de Agenda</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f1f5f9;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .info-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .info-box h1 {
+            color: #0f172a;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            color: #64748b;
+            line-height: 1.6;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .feature {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 3px solid #0ea5e9;
+        }
+
+        .feature h3 {
+            color: #0f172a;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .feature p {
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        .preview-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .preview-image {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .preview-image img {
+            width: 100%;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .preview-image h3 {
+            color: #0f172a;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .code-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .code-section h2 {
+            color: #0f172a;
+            margin-bottom: 15px;
+        }
+
+        .code-list {
+            list-style: none;
+        }
+
+        .code-list li {
+            padding: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .code-list li:last-child {
+            border-bottom: none;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-new {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-ready {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #0ea5e9;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0284c7;
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        .warning-box {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+
+        .warning-box h3 {
+            color: #92400e;
+            margin-bottom: 8px;
+        }
+
+        .warning-box p {
+            color: #78350f;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="info-box">
+            <h1>🎨 Preview - Nueva Vista de Agenda Semanal</h1>
+            <p>
+                He creado una nueva versión del componente AgendaTab basada en las imágenes de inspiración que
+                proporcionaste.
+                Esta nueva vista incluye un calendario semanal completo con todas las características solicitadas.
+            </p>
+
+            <div class="features">
+                <div class="feature">
+                    <h3>✅ Vista de Calendario Semanal</h3>
+                    <p>Grid con 7 columnas (Domingo a Sábado) y horarios de 07:00 a 23:45</p>
+                </div>
+                <div class="feature">
+                    <h3>✅ Navegación de Mes/Semana</h3>
+                    <p>Flechas para navegar entre meses y semanas con formato "Dezembro 2025"</p>
+                </div>
+                <div class="feature">
+                    <h3>✅ Rango de Fechas Visible</h3>
+                    <p>Muestra "21 de dezembro - 27 de dezembro de 2025"</p>
+                </div>
+                <div class="feature">
+                    <h3>✅ Botón Atualizar Horários</h3>
+                    <p>Botón rosa en la esquina superior derecha para refrescar</p>
+                </div>
+                <div class="feature">
+                    <h3>✅ Toggle Vista Grid/Lista</h3>
+                    <p>Iconos para cambiar entre vista de calendario y lista</p>
+                </div>
+                <div class="feature">
+                    <h3>✅ Bloques de Aulas</h3>
+                    <p>Aulas mostradas como bloques con nombre del alumno y materia</p>
+                </div>
+                <div class="feature">
+                    <h3>✅ Colores por Estado</h3>
+                    <p>Amarillo (agendada), Verde (completada), Púrpura (reagendada)</p>
+                </div>
+                <div class="feature">
+                    <h3>✅ Zona Horaria Correcta</h3>
+                    <p>Usa UTC-3 (Brasil) para todas las consultas</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-images">
+            <div class="preview-image">
+                <h3>📸 Imagen de Inspiración 1</h3>
+                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f1f5f9' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='%2364748b' font-family='Arial' font-size='14'%3EImagen de referencia proporcionada%3C/text%3E%3C/svg%3E"
+                    alt="Inspiración 1">
+                <p style="margin-top: 10px; color: #64748b; font-size: 13px;">Vista de calendario con aulas en bloques
+                    amarillos</p>
+            </div>
+            <div class="preview-image">
+                <h3>📸 Imagen de Inspiración 2</h3>
+                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f1f5f9' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='%2364748b' font-family='Arial' font-size='14'%3EImagen de referencia proporcionada%3C/text%3E%3C/svg%3E"
+                    alt="Inspiración 2">
+                <p style="margin-top: 10px; color: #64748b; font-size: 13px;">Vista de calendario con horarios de tarde
+                </p>
+            </div>
+        </div>
+
+        <div class="code-section">
+            <h2>📁 Archivos Creados/Modificados</h2>
+            <ul class="code-list">
+                <li>
+                    <span class="status-badge status-new">NUEVO</span>
+                    <code>src/components/professor-dashboard/AgendaTab_NEW.jsx</code>
+                    <span style="margin-left: auto; color: #64748b; font-size: 13px;">Nueva vista de calendario</span>
+                </li>
+                <li>
+                    <span class="status-badge status-ready">LISTO</span>
+                    <code>Archivo de preview HTML</code>
+                    <span style="margin-left: auto; color: #64748b; font-size: 13px;">Este archivo</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="warning-box">
+            <h3>⚠️ Antes de Publicar</h3>
+            <p>
+                <strong>El archivo está listo pero NO ha sido publicado todavía.</strong><br><br>
+                He creado el archivo como <code>AgendaTab_NEW.jsx</code> para que puedas revisarlo primero.
+                Una vez que lo apruebes, lo renombraré a <code>AgendaTab.jsx</code> para reemplazar el actual.
+                <br><br>
+                <strong>Próximos pasos:</strong><br>
+                1. Revisar el código en <code>AgendaTab_NEW.jsx</code><br>
+                2. Probar localmente con <code>npm run dev</code><br>
+                3. Si todo está bien, reemplazar el archivo original<br>
+                4. Hacer commit y push a Vercel
+            </p>
+        </div>
+
+        <div class="code-section">
+            <h2>🧪 Cómo Probar Localmente</h2>
+            <p style="color: #64748b; margin-bottom: 15px;">
+                Para probar la nueva vista antes de publicar, sigue estos pasos:
+            </p>
+            <ol style="color: #64748b; line-height: 2; margin-left: 20px;">
+                <li>Abre una terminal en el directorio del proyecto</li>
+                <li>Ejecuta: <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 3px;">npm run dev</code>
+                </li>
+                <li>Abre el navegador en la URL que aparece (generalmente http://localhost:5173)</li>
+                <li>Inicia sesión como profesor</li>
+                <li>Ve a la pestaña "Agenda"</li>
+                <li>Verifica que todo funcione correctamente</li>
+            </ol>
+        </div>
+
+        <div class="button-group">
+            <button class="btn btn-primary"
+                onclick="alert('Para probar: 1. Abre terminal\\n2. cd site-para-alunos-e-professor-\\n3. npm run dev\\n4. Abre localhost:5173')">
+                📋 Ver Instrucciones de Prueba
+            </button>
+            <button class="btn btn-secondary"
+                onclick="alert('El archivo está en:\\nsrc/components/professor-dashboard/AgendaTab_NEW.jsx')">
+                📂 Ver Ubicación del Archivo
+            </button>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -5,9 +5,10 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { format, formatDistanceToNowStrict, parseISO, getDay, add, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getBrazilDate } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, isAfter } from 'lucide-react';
+import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { TabsContent } from "@/components/ui/tabs";
@@ -25,6 +26,7 @@ const HomeTab = ({ dashboardData }) => {
   const { toast } = useToast();
   const [updatingRequestId, setUpdatingRequestId] = useState(null);
   const [solicitudes, setSolicitudes] = useState([]);
+  const [next24Hours, setNext24Hours] = useState([]);
 
   // Extração segura das propriedades
   const professorId = dashboardData?.professorId;
@@ -44,6 +46,37 @@ const HomeTab = ({ dashboardData }) => {
       setSolicitudes([]); // Garante que seja um array vazio se o dado for nulo/inválido
     }
   }, [data?.scheduleRequests]);
+
+  // Buscar aulas das próximas 24 horas
+  useEffect(() => {
+    const fetchNext24Hours = async () => {
+      if (!professorId) return;
+
+      const now = getBrazilDate();
+      const next24 = add(now, { hours: 24 });
+
+      const { data: appointments, error } = await supabase
+        .from('appointments')
+        .select(`
+          id, class_datetime, duration_minutes,
+          student:profiles!student_id(full_name)
+        `)
+        .eq('professor_id', professorId)
+        .gte('class_datetime', now.toISOString())
+        .lte('class_datetime', next24.toISOString())
+        .in('status', ['scheduled', 'rescheduled'])
+        .order('class_datetime', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching next 24 hours:', error);
+        return;
+      }
+
+      setNext24Hours(appointments || []);
+    };
+
+    fetchNext24Hours();
+  }, [professorId, loading]);
 
   const handleUpdateRequestStatus = async (solicitudId, newStatus) => {
     setUpdatingRequestId(solicitudId);
@@ -84,7 +117,7 @@ const HomeTab = ({ dashboardData }) => {
         const { data: billingData, error: billingError } = await supabase
           .from('billing').select('end_date, packages(number_of_classes, class_duration_minutes)')
           .eq('user_id', studentId)
-          .gte('end_date', new Date().toISOString())
+          .gte('end_date', getBrazilDate().toISOString())
           .order('purchase_date', { ascending: false }).limit(1).single();
 
         if (billingError || !billingData) throw new Error("Fatura ativa do aluno não encontrada.");
@@ -181,7 +214,7 @@ const HomeTab = ({ dashboardData }) => {
           .from('billing')
           .select('packages(class_duration_minutes)')
           .eq('user_id', studentId)
-          .gte('end_date', new Date().toISOString())
+          .gte('end_date', getBrazilDate().toISOString())
           .order('purchase_date', { ascending: false })
           .limit(1)
           .single();
@@ -262,113 +295,147 @@ const HomeTab = ({ dashboardData }) => {
   };
 
   return (
-    // CORREÇÃO DE LAYOUT: Aplica padding horizontal aqui para alinhar com o cabeçalho.
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8 px-4 lg:px-8">
-      <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
-        <h3 className="font-bold mb-4">Solicitações de Agendamento ({solicitudes.length})</h3>
-        {loading ? <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin" /></div> :
-          solicitudes.length > 0 ? (
-            <div className="space-y-4">
-              {solicitudes.map(req => (
-                <div key={req.solicitud_id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 rounded-lg border">
-                  <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                    <Avatar><AvatarImage src={req.profile?.avatar_url} /><AvatarFallback>{req.profile?.full_name?.[0]}</AvatarFallback></Avatar>
-                    <div>
-                      <p className="font-semibold">{req.profile?.full_name}</p>
-                      {renderHorarios(req.horarios_propuestos)}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-3 sm:mt-0 self-end sm:self-center">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
-                      onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Aceita')}
-                      disabled={updatingRequestId === req.solicitud_id}
-                    >
-                      {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
-                      onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Rejeitada')}
-                      disabled={updatingRequestId === req.solicitud_id}
-                    >
-                      {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) :
-            <div className="text-center py-10 text-slate-500">
-              <CalendarHeart className="w-12 h-12 mx-auto mb-2 text-slate-400" />
-              <p className="font-semibold">Nenhuma solicitação pendente.</p>
-              <p className="text-sm">Quando um aluno solicitar uma aula, aparecerá aqui.</p>
-            </div>}
-      </div>
-      <div className="space-y-4 lg:space-y-8">
-        {/* Card da Próxima Aula (destaque) */}
-        <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
-          <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
-          {loading ? (
-            <p>Carregando...</p>
-          ) : nextClass ? (
-            <>
-              <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
-              <p className="text-sm font-medium mt-1">{format(new Date(nextClass.class_datetime), "EEEE, dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}</p>
-              <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student?.full_name}</p>
-              <p className="text-sm"><strong>Nível:</strong> {nextClass.student?.spanish_level || 'Não definido'}</p>
-              <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
-            </>
-          ) : (
-            <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
-          )}
-        </div>
+    <div className="flex justify-center">
+      <div className="w-full max-w-[1400px]">
 
-        {/* Card de Todas as Próximas Aulas Agendadas */}
-        <div className="bg-white rounded-lg border-l-4 border-emerald-500 shadow-sm p-4">
-          <h3 className="text-lg font-bold mb-2">Todas as Aulas Agendadas ({upcomingClasses.length})</h3>
-          {loading ? (
-            <p>Carregando...</p>
-          ) : upcomingClasses.length > 0 ? (
-            <div className="space-y-3 max-h-80 overflow-y-auto">
-              {upcomingClasses.map((classItem, index) => (
-                <div
-                  key={classItem.id}
-                  className={cn(
-                    "p-3 rounded-lg border transition-all",
-                    index === 0 ? "bg-sky-50 border-sky-200" : "bg-slate-50 border-slate-200"
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-xs text-slate-500">
-                        {formatDistanceToNowStrict(new Date(classItem.class_datetime), { locale: ptBR, addSuffix: true })}
-                      </p>
-                      <p className="text-sm font-medium">
-                        {format(new Date(classItem.class_datetime), "EEE, dd/MM 'às' HH:mm", { locale: ptBR })}
-                      </p>
-                      <p className="text-xs text-slate-600 mt-1">
-                        <strong>Aluno:</strong> {classItem.student?.full_name || 'N/A'}
-                      </p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8 px-4 lg:px-8">
+          <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+            <h3 className="font-bold mb-4">Solicitações de Agendamento ({solicitudes.length})</h3>
+            {loading ? <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin" /></div> :
+              solicitudes.length > 0 ? (
+                <div className="space-y-4">
+                  {solicitudes.map(req => (
+                    <div key={req.solicitud_id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 rounded-lg border">
+                      <div className="flex items-center gap-4 mb-3 sm:mb-0">
+                        <Avatar><AvatarImage src={req.profile?.avatar_url} /><AvatarFallback>{req.profile?.full_name?.[0]}</AvatarFallback></Avatar>
+                        <div>
+                          <p className="font-semibold">{req.profile?.full_name}</p>
+                          {renderHorarios(req.horarios_propuestos)}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 mt-3 sm:mt-0 self-end sm:self-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
+                          onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Aceita')}
+                          disabled={updatingRequestId === req.solicitud_id}
+                        >
+                          {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Rejeitada')}
+                          disabled={updatingRequestId === req.solicitud_id}
+                        >
+                          {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                        </Button>
+                      </div>
                     </div>
-                    {index === 0 && (
-                      <span className="text-xs bg-sky-500 text-white px-2 py-1 rounded-full font-medium">
-                        Próxima
-                      </span>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              ))}
+              ) :
+                <div className="text-center py-10 text-slate-500">
+                  <CalendarHeart className="w-12 h-12 mx-auto mb-2 text-slate-400" />
+                  <p className="font-semibold">Nenhuma solicitação pendente.</p>
+                  <p className="text-sm">Quando um aluno solicitar uma aula, aparecerá aqui.</p>
+                </div>}
+          </div>
+          <div className="space-y-4 lg:space-y-8">
+            <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
+              <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
+              {loading ? (
+                <p>Carregando...</p>
+              ) : nextClass ? (
+                <>
+                  <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
+                  <h3 className="text-lg font-bold mt-1">{nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
+                  <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student.full_name}</p>
+                  <p className="text-sm"><strong>Nível:</strong> {nextClass.student.spanish_level || 'Não definido'}</p>
+                  <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
+                </>
+              ) : (
+                <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
+              )}
             </div>
-          ) : (
-            <div className="text-center py-6 text-slate-500">
-              <CalendarDays className="w-10 h-10 mx-auto mb-2 text-slate-400" />
-              <p className="text-sm">Nenhuma aula agendada no momento.</p>
+
+            {/* Novo Card: Próximas 24 Horas */}
+            <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm p-4">
+              <h3 className="text-lg font-bold mb-3">Próximas 24 Horas</h3>
+              {loading ? (
+                <p className="text-sm text-slate-500">Carregando...</p>
+              ) : next24Hours.length > 0 ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {next24Hours.map(apt => {
+                    const aptDate = parseISO(apt.class_datetime);
+                    return (
+                      <div key={apt.id} className="flex justify-between items-center p-2 border rounded hover:bg-slate-50">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-800">
+                            {apt.student?.full_name || 'Aluno'}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {format(aptDate, "dd/MM 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                        </div>
+                        <div className="text-xs text-slate-600">
+                          {apt.duration_minutes || 30} min
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-slate-500 text-sm">Nenhuma aula nas próximas 24 horas.</p>
+              )}
             </div>
-          )}
+
+            {/* Card de Todas as Aulas Agendadas */}
+            <div className="bg-white rounded-lg border-l-4 border-emerald-500 shadow-sm p-4">
+              <h3 className="text-lg font-bold mb-2">Todas as Aulas Agendadas ({upcomingClasses.length})</h3>
+              {loading ? (
+                <p>Carregando...</p>
+              ) : upcomingClasses.length > 0 ? (
+                <div className="space-y-3 max-h-80 overflow-y-auto">
+                  {upcomingClasses.map((classItem, index) => (
+                    <div
+                      key={classItem.id}
+                      className={cn(
+                        "p-3 rounded-lg border transition-all",
+                        index === 0 ? "bg-sky-50 border-sky-200" : "bg-slate-50 border-slate-200"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="text-xs text-slate-500">
+                            {formatDistanceToNowStrict(new Date(classItem.class_datetime), { locale: ptBR, addSuffix: true })}
+                          </p>
+                          <p className="text-sm font-medium">
+                            {format(new Date(classItem.class_datetime), "EEE, dd/MM 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                          <p className="text-xs text-slate-600 mt-1">
+                            <strong>Aluno:</strong> {classItem.student?.full_name || 'N/A'}
+                          </p>
+                        </div>
+                        {index === 0 && (
+                          <span className="text-xs bg-sky-500 text-white px-2 py-1 rounded-full font-medium">
+                            Próxima
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-slate-500">
+                  <CalendarDays className="w-10 h-10 mx-auto mb-2 text-slate-400" />
+                  <p className="text-sm">Nenhuma aula agendada no momento.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

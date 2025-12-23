@@ -9,6 +9,7 @@ import RegisterPage from '@/pages/RegisterPage';
 import UpdatePasswordPage from '@/pages/UpdatePasswordPage';
 import ProfessorLoginPage from '@/pages/ProfessorLoginPage';
 import ProfessorDashboardPage from '@/pages/ProfessorDashboardPage';
+import SpanishAssistantDemo from '@/pages/SpanishAssistantDemo';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { AnimatePresence } from 'framer-motion';
 import ChatWidget from '@/components/ChatWidget';
@@ -31,9 +32,9 @@ const SuspendedScreen = () => (
       </Alert>
 
       {/* Botão WhatsApp para o Suporte */}
-      <a 
-        href="https://wa.me/555198541835" 
-        target="_blank" 
+      <a
+        href="https://wa.me/555198541835"
+        target="_blank"
         rel="noopener noreferrer"
         className="block"
       >
@@ -42,7 +43,7 @@ const SuspendedScreen = () => (
           Falar com o Suporte (WhatsApp)
         </Button>
       </a>
-      
+
       <p className="text-xs text-center text-slate-500">
         Esta mensagem permanecerá visível até que você entre em contato com o suporte.
       </p>
@@ -119,6 +120,7 @@ function App() {
             <Route path="/update-password" element={<UpdatePasswordPage />} />
             <Route path="/professor-login" element={!professorSession ? <ProfessorLoginPage /> : <Navigate to="/professor-dashboard" />} />
             <Route path="/professor-dashboard" element={professorSession ? <ProfessorDashboardPage /> : <Navigate to="/professor-login" />} />
+            <Route path="/spanish-assistant" element={<SpanishAssistantDemo />} />
           </Routes>
         </AnimatePresence>
       </main>

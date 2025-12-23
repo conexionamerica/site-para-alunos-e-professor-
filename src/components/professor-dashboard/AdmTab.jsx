@@ -8,12 +8,12 @@ import { Loader2, Trash2, UserX, UserCheck, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Badge } from '@/components/ui/badge'; 
+import { Badge } from '@/components/ui/badge';
 
 // Utility for managing profile actions
 const ProfileActions = ({ profile, onDelete, onToggleActive, isSubmitting, currentUserId }) => {
     // A função de deleção de Auth precisa ser manual via SDK admin (no backend), não disponível aqui.
-    const isCurrentUser = profile.id === currentUserId; 
+    const isCurrentUser = profile.id === currentUserId;
     const isActive = profile.is_active !== false; // Assume ativo se o campo estiver ausente ou true
 
     if (isCurrentUser) {
@@ -69,7 +69,7 @@ const ProfileTable = ({ title, profiles, onDelete, onToggleActive, isSubmitting,
                             profiles.map(profile => (
                                 <TableRow key={profile.id} className={profile.is_active === false ? 'opacity-50' : ''}>
                                     <TableCell className="font-medium">{profile.full_name}</TableCell>
-                                    <TableCell>{profile.email || 'N/A'}</TableCell>
+                                    <TableCell>{profile.real_email || profile.email || 'N/A'}</TableCell>
                                     <TableCell>{format(new Date(profile.created_at), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                                     <TableCell>
                                         <Badge variant={profile.is_active === false ? 'destructive' : 'default'}>
@@ -77,12 +77,12 @@ const ProfileTable = ({ title, profiles, onDelete, onToggleActive, isSubmitting,
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <ProfileActions 
+                                        <ProfileActions
                                             profile={profile}
                                             onDelete={onDelete}
                                             onToggleActive={onToggleActive}
                                             isSubmitting={isSubmitting}
-                                            currentUserId={currentUserId} 
+                                            currentUserId={currentUserId}
                                         />
                                     </TableCell>
                                 </TableRow>
@@ -108,8 +108,8 @@ const AdmTab = ({ dashboardData }) => {
     const allProfiles = data.allProfiles || [];
     const onUpdate = dashboardData?.onUpdate;
 
-    const professorId = dashboardData?.professorId; 
-    
+    const professorId = dashboardData?.professorId;
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [localProfiles, setLocalProfiles] = useState(allProfiles);
 
@@ -126,7 +126,7 @@ const AdmTab = ({ dashboardData }) => {
     const handleToggleActive = useCallback(async (profileId, newStatus, profileToUpdate) => {
         setIsSubmitting(true);
         const action = newStatus ? 'Ativar' : 'Inativar';
-        
+
         if (!window.confirm(`Confirma ${action} o perfil de ${profileToUpdate.full_name}? (Atenção: A atualização da base de dados será ignorada para evitar erros. A mudança será apenas visual para você e dependerá de uma correção manual do campo is_active no Supabase para bloquear o aluno.)`)) {
             setIsSubmitting(false);
             return;
@@ -134,20 +134,20 @@ const AdmTab = ({ dashboardData }) => {
 
         try {
             // *** REMOVIDA A CHAMADA SUPABASE.UPDATE PARA EVITAR O ERRO RLS ***
-            
+
             // 1. Atualizar o estado local (Simulação)
-            setLocalProfiles(prev => prev.map(p => 
+            setLocalProfiles(prev => prev.map(p =>
                 p.id === profileId ? { ...p, is_active: newStatus } : p
             ));
-            
+
             // 2. Notificação (alerta sobre a simulação)
-            toast({ 
-                variant: newStatus ? 'default' : 'destructive', 
-                title: `${action} (Simulado) Concluído!`, 
-                description: `Status de ${profileToUpdate.full_name} atualizado superficialmente. Verifique o RLS para o bloqueio real.` 
+            toast({
+                variant: newStatus ? 'default' : 'destructive',
+                title: `${action} (Simulado) Concluído!`,
+                description: `Status de ${profileToUpdate.full_name} atualizado superficialmente. Verifique o RLS para o bloqueio real.`
             });
             // Não chama onUpdate para não forçar o pai a recarregar e perder a simulação local
-            
+
         } catch (error) {
             console.error("Error simulating toggling status:", error);
             toast({ variant: 'destructive', title: `Erro ao ${action}`, description: `Falha na simulação: ${error.message}` });
@@ -164,26 +164,26 @@ const AdmTab = ({ dashboardData }) => {
         }
 
         setIsSubmitting(true);
-        
+
         try {
             // 1. Delete all appointments linked to this user (for cleanup)
             if (profileToDelete.role === 'student') {
-                 // Deletar as aulas agendadas (foreign key constraint)
+                // Deletar as aulas agendadas (foreign key constraint)
                 await supabase.from('appointments').delete().eq('student_id', profileToDelete.id);
             }
-            
+
             // 2. Delete the profile record
             const { error } = await supabase.from('profiles').delete().eq('id', profileToDelete.id);
-            
+
             if (error) throw error;
-            
+
             // 3. Update local state
             setLocalProfiles(prev => prev.filter(p => p.id !== profileToDelete.id));
 
-            toast({ 
-                variant: 'destructive', 
-                title: 'Perfil Deletado!', 
-                description: `O perfil de ${profileToDelete.full_name} foi removido. REMOVA MANUALMENTE o usuário no Supabase Authentication!` 
+            toast({
+                variant: 'destructive',
+                title: 'Perfil Deletado!',
+                description: `O perfil de ${profileToDelete.full_name} foi removido. REMOVA MANUALMENTE o usuário no Supabase Authentication!`
             });
             if (onUpdate) onUpdate();
 
@@ -199,7 +199,7 @@ const AdmTab = ({ dashboardData }) => {
     return (
         <div className="bg-white p-6 rounded-lg shadow-sm">
             <h3 className="text-2xl font-bold mb-6">Administração de Usuários</h3>
-            
+
             {loading ? (
                 <div className="flex justify-center py-10">
                     <Loader2 className="w-8 h-8 animate-spin text-sky-600" />
@@ -210,7 +210,7 @@ const AdmTab = ({ dashboardData }) => {
                         <TabsTrigger value="students">Alunos</TabsTrigger>
                         <TabsTrigger value="professors">Professores</TabsTrigger>
                     </TabsList>
-                    
+
                     <TabsContent value="students" className="mt-4">
                         <ProfileTable
                             title="Perfis de Alunos"
@@ -218,23 +218,23 @@ const AdmTab = ({ dashboardData }) => {
                             onDelete={handleDelete}
                             onToggleActive={handleToggleActive}
                             isSubmitting={isSubmitting}
-                            currentUserId={professorId} 
+                            currentUserId={professorId}
                         />
                     </TabsContent>
-                    
+
                     <TabsContent value="professors" className="mt-4">
-                         <ProfileTable
+                        <ProfileTable
                             title="Perfis de Professores"
                             profiles={professors}
                             onDelete={handleDelete}
                             onToggleActive={handleToggleActive}
                             isSubmitting={isSubmitting}
-                            currentUserId={professorId} 
+                            currentUserId={professorId}
                         />
                     </TabsContent>
                 </Tabs>
             )}
-            
+
             <div className="mt-6 p-4 border-l-4 border-yellow-500 bg-yellow-50 text-sm text-yellow-900">
                 <p className="font-bold">Atenção Administrativa - Exclusão de Usuários:</p>
                 <p>O cliente Supabase não permite deletar usuários do serviço de autenticação (email/senha) via código frontend. Após deletar um perfil aqui, você deve removê-lo manualmente do painel do Supabase Authentication para liberar o e-mail para um novo cadastro.</p>

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { add, format, parseISO, getDay, parse, isFuture, formatDistanceToNowStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getBrazilDate, getTodayBrazil } from '@/lib/dateUtils';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
@@ -13,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Se incluyen los iconos necesarios para la nueva funcionalidad
-import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw } from 'lucide-react';
+import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot } from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
 import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 
@@ -21,6 +23,7 @@ import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MessageSquare as MessageIcon, BarChart3, Star, MessageCircle, ChevronRight, User, TrendingUp, TrendingDown, Minus, Calendar as CalendarIcon } from 'lucide-react';
 
 
 const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
@@ -73,6 +76,7 @@ export const HelpWidget = () => (
 const HomePage = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [activeBillings, setActiveBillings] = useState([]);
@@ -95,6 +99,18 @@ const HomePage = () => {
   const [singleSelectedDate, setSingleSelectedDate] = useState(null);
   const [singleSelectedTime, setSingleSelectedTime] = useState(null);
 
+  // NOVOS ESTADOS PARA DASHBOARD E CHAT
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [chat, setChat] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newChatMessage, setNewChatMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const chatEndRef = React.useRef(null);
+  const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(scrollToBottom, [chatMessages]);
+
   const latestActiveBilling = activeBillings[0];
   const classesPerWeek = latestActiveBilling?.packages?.classes_per_week || 0;
   const classDuration = latestActiveBilling?.packages?.class_duration_minutes || 30;
@@ -105,20 +121,22 @@ const HomePage = () => {
     if (!user || !profile?.age) return;
     setLoading(true);
     try {
-      const today = new Date().toISOString();
+      const today = getBrazilDate().toISOString();
       const { data: profData, error: profError } = await supabase.from('profiles').select('id').eq('role', 'professor').limit(1).single();
       if (profError && profError.code !== 'PGRST116') throw profError;
       const currentProfessorId = profData?.id;
       if (!currentProfessorId) { setLoading(false); return; }
       setProfessorId(currentProfessorId);
 
-      const [appointmentsRes, activeBillingsRes, pastBillingsRes, assignedLogsRes, pendingReqRes, nextClassRes] = await Promise.all([
-        supabase.from('appointments').select('*').eq('student_id', user.id).order('class_datetime', { ascending: false }),
+      const [appointmentsRes, activeBillingsRes, pastBillingsRes, assignedLogsRes, pendingReqRes, nextClassRes, feedbacksRes, chatRes] = await Promise.all([
+        supabase.from('appointments').select('*').eq('student_id', user.id).order('class_datetime', { ascending: true }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).gte('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).lt('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
         supabase.from('assigned_packages_log').select('assigned_classes, package_id, status').eq('student_id', user.id), // Fetch status here
         supabase.from('solicitudes_clase').select('solicitud_id, is_recurring').eq('alumno_id', user.id).eq('status', 'Pendiente').maybeSingle(),
-        supabase.from('appointments').select(`*, student:profiles!student_id(full_name, spanish_level)`).eq('student_id', user.id).eq('status', 'scheduled').gte('class_datetime', today).order('class_datetime', { ascending: true }).limit(1).maybeSingle(),
+        supabase.from('appointments').select(`*, student:profiles!student_id(full_name, spanish_level)`).eq('student_id', user.id).in('status', ['scheduled', 'rescheduled']).gte('class_datetime', today).order('class_datetime', { ascending: true }).limit(1).maybeSingle(),
+        supabase.from('class_feedback').select(`*, appointment:appointments!fk_appointment(class_datetime)`).eq('student_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('chats').select('*').eq('alumno_id', user.id).maybeSingle(),
       ]);
 
       const errors = [appointmentsRes.error, activeBillingsRes.error, pastBillingsRes.error, assignedLogsRes.error, pendingReqRes.error, nextClassRes.error].filter(Boolean).filter(e => e.code !== 'PGRST116');
@@ -132,6 +150,15 @@ const HomePage = () => {
       const assignedLogsData = assignedLogsRes.data || [];
       setActiveBillings(activeBillingsData);
       setPastBillings(pastBillingsRes.data || []);
+      setFeedbacks(feedbacksRes.data || []);
+
+      if (chatRes.data) {
+        setChat(chatRes.data);
+        fetchChatMessages(chatRes.data.chat_id);
+      } else if (professorId) {
+        // Se não existir chat, tenta encontrar/criar? 
+        // Por agora, apenas se existir no banco.
+      }
 
       const latestBilling = activeBillingsData[0]; // The most recent active billing
       const currentClassesPerWeek = latestBilling?.packages?.classes_per_week || 0;
@@ -191,6 +218,120 @@ const HomePage = () => {
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [fetchData, user, professorId]);
+
+  const fetchChatMessages = async (chatId) => {
+    setChatLoading(true);
+    const { data, error } = await supabase
+      .from('mensajes')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('enviado_en', { ascending: true });
+
+    if (!error) setChatMessages(data || []);
+    setChatLoading(false);
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newChatMessage.trim() || !chat) return;
+
+    setIsSendingMessage(true);
+    const tempMessage = {
+      mensaje_id: `temp-${Date.now()}`,
+      remitente_id: user.id,
+      contenido: newChatMessage,
+      enviado_en: new Date().toISOString()
+    };
+    setChatMessages(prev => [...prev, tempMessage]);
+    const messageToSend = newChatMessage;
+    setNewChatMessage('');
+
+    const { error } = await supabase.from('mensajes').insert({
+      chat_id: chat.chat_id,
+      remitente_id: user.id,
+      contenido: messageToSend
+    });
+
+    if (error) {
+      toast({ variant: 'destructive', title: 'Erro ao enviar', description: error.message });
+      setChatMessages(prev => prev.filter(m => m.mensaje_id !== tempMessage.mensaje_id));
+      setNewChatMessage(messageToSend);
+    }
+    setIsSendingMessage(false);
+  };
+
+  const performanceStats = useMemo(() => {
+    if (feedbacks.length === 0) return null;
+    const dimensions = ['fala', 'leitura', 'escrita', 'compreensao', 'audicao', 'gramatica', 'pronuncia', 'vocabulario'];
+
+    // Calcular somas gerais
+    const sumsAll = {};
+    dimensions.forEach(d => sumsAll[d] = 0);
+
+    feedbacks.forEach(f => {
+      dimensions.forEach(d => {
+        sumsAll[d] += (f[d] || 0);
+      });
+    });
+
+    // Filtrar feedbacks dos últimos 30 dias
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentFeedbacks = feedbacks.filter(f => {
+      const feedbackDate = f.appointment?.class_datetime
+        ? new Date(f.appointment.class_datetime)
+        : new Date(f.created_at);
+      return feedbackDate >= thirtyDaysAgo;
+    });
+
+    // Calcular somas dos últimos 30 dias
+    const sumsRecent = {};
+    dimensions.forEach(d => sumsRecent[d] = 0);
+
+    recentFeedbacks.forEach(f => {
+      dimensions.forEach(d => {
+        sumsRecent[d] += (f[d] || 0);
+      });
+    });
+
+    // Criar estatísticas por dimensão
+    const stats = dimensions.map(d => ({
+      name: d.charAt(0).toUpperCase() + d.slice(1).replace('_', ' '),
+      key: d,
+      average: (sumsAll[d] / feedbacks.length).toFixed(1),
+      recentAverage: recentFeedbacks.length > 0 ? (sumsRecent[d] / recentFeedbacks.length).toFixed(1) : null
+    }));
+
+    // Calcular média geral (todas as dimensões, todo o histórico)
+    const overallAverage = stats.reduce((acc, curr) => acc + parseFloat(curr.average), 0) / stats.length;
+    const overallAveragePercent = ((overallAverage / 5) * 100).toFixed(0);
+
+    // Calcular média dos últimos 30 dias
+    let recentAveragePercent = null;
+    let trendPercent = null;
+    let trendDirection = null;
+
+    if (recentFeedbacks.length > 0) {
+      const recentOverallAverage = stats.reduce((acc, curr) => acc + parseFloat(curr.recentAverage || 0), 0) / stats.length;
+      recentAveragePercent = ((recentOverallAverage / 5) * 100).toFixed(0);
+
+      // Calcular diferença entre média recente e geral
+      const difference = parseFloat(recentAveragePercent) - parseFloat(overallAveragePercent);
+      trendPercent = Math.abs(difference).toFixed(0);
+      trendDirection = difference >= 0 ? 'up' : 'down';
+    }
+
+    return {
+      dimensions: stats,
+      overallAveragePercent,
+      recentAveragePercent,
+      trendPercent,
+      trendDirection,
+      totalFeedbacks: feedbacks.length,
+      recentFeedbacksCount: recentFeedbacks.length
+    };
+  }, [feedbacks]);
 
 
   // FUNÇÃO MODIFICADA: Agora se chama para agendamento pontual se houver créditos reagendados
@@ -404,10 +545,12 @@ const HomePage = () => {
         <StudentMessagesWidget />
 
         <Tabs defaultValue="agenda" className="w-full mt-8">
-          <TabsList className="grid w-full grid-cols-3 bg-slate-200">
-            <TabsTrigger value="faturas"><FileText className="mr-2 h-4 w-4 hidden sm:block" />Faturas</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 bg-slate-200">
             <TabsTrigger value="agenda"><Package className="mr-2 h-4 w-4 hidden sm:block" />Agenda</TabsTrigger>
             <TabsTrigger value="aulas"><BookOpen className="mr-2 h-4 w-4 hidden sm:block" />Aulas</TabsTrigger>
+            <TabsTrigger value="conversas"><MessageIcon className="mr-2 h-4 w-4 hidden sm:block" />Conversas</TabsTrigger>
+            <TabsTrigger value="desempenho"><BarChart3 className="mr-2 h-4 w-4 hidden sm:block" />Desempenho</TabsTrigger>
+            <TabsTrigger value="faturas"><FileText className="mr-2 h-4 w-4 hidden sm:block" />Faturas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="faturas" className="mt-4 space-y-6">
@@ -432,6 +575,7 @@ const HomePage = () => {
               <h2 className="text-xl font-bold mb-4">Histórico de Faturas</h2>
               <div className="border rounded-lg overflow-hidden">{loading ? <p className="p-4">Carregando...</p> : pastBillings.length > 0 ? <Table><TableHeader className="bg-slate-50"><TableRow><TableHead>Pacote</TableHead><TableHead>Data da Compra</TableHead><TableHead>Data de Expiração</TableHead></TableRow></TableHeader><TableBody>{pastBillings.map(b => (<TableRow key={b.id}><TableCell>{b.packages.name}</TableCell><TableCell>{format(parseISO(b.purchase_date), 'PPP', { locale: ptBR })}</TableCell><TableCell>{format(parseISO(b.end_date), 'PPP', { locale: ptBR })}</TableCell></TableRow>))}</TableBody></Table> : <p className="p-8 text-center text-slate-500">Nenhum histórico encontrado.</p>}</div>
             </div>
+
           </TabsContent>
 
           <TabsContent value="agenda" className="mt-4 space-y-6">
@@ -583,13 +727,370 @@ const HomePage = () => {
             </div>
           </TabsContent>
           <TabsContent value="aulas" className="mt-4 space-y-6 bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="text-xl font-bold mb-4">Histórico de Aulas</h2>
-            <div className="border rounded-lg overflow-hidden"><Table><TableHeader className="bg-slate-50"><TableRow><TableHead>Data</TableHead><TableHead>Hora</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan="3" className="text-center">Carregando...</TableCell></TableRow> : appointments.length > 0 ? appointments.map(apt => (<TableRow key={apt.id}><TableCell>{format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR })}</TableCell><TableCell>{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell><TableCell><StatusBadge status={apt.status} /></TableCell></TableRow>)) : <TableRow><TableCell colSpan="3" className="text-center p-8 text-slate-500">Nenhuma aula encontrada.</TableCell></TableRow>}</TableBody></Table></div>
-            <div className="fixed bottom-6 right-24 z-50">
-              <HelpWidget />
+            <h2 className="text-xl font-bold mb-4">Minhas Aulas</h2>
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Hora</TableHead>
+                    <TableHead>Duração</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow><TableCell colSpan="4" className="text-center">Carregando...</TableCell></TableRow>
+                  ) : appointments.length > 0 ? (
+                    appointments.map(apt => (
+                      <TableRow key={apt.id}>
+                        <TableCell className="font-medium">{format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR })}</TableCell>
+                        <TableCell>{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell>
+                        <TableCell>{apt.duration_minutes || 30} min</TableCell>
+                        <TableCell><StatusBadge status={apt.status} /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow><TableCell colSpan="4" className="text-center p-8 text-slate-500">Nenhuma aula encontrada.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="conversas" className="mt-4">
+            <div className="bg-white rounded-lg shadow-sm flex flex-col h-[600px] border overflow-hidden">
+              <header className="p-4 border-b bg-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-sky-100 flex items-center justify-center text-sky-600">
+                    <User className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold">Chat com Professor</h3>
+                    <p className="text-xs text-slate-500">Tire suas dúvidas em tempo real</p>
+                  </div>
+                </div>
+              </header>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+                {chatLoading ? (
+                  <div className="flex justify-center items-center h-full"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div>
+                ) : chatMessages.length > 0 ? (
+                  chatMessages.map((msg, idx) => {
+                    const isMe = msg.remitente_id === user.id;
+                    return (
+                      <div key={msg.mensaje_id || idx} className={cn("flex", isMe ? "justify-end" : "justify-start")}>
+                        <div className={cn("max-w-[80%] rounded-2xl px-4 py-2 shadow-sm", isMe ? "bg-sky-600 text-white rounded-tr-none" : "bg-white text-slate-800 rounded-tl-none border")}>
+                          <p className="text-sm">{msg.contenido}</p>
+                          <p className={cn("text-[10px] mt-1 text-right", isMe ? "text-sky-100" : "text-slate-400")}>
+                            {format(parseISO(msg.enviado_en), 'HH:mm')}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                    <MessageCircle className="h-12 w-12 mb-2 opacity-20" />
+                    <p>Inicie uma conversa com seu professor!</p>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              <form onSubmit={handleSendMessage} className="p-4 border-t bg-white flex gap-2">
+                <input
+                  value={newChatMessage}
+                  onChange={(e) => setNewChatMessage(e.target.value)}
+                  placeholder="Escreva sua mensagem..."
+                  className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                  disabled={isSendingMessage}
+                />
+                <Button type="submit" size="icon" className="rounded-full bg-sky-600 h-10 w-10 shrink-0" disabled={isSendingMessage || !newChatMessage.trim()}>
+                  {isSendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </form>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="desempenho" className="mt-4 space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <h2 className="text-xl font-bold mb-6">Meu Desempenho</h2>
+              {!performanceStats ? (
+                <div className="text-center py-12 text-slate-500">
+                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                  <p>Ainda não há avaliações disponíveis para gerar seu dashboard.</p>
+                  <p className="text-sm">As notas aparecerão aqui após suas aulas serem avaliadas pelo professor.</p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Três Indicadores KPI */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Indicador 1: Média Geral */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0 }}
+                      className="bg-gradient-to-br from-sky-500 to-sky-600 p-6 rounded-xl text-white shadow-lg"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sky-100 text-sm font-medium">Média Geral</span>
+                        <div className="p-2 bg-white/20 rounded-lg">
+                          <Star className="h-5 w-5 text-white" />
+                        </div>
+                      </div>
+                      <p className="text-4xl font-black">{performanceStats.overallAveragePercent}%</p>
+                      <p className="text-sky-100 text-xs mt-1">Baseado em {performanceStats.totalFeedbacks} avaliações</p>
+                    </motion.div>
+
+                    {/* Indicador 2: Média 30 Dias */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.1 }}
+                      className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-xl text-white shadow-lg"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-emerald-100 text-sm font-medium">Últimos 30 Dias</span>
+                        <div className="p-2 bg-white/20 rounded-lg">
+                          <CalendarIcon className="h-5 w-5 text-white" />
+                        </div>
+                      </div>
+                      <p className="text-4xl font-black">
+                        {performanceStats.recentAveragePercent ? `${performanceStats.recentAveragePercent}%` : 'N/A'}
+                      </p>
+                      <p className="text-emerald-100 text-xs mt-1">
+                        {performanceStats.recentFeedbacksCount > 0
+                          ? `${performanceStats.recentFeedbacksCount} avaliações recentes`
+                          : 'Sem avaliações neste período'
+                        }
+                      </p>
+                    </motion.div>
+
+                    {/* Indicador 3: Tendência */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.2 }}
+                      className={cn(
+                        "p-6 rounded-xl text-white shadow-lg",
+                        performanceStats.trendDirection === 'up'
+                          ? "bg-gradient-to-br from-green-500 to-green-600"
+                          : performanceStats.trendDirection === 'down'
+                            ? "bg-gradient-to-br from-orange-500 to-orange-600"
+                            : "bg-gradient-to-br from-slate-500 to-slate-600"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={cn(
+                          "text-sm font-medium",
+                          performanceStats.trendDirection === 'up' ? "text-green-100"
+                            : performanceStats.trendDirection === 'down' ? "text-orange-100"
+                              : "text-slate-100"
+                        )}>Tendência</span>
+                        <div className="p-2 bg-white/20 rounded-lg">
+                          {performanceStats.trendDirection === 'up' ? (
+                            <TrendingUp className="h-5 w-5 text-white" />
+                          ) : performanceStats.trendDirection === 'down' ? (
+                            <TrendingDown className="h-5 w-5 text-white" />
+                          ) : (
+                            <Minus className="h-5 w-5 text-white" />
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-4xl font-black flex items-center gap-2">
+                        {performanceStats.trendPercent ? (
+                          <>
+                            {performanceStats.trendDirection === 'up' ? '+' : performanceStats.trendDirection === 'down' ? '-' : ''}
+                            {performanceStats.trendPercent}%
+                          </>
+                        ) : 'N/A'}
+                      </p>
+                      <p className={cn(
+                        "text-xs mt-1",
+                        performanceStats.trendDirection === 'up' ? "text-green-100"
+                          : performanceStats.trendDirection === 'down' ? "text-orange-100"
+                            : "text-slate-100"
+                      )}>
+                        {performanceStats.trendDirection === 'up'
+                          ? 'Você está evoluindo!'
+                          : performanceStats.trendDirection === 'down'
+                            ? 'Hora de focar mais!'
+                            : 'Sem dados suficientes'
+                        }
+                      </p>
+                    </motion.div>
+                  </div>
+
+                  {/* Gráfico de Barras Verticais */}
+                  <div className="bg-slate-50 p-6 rounded-xl border border-slate-100">
+                    <h3 className="text-lg font-bold mb-6 text-slate-800">Desempenho por Competência</h3>
+                    <div className="flex items-end justify-between gap-2 h-64 px-4">
+                      {performanceStats.dimensions.map((stat, index) => {
+                        const heightPercent = (parseFloat(stat.average) / 5) * 100;
+                        const getBarColor = (percent) => {
+                          if (percent >= 80) return 'from-emerald-400 to-emerald-600';
+                          if (percent >= 60) return 'from-sky-400 to-sky-600';
+                          if (percent >= 40) return 'from-yellow-400 to-yellow-600';
+                          return 'from-orange-400 to-orange-600';
+                        };
+                        return (
+                          <div key={stat.key} className="flex flex-col items-center flex-1 group">
+                            <div className="relative w-full flex flex-col items-center">
+                              {/* Valor acima da barra */}
+                              <motion.span
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.5 + index * 0.1 }}
+                                className="text-xs font-bold text-slate-700 mb-1"
+                              >
+                                {stat.average}
+                              </motion.span>
+                              {/* Container da barra */}
+                              <div className="w-full h-48 bg-slate-200 rounded-t-lg overflow-hidden flex items-end">
+                                <motion.div
+                                  initial={{ height: 0 }}
+                                  animate={{ height: `${heightPercent}%` }}
+                                  transition={{ duration: 1, delay: index * 0.1, ease: "easeOut" }}
+                                  className={cn(
+                                    "w-full rounded-t-lg bg-gradient-to-t shadow-inner",
+                                    getBarColor(heightPercent)
+                                  )}
+                                />
+                              </div>
+                            </div>
+                            {/* Label abaixo */}
+                            <span className="text-[10px] font-medium text-slate-600 mt-2 text-center leading-tight">
+                              {stat.name}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Legenda */}
+                    <div className="flex justify-center gap-6 mt-6 pt-4 border-t border-slate-200">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" />
+                        <span className="text-xs text-slate-600">Excelente (≥80%)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-sky-400 to-sky-600" />
+                        <span className="text-xs text-slate-600">Bom (60-79%)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600" />
+                        <span className="text-xs text-slate-600">Regular (40-59%)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-400 to-orange-600" />
+                        <span className="text-xs text-slate-600">A melhorar (&lt;40%)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Histórico de Feedbacks */}
+                  <div className="pt-6 border-t">
+                    <h3 className="text-lg font-bold mb-4">Comentários e Feedbacks do Professor</h3>
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                      {feedbacks.length === 0 ? (
+                        <p className="text-center text-slate-500 py-8">Nenhum feedback encontrado.</p>
+                      ) : (
+                        feedbacks.map((f) => {
+                          const dimensions = ['fala', 'leitura', 'escrita', 'compreensao', 'audicao', 'gramatica', 'pronuncia', 'vocabulario'];
+                          const avgScore = dimensions.reduce((sum, d) => sum + (f[d] || 0), 0) / dimensions.length;
+                          const avgPercent = ((avgScore / 5) * 100).toFixed(0);
+
+                          return (
+                            <motion.div
+                              key={f.id}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              className="p-5 rounded-xl bg-white border-2 border-slate-100 hover:border-sky-200 hover:shadow-md transition-all"
+                            >
+                              <div className="flex justify-between items-start mb-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 bg-sky-100 rounded-lg">
+                                    <CalendarIcon className="h-4 w-4 text-sky-600" />
+                                  </div>
+                                  <div>
+                                    <span className="text-sm font-bold text-slate-800">
+                                      {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'PPP', { locale: ptBR }) : 'Aula'}
+                                    </span>
+                                    <p className="text-xs text-slate-500">
+                                      {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'HH:mm') : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex gap-0.5">
+                                    {[1, 2, 3, 4, 5].map(s => (
+                                      <Star key={s} className={cn("h-4 w-4", s <= Math.round(avgScore) ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                                    ))}
+                                  </div>
+                                  <Badge variant="outline" className={cn(
+                                    "text-xs font-bold",
+                                    parseInt(avgPercent) >= 80 ? "border-emerald-300 bg-emerald-50 text-emerald-700" :
+                                      parseInt(avgPercent) >= 60 ? "border-sky-300 bg-sky-50 text-sky-700" :
+                                        parseInt(avgPercent) >= 40 ? "border-yellow-300 bg-yellow-50 text-yellow-700" :
+                                          "border-orange-300 bg-orange-50 text-orange-700"
+                                  )}>
+                                    {avgPercent}%
+                                  </Badge>
+                                </div>
+                              </div>
+
+                              {/* Comentário do professor */}
+                              <div className="bg-slate-50 p-4 rounded-lg mb-4">
+                                <p className="text-sm text-slate-700 italic leading-relaxed">
+                                  "{f.comment || 'Sem comentário adicional do professor.'}"
+                                </p>
+                              </div>
+
+                              {/* Notas por competência */}
+                              <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+                                {dimensions.map(d => (
+                                  <div key={d} className="text-center p-2 bg-white border rounded-lg">
+                                    <p className="text-[10px] text-slate-500 font-medium truncate">
+                                      {d.charAt(0).toUpperCase() + d.slice(1)}
+                                    </p>
+                                    <p className={cn(
+                                      "text-sm font-bold mt-1",
+                                      f[d] >= 4 ? "text-emerald-600" :
+                                        f[d] >= 3 ? "text-sky-600" :
+                                          f[d] >= 2 ? "text-yellow-600" :
+                                            "text-orange-600"
+                                    )}>
+                                      {f[d]}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </motion.div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Botões Flutuantes Globais */}
+        <div className="fixed bottom-6 right-24 z-50 flex gap-3">
+          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+            <Button
+              size="icon"
+              onClick={() => navigate('/spanish-assistant')}
+              className="rounded-full h-14 w-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg"
+              title="Asistente de Español IA"
+            >
+              <Bot className="h-7 w-7" />
+            </Button>
+          </motion.div>
+          <HelpWidget />
+        </div>
       </div>
     </motion.div>
   );

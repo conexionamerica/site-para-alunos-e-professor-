@@ -1,18 +1,16 @@
 // Archivo: src/components/professor-dashboard/AgendaTab.jsx
+// Vista de Calendario Semanal - Inspirado en el diseño proporcionado
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
-import { format, parseISO, getDay, startOfWeek, endOfWeek, isSameDay, addDays } from 'date-fns';
+import { format, parseISO, getDay, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, Clock, CheckCircle2, UserX, Calendar as CalendarIcon, Filter, X } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Grid3x3, List, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { getBrazilDate } from '@/lib/dateUtils';
 
-const daysOfWeekMap = {
+const daysOfWeekMapShort = {
     0: 'Domingo',
     1: 'Segunda',
     2: 'Terça',
@@ -22,338 +20,355 @@ const daysOfWeekMap = {
     6: 'Sábado'
 };
 
-// CORRECCIÓN: Ahora solo recibe 'dashboardData'
+// Horarios de 07:00 a 23:45 en intervalos de 15 minutos
+const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 7; hour <= 23; hour++) {
+        for (let minute = 0; minute < 60; minute += 15) {
+            if (hour === 23 && minute > 45) break;
+            slots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+        }
+    }
+    return slots;
+};
+
+const TIME_SLOTS = generateTimeSlots();
+
 const AgendaTab = ({ dashboardData }) => {
-    // Extrai professorId do objeto de dados
     const professorId = dashboardData?.professorId;
-    
-    const today = useMemo(() => new Date(), []);
-    const todayDayOfWeek = useMemo(() => getDay(today), [today]); // 0 (Dom) a 6 (Sáb)
+    const onUpdate = dashboardData?.onUpdate;
 
-    // CORREÇÃO: Renomeado 'loading' para 'isLoadingTab' e inicializado com base no dashboardData
-    const [isLoadingTab, setIsLoadingTab] = useState(false);
+    const today = useMemo(() => getBrazilDate(), []);
+
+    // Estados
+    const [currentDate, setCurrentDate] = useState(today);
+    const [viewMode, setViewMode] = useState('week'); // 'week' o 'list'
     const [appointments, setAppointments] = useState([]);
-    const [selectedDate, setSelectedDate] = useState(today);
-    // Inicia com o dia da semana atual selecionado visualmente
-    const [selectedDayOfWeek, setSelectedDayOfWeek] = useState(todayDayOfWeek); 
-    const [loadingDay, setLoadingDay] = useState(false);
-    
-    // Controla o filtro principal
-    const [quickFilter, setQuickFilter] = useState('TODAY');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const fetchAppointments = useCallback(async (dateToFilter, dayFilter = null, currentQuickFilter) => {
+    // Calcular inicio y fin de la semana
+    const weekStart = useMemo(() => startOfWeek(currentDate, { weekStartsOn: 0 }), [currentDate]);
+    const weekEnd = useMemo(() => endOfWeek(currentDate, { weekStartsOn: 0 }), [currentDate]);
+
+    // Generar array de días de la semana
+    const weekDays = useMemo(() => {
+        const days = [];
+        for (let i = 0; i < 7; i++) {
+            days.push(addDays(weekStart, i));
+        }
+        return days;
+    }, [weekStart]);
+
+    // Fetch appointments para la semana
+    const fetchWeekAppointments = useCallback(async () => {
         if (!professorId) return;
 
-        setLoadingDay(true);
-        
-        let query = supabase
-            .from('appointments')
-            .select(`
-                id, class_datetime, status, duration_minutes, 
-                student:profiles!student_id(full_name, spanish_level)
-            `)
-            .eq('professor_id', professorId);
+        setIsLoading(true);
 
-        let dateStringStart;
-        let dateStringEnd;
-        
-        // 1. LÓGICA DE FILTROS RÁPIDOS
-        if (currentQuickFilter === 'ALL') {
-            // Busca todas as aulas
-        } else if (currentQuickFilter === 'TODAY') {
-            dateStringStart = format(today, 'yyyy-MM-dd');
-            dateStringEnd = dateStringStart;
-        } else if (currentQuickFilter === 'TOMORROW') {
-            const tomorrow = addDays(today, 1);
-            dateStringStart = format(tomorrow, 'yyyy-MM-dd');
-            dateStringEnd = dateStringStart;
-        } else if (dayFilter !== null) {
-            // Lógica de filtro semanal por dia da semana
-            const start = startOfWeek(dateToFilter, { weekStartsOn: 0 });
-            const end = endOfWeek(dateToFilter, { weekStartsOn: 0 });
+        try {
+            const startStr = format(weekStart, 'yyyy-MM-dd');
+            const endStr = format(weekEnd, 'yyyy-MM-dd');
 
-            query = query
-                .gte('class_datetime', format(start, 'yyyy-MM-dd'))
-                .lte('class_datetime', format(end, 'yyyy-MM-dd'));
-        } else {
-            // Filtro por data selecionada (do calendário)
-            dateStringStart = format(dateToFilter, 'yyyy-MM-dd');
-            dateStringEnd = dateStringStart;
-        }
-        
-        // Aplica filtros de data para Hoje/Amanhã/Calendário Individual
-        if (dateStringStart) {
-            query = query
-                .gte('class_datetime', `${dateStringStart}T00:00:00Z`)
-                .lte('class_datetime', `${dateStringEnd}T23:59:59Z`);
-        }
+            const { data, error } = await supabase
+                .from('appointments')
+                .select(`
+                    id, class_datetime, status, duration_minutes,
+                    student:profiles!student_id(full_name, spanish_level)
+                `)
+                .eq('professor_id', professorId)
+                .gte('class_datetime', `${startStr}T00:00:00-03:00`)
+                .lte('class_datetime', `${endStr}T23:59:59-03:00`)
+                .in('status', ['scheduled', 'completed', 'rescheduled', 'missed'])
+                .order('class_datetime', { ascending: true });
 
+            if (error) throw error;
 
-        const { data, error } = await query
-            .order('class_datetime', { ascending: true });
-
-        if (error) {
-            console.error("Error fetching appointments:", error);
+            setAppointments(data || []);
+        } catch (error) {
+            console.error('Error fetching appointments:', error);
             setAppointments([]);
-        } else {
-            let filteredData = data || [];
-            
-            // FILTRAGEM FINAL POR DIA DA SEMANA (Apenas se o filtro semanal estiver ativo)
-            if (dayFilter !== null && currentQuickFilter === null) {
-                filteredData = filteredData.filter(apt => {
-                    const aptDay = getDay(parseISO(apt.class_datetime));
-                    return aptDay === dayFilter;
-                });
-            }
-
-            setAppointments(filteredData);
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoadingTab(false);
-        setLoadingDay(false);
-    }, [professorId, today]);
+    }, [professorId, weekStart, weekEnd]);
 
     useEffect(() => {
-        // CORREÇÃO: Chama fetchAppointments apenas se professorId estiver disponível
-        if (professorId) {
-            fetchAppointments(selectedDate, selectedDayOfWeek, quickFilter);
-        }
-    }, [fetchAppointments, selectedDate, selectedDayOfWeek, quickFilter, professorId]);
-    
-    // Handler para os botões de filtro de dia da semana (Antiga lógica semanal)
-    const handleDayFilter = (dayIndex) => {
-        
-        // 1. Desativa o filtro rápido, forçando o modo semanal
-        setQuickFilter(null);
-        
-        if (selectedDayOfWeek === dayIndex) {
-            // Clicou no dia já ativo (no modo semanal) -> Desativa o semanal e volta para o quick filter 'TODAY'
-            setSelectedDayOfWeek(null); 
-            setSelectedDate(today); 
-            setQuickFilter('TODAY');
-        } else {
-            // Ativa o modo semanal no dia selecionado
-            setSelectedDayOfWeek(dayIndex);
-            
-            const currentDayIndex = getDay(today);
-            const diff = dayIndex - currentDayIndex;
-            const newDate = new Date(today);
-            newDate.setDate(today.getDate() + diff);
-            setSelectedDate(newDate);
-        }
-    };
-    
-    // Handler para os novos filtros rápidos
-    const handleQuickFilter = (filterType) => {
-        
-        // 1. Zera o filtro semanal
-        setSelectedDayOfWeek(null); 
-        
-        // 2. Define o filtro rápido
-        setQuickFilter(filterType);
-        
-        // 3. Define a data base para os filtros
-        if (filterType === 'TODAY') {
-            setSelectedDate(today);
-            setSelectedDayOfWeek(todayDayOfWeek); // Mantém o botão de hoje aceso
-        } else if (filterType === 'TOMORROW') {
-            setSelectedDate(addDays(today, 1));
-        } else if (filterType === 'ALL') {
-            setSelectedDate(today); 
-        }
+        fetchWeekAppointments();
+    }, [fetchWeekAppointments]);
+
+    // Navegación
+    const goToPreviousWeek = () => setCurrentDate(subWeeks(currentDate, 1));
+    const goToNextWeek = () => setCurrentDate(addWeeks(currentDate, 1));
+    const goToPreviousMonth = () => setCurrentDate(subMonths(currentDate, 1));
+    const goToNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+    const goToToday = () => setCurrentDate(today);
+
+    // Obtener appointments para un día y hora específicos
+    const getAppointmentsForSlot = (day, timeSlot) => {
+        return appointments.filter(apt => {
+            const aptDate = parseISO(apt.class_datetime);
+            const aptTime = format(aptDate, 'HH:mm');
+            return isSameDay(aptDate, day) && aptTime === timeSlot;
+        });
     };
 
-
-    const StatusBadge = ({ status }) => {
-        switch(status) {
-            case 'scheduled': return <Badge className="bg-sky-500 hover:bg-sky-600 text-white">Agendada</Badge>;
-            case 'completed': return <Badge className="bg-green-500 hover:bg-green-600 text-white">Realizada</Badge>;
-            case 'canceled': return <Badge variant="destructive">Cancelada</Badge>;
-            case 'missed': return <Badge className="bg-orange-500 hover:bg-orange-600 text-white">Falta</Badge>;
-            case 'rescheduled': return <Badge className="bg-purple-500 hover:bg-purple-600 text-white">Reagendada</Badge>;
-            default: return <Badge variant="secondary">{status}</Badge>;
-        }
+    // Calcular la altura del bloque de aula basado en la duración
+    const getBlockHeight = (duration) => {
+        const slots = Math.ceil(duration / 15);
+        return `${slots * 60}px`; // 60px por cada slot de 15 minutos
     };
 
-    const isCurrentWeekDay = (dayIndex) => {
-        return todayDayOfWeek === dayIndex;
-    }
+    // Renderizar bloque de aula
+    const renderAppointmentBlock = (apt) => {
+        const isSpanish = apt.student?.spanish_level;
+        const bgColor = apt.status === 'completed' ? 'bg-green-100 border-green-300' :
+            apt.status === 'rescheduled' ? 'bg-blue-200 border-blue-400' :
+                apt.status === 'missed' ? 'bg-red-100 border-red-300' :
+                    'bg-blue-50 border-blue-200';
 
-    const displayDate = useMemo(() => {
-        if (quickFilter === 'TODAY') return 'Aulas de Hoje';
-        if (quickFilter === 'TOMORROW') return 'Aulas de Amanhã';
-        if (quickFilter === 'ALL') return 'Todas as Aulas (Histórico Completo)';
-        
-        if (selectedDayOfWeek !== null) {
-            return `${daysOfWeekMap[selectedDayOfWeek]}, Semana de ${format(startOfWeek(selectedDate, { weekStartsOn: 0 }), 'dd/MM/yyyy')}`;
-        }
-        
-        return `${format(selectedDate, 'PPP', { locale: ptBR })}`;
-    }, [quickFilter, selectedDate, selectedDayOfWeek]);
-        
-    // A navegação semanal só aparece se o quickFilter for null (modo de filtro semanal/individual)
-    const showWeekNavigation = selectedDayOfWeek !== null && quickFilter === null;
-
-    const navigateWeek = (direction) => {
-        if (selectedDayOfWeek !== null) {
-            const daysToMove = direction === 'next' ? 7 : -7;
-            const newDate = new Date(selectedDate);
-            newDate.setDate(selectedDate.getDate() + daysToMove);
-            setSelectedDate(newDate);
-            // Ao navegar na semana, desativa o filtro rápido (já está implícito pelo quickFilter === null)
-        }
+        return (
+            <div
+                key={apt.id}
+                className={cn(
+                    "absolute left-0 right-0 mx-1 p-2 rounded border text-xs overflow-hidden",
+                    bgColor
+                )}
+                style={{
+                    height: getBlockHeight(apt.duration_minutes || 30),
+                    zIndex: 10
+                }}
+            >
+                <div className="font-semibold truncate text-slate-800">
+                    {apt.student?.full_name || 'Sin nombre'}
+                </div>
+                <div className="text-slate-600 text-[10px]">
+                    {isSpanish ? 'Espanhol' : 'Inglês'}
+                </div>
+            </div>
+        );
     };
-    
-    // CORRIGIDO: O calendário fica desabilitado APENAS se o filtro for 'ALL'.
-    const isCalendarDisabled = quickFilter === 'ALL';
-    
-    // Renderização de carregamento mais robusta (usa o estado do tab e o ID do professor)
-    // O dashboardData?.loading não está disponível neste componente, mas a verificação do ID é suficiente para evitar falhas.
+
     if (!professorId) {
-        return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-sky-600" /></div>;
+        return (
+            <div className="flex justify-center p-8">
+                <Loader2 className="h-8 w-8 animate-spin text-sky-600" />
+            </div>
+        );
     }
-
 
     return (
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm space-y-4 sm:space-y-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Minha Agenda</h2>
-            
-            {/* FILTROS DE DIA DA SEMANA */}
-            <div className="flex flex-wrap gap-2 items-center border-b pb-4">
-                <Filter className="h-5 w-5 text-sky-600 mr-2 flex-shrink-0" />
-                {Object.entries(daysOfWeekMap).map(([index, day]) => {
-                    const dayIndex = parseInt(index);
-                    
-                    // O botão está ativo se estiver selecionado NO MODO SEMANAL (quickFilter === null)
-                    // OU se estiver no modo rápido 'TODAY' E for o dia atual
-                    const isActive = (selectedDayOfWeek === dayIndex && quickFilter === null) || (quickFilter === 'TODAY' && isCurrentWeekDay(dayIndex));
-                    const isToday = isCurrentWeekDay(dayIndex);
-                    
-                    return (
-                        <Button
-                            key={dayIndex}
-                            variant={isActive ? 'default' : 'outline'}
-                            onClick={() => handleDayFilter(dayIndex)}
-                            className={cn(
-                                "h-8 sm:h-9 px-3 sm:px-4 py-1.5 sm:py-2 transition-colors text-xs sm:text-sm",
-                                isActive ? "bg-sky-600 hover:bg-sky-700 text-white" : "text-slate-700 border-slate-300 hover:bg-slate-100"
-                            )}
-                        >
-                            {day} {isToday && '(Hoje)'}
-                        </Button>
-                    );
-                })}
-                 {selectedDayOfWeek !== null && quickFilter === null && (
-                    <Button variant="ghost" size="icon" onClick={() => handleDayFilter(null)} className="ml-0 sm:ml-2">
-                        <X className="h-5 w-5 text-red-500" />
-                    </Button>
-                )}
-            </div>
+        <div className="flex justify-center">
+            <div className="w-full max-w-[1400px] bg-white rounded-lg shadow-sm">
+                {/* Header */}
+                <div className="p-4 border-b flex items-center justify-between flex-wrap gap-4">
+                    <h2 className="text-xl font-bold text-slate-800">Horários de Aula</h2>
 
-            {/* BARRA DE NAVEGAÇÃO / FILTROS RÁPIDOS */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 p-3 rounded-lg border space-y-3 sm:space-y-0">
-                <div className="flex flex-wrap items-center space-x-3 w-full sm:w-auto">
-                    
-                    {/* BOTÃO DE CALENDÁRIO */}
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button variant={"outline"} disabled={isCalendarDisabled} className={cn(
-                                    "w-auto justify-start text-left font-semibold",
-                                )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {/* Navegación de mes */}
+                        <div className="flex items-center gap-2 border rounded-lg px-2 py-1">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={goToPreviousMonth}
                             >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {/* Exibe a data do dia selecionado */}
-                                {format(selectedDate, 'PPP', { locale: ptBR })}
-                                {isSameDay(selectedDate, today) && quickFilter !== 'TODAY' && quickFilter !== 'TOMORROW' && <span className="ml-2 text-sky-600">(Hoje)</span>}
+                                <ChevronLeft className="h-4 w-4" />
                             </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                            <Calendar
-                                mode="single"
-                                selected={selectedDate}
-                                onSelect={(date) => {
-                                    setSelectedDate(date);
-                                    // Desativa filtros rápidos e semanais ao usar o calendário
-                                    setSelectedDayOfWeek(null); 
-                                    setQuickFilter(null);
-                                }}
-                                initialFocus
-                                locale={ptBR}
-                            />
-                        </PopoverContent>
-                    </Popover>
-                    
-                    {/* BOTÕES DE FILTRO RÁPIDO */}
-                    <Button 
-                        variant={quickFilter === 'TODAY' ? 'default' : 'outline'} 
-                        onClick={() => handleQuickFilter('TODAY')}
-                        className={cn(quickFilter === 'TODAY' && "bg-sky-600 hover:bg-sky-700")}
-                    >
-                        Hoje
-                    </Button>
-                    <Button 
-                        variant={quickFilter === 'TOMORROW' ? 'default' : 'outline'} 
-                        onClick={() => handleQuickFilter('TOMORROW')}
-                        className={cn(quickFilter === 'TOMORROW' && "bg-sky-600 hover:bg-sky-700")}
-                    >
-                        Amanhã
-                    </Button>
-                    <Button 
-                        variant={quickFilter === 'ALL' ? 'default' : 'outline'} 
-                        onClick={() => handleQuickFilter('ALL')}
-                        className={cn(quickFilter === 'ALL' && "bg-sky-600 hover:bg-sky-700")}
-                    >
-                        Todas
-                    </Button>
-                </div>
-                
-                {/* TÍTULO CENTRALIZADO */}
-                <span className="font-semibold text-sky-700 w-full sm:w-auto mt-2 sm:mt-0 text-center sm:text-left">
-                    {displayDate}
-                </span>
-                
-                {/* NAVEGAÇÃO SEMANAL (Aparece apenas se o filtro semanal estiver ativo) */}
-                <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
-                    {showWeekNavigation && (
-                        <>
-                            <Button onClick={() => navigateWeek('prev')} variant="outline" size="sm">Semana Anterior</Button>
-                            <Button onClick={() => navigateWeek('next')} variant="outline" size="sm">Próxima Semana</Button>
-                        </>
-                    )}
-                </div>
-            </div>
+                            <span className="text-sm font-medium min-w-[120px] text-center">
+                                {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={goToNextMonth}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
 
-            {/* TABELA DE AULAS */}
-            <div className="border rounded-lg overflow-hidden">
-                <Table>
-                    <TableHeader className="bg-slate-100">
-                        <TableRow>
-                            <TableHead>Hora</TableHead>
-                            <TableHead>Aluno</TableHead>
-                            <TableHead>Matéria</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Duração</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {(isLoadingTab || loadingDay) ? (
-                            <TableRow><TableCell colSpan="5" className="text-center p-8"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                        {/* Navegación de semana */}
+                        <div className="flex items-center gap-2 border rounded-lg px-2 py-1">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={goToPreviousWeek}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <span className="text-sm font-medium min-w-[200px] text-center">
+                                {format(weekStart, 'dd', { locale: ptBR })} de {format(weekStart, 'MMMM', { locale: ptBR })} - {format(weekEnd, 'dd', { locale: ptBR })} de {format(weekEnd, 'MMMM yyyy', { locale: ptBR })}
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={goToNextWeek}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        {/* Botón Actualizar */}
+                        <Button
+                            onClick={() => {
+                                fetchWeekAppointments();
+                                if (onUpdate) onUpdate();
+                            }}
+                            className="bg-blue-500 hover:bg-blue-600 text-white"
+                            size="sm"
+                        >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Atualizar Horários
+                        </Button>
+
+                        {/* Toggle vista */}
+                        <div className="flex border rounded-lg">
+                            <Button
+                                variant={viewMode === 'week' ? 'default' : 'ghost'}
+                                size="icon"
+                                className={cn("h-8 w-8", viewMode === 'week' && "bg-sky-600")}
+                                onClick={() => setViewMode('week')}
+                            >
+                                <Grid3x3 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                                size="icon"
+                                className={cn("h-8 w-8", viewMode === 'list' && "bg-sky-600")}
+                                onClick={() => setViewMode('list')}
+                            >
+                                <List className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Vista de Calendario Semanal */}
+                {viewMode === 'week' && (
+                    <div className="overflow-x-auto">
+                        <div className="min-w-[1000px] mx-auto">
+                            {/* Header de días */}
+                            <div className="grid grid-cols-8 border-b bg-slate-50" style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}>
+                                <div className="p-2 text-center text-sm font-medium text-slate-600 border-r">
+                                    Horário
+                                </div>
+                                {weekDays.map((day, idx) => {
+                                    const isToday = isSameDay(day, today);
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className={cn(
+                                                "p-2 text-center border-r last:border-r-0",
+                                                isToday && "bg-sky-50"
+                                            )}
+                                        >
+                                            <div className={cn(
+                                                "text-sm font-medium",
+                                                isToday ? "text-sky-600" : "text-slate-700"
+                                            )}>
+                                                {daysOfWeekMapShort[getDay(day)]}
+                                            </div>
+                                            <div className={cn(
+                                                "text-xs",
+                                                isToday ? "text-sky-500 font-semibold" : "text-slate-500"
+                                            )}>
+                                                {format(day, 'dd/MM')}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Grid de horarios */}
+                            <div className="relative" style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                                {isLoading ? (
+                                    <div className="flex justify-center items-center h-64">
+                                        <Loader2 className="h-8 w-8 animate-spin text-sky-600" />
+                                    </div>
+                                ) : (
+                                    TIME_SLOTS.map((timeSlot, timeIdx) => (
+                                        <div key={timeSlot} className="grid grid-cols-8 border-b hover:bg-slate-50" style={{ minHeight: '60px', gridTemplateColumns: '80px repeat(7, 1fr)' }}>
+                                            {/* Columna de hora */}
+                                            <div className="p-2 text-center text-xs text-slate-600 border-r bg-slate-50 font-medium">
+                                                {timeSlot}
+                                            </div>
+
+                                            {/* Columnas de días */}
+                                            {weekDays.map((day, dayIdx) => {
+                                                const isToday = isSameDay(day, today);
+                                                const aptsForSlot = getAppointmentsForSlot(day, timeSlot);
+
+                                                return (
+                                                    <div
+                                                        key={dayIdx}
+                                                        className={cn(
+                                                            "relative border-r last:border-r-0",
+                                                            isToday && "bg-sky-50/30"
+                                                        )}
+                                                        style={{ minHeight: '60px' }}
+                                                    >
+                                                        {aptsForSlot.map(apt => renderAppointmentBlock(apt))}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Vista de Lista (alternativa) */}
+                {viewMode === 'list' && (
+                    <div className="p-4">
+                        {isLoading ? (
+                            <div className="flex justify-center items-center h-64">
+                                <Loader2 className="h-8 w-8 animate-spin text-sky-600" />
+                            </div>
                         ) : appointments.length > 0 ? (
-                            appointments.map(apt => (
-                                <TableRow key={apt.id}>
-                                    <TableCell className="font-medium">{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell>
-                                    <TableCell>{apt.student?.full_name || 'N/A'}</TableCell>
-                                    <TableCell>{apt.student?.spanish_level ? 'Espanhol' : 'Inglês'}</TableCell>
-                                    <TableCell><StatusBadge status={apt.status} /></TableCell>
-                                    <TableCell>{apt.duration_minutes || 30} min</TableCell>
-                                </TableRow>
-                            ))
+                            <div className="space-y-2">
+                                {appointments.map(apt => {
+                                    const aptDate = parseISO(apt.class_datetime);
+                                    const bgColor = apt.status === 'completed' ? 'bg-green-100 border-green-300' :
+                                        apt.status === 'rescheduled' ? 'bg-blue-200 border-blue-400' :
+                                            apt.status === 'missed' ? 'bg-red-100 border-red-300' :
+                                                'bg-blue-50 border-blue-200';
+                                    const textColor = apt.status === 'missed' ? 'text-red-800' : 'text-slate-800';
+
+                                    return (
+                                        <div key={apt.id} className={`p-4 border-2 rounded-lg hover:shadow-md transition-shadow ${bgColor}`}>
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className={`font-semibold ${textColor}`}>
+                                                        {apt.student?.full_name || 'Sin nombre'}
+                                                    </div>
+                                                    <div className="text-sm text-slate-600">
+                                                        {apt.student?.spanish_level ? 'Espanhol' : 'Inglês'}
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className={`text-sm font-medium ${textColor}`}>
+                                                        {format(aptDate, 'dd/MM/yyyy')}
+                                                    </div>
+                                                    <div className="text-sm text-slate-600">
+                                                        {format(aptDate, 'HH:mm')} ({apt.duration_minutes || 30} min)
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         ) : (
-                            <TableRow><TableCell colSpan="5" className="text-center p-8 text-slate-500">
-                                {quickFilter === 'ALL' ? 'Nenhuma aula encontrada no histórico.' : `Nenhuma aula agendada para ${displayDate}.`}
-                            </TableCell></TableRow>
+                            <div className="text-center py-12 text-slate-500">
+                                Nenhuma aula agendada para esta semana.
+                            </div>
                         )}
-                    </TableBody>
-                </Table>
+                    </div>
+                )}
             </div>
         </div>
     );

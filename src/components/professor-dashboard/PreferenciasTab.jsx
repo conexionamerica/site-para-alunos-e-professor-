@@ -15,6 +15,7 @@ import { ChevronsUpDown, Check, History, Loader2, Calendar as CalendarIcon, Lock
 import { cn } from '@/lib/utils';
 import { format, parseISO, addMonths, parse, getDay, add } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getBrazilDate } from '@/lib/dateUtils';
 import { Input } from '@/components/ui/input';
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
@@ -103,23 +104,15 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
   }, [fetchHistory, professorId]);
 
   const handleDeleteWrapper = async (log) => {
-    // 1. Confirmação do usuário ANTES de qualquer alteração
-    if (!window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. CANCELAR a fatura ativa mais recente.\n3. EXCLUIR TODAS AS AULAS FUTURAS agendadas.\n4. LIBERAR OS HORÁRIOS RECORRENTES (slots).\n\nConfirma a operação?")) {
-      return; // Usuário cancelou, não fazer nada
-    }
+    // 1. Otimização: Atualizar o estado local imediatamente
+    setHistory(prevHistory => prevHistory.map(item =>
+      item.id === log.id
+        ? { ...item, status: 'Cancelado' } // <--- Esta linha atualiza o estado
+        : item
+    ));
 
     // 2. Chama a ação principal no pai (que atualiza o DB e o Dashboard principal)
-    // Passa um flag indicando que a confirmação já foi feita
-    const success = await onDelete(log, true);
-
-    // 3. Só atualiza o estado local se a operação foi bem-sucedida
-    if (success) {
-      setHistory(prevHistory => prevHistory.map(item =>
-        item.id === log.id
-          ? { ...item, status: 'Cancelado' }
-          : item
-      ));
-    }
+    await onDelete(log);
   };
 
   const StatusBadge = ({ status }) => {
@@ -254,8 +247,8 @@ const PreferenciasTab = ({ dashboardData }) => {
     time: ALL_TIMES[0].substring(0, 5),
     days: [],
     price: '',
-    startDate: new Date(), // NOVA: Data de Início do Customizado
-    endDate: addMonths(new Date(), 1), // Default validity
+    startDate: getBrazilDate(), // NOVA: Data de Início do Customizado
+    endDate: addMonths(getBrazilDate(), 1), // Default validity
   });
   // Usamos 'custom' para compatibilidade com o fluxo original que só precisava de customClassCount.
   // Agora, usaremos pckPersonalData para a maioria dos inputs.
@@ -274,9 +267,12 @@ const PreferenciasTab = ({ dashboardData }) => {
   // FIM DOS NOVOS ESTADOS
 
   const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
-  const [purchaseDate, setPurchaseDate] = useState(new Date());
+  const [liberatingSlot, setLiberatingSlot] = useState(null); // Para mostrar loading en el slot que se está liberando
+  const [futureAppointments, setFutureAppointments] = useState([]);
+  const [slotOccupancy, setSlotOccupancy] = useState({});
+  const [purchaseDate, setPurchaseDate] = useState(getBrazilDate());
   // Estado para a Data de Fim/Validade (Usado por pacotes padrão e Personalizado)
-  const [endDate, setEndDate] = useState(addMonths(new Date(), 1));
+  const [endDate, setEndDate] = useState(addMonths(getBrazilDate(), 1));
 
   const selectedStudent = students.find(s => s.id === selectedStudentId); // Usa students extraído
 
@@ -323,6 +319,58 @@ const PreferenciasTab = ({ dashboardData }) => {
 
     setSlots(mergedSlots);
   }, [classSlots, professorId, loading]); // Depende de classSlots e loading
+
+  // Buscar appointments futuros para marcar slots ocupados
+  useEffect(() => {
+    const fetchFutureAppointments = async () => {
+      if (!professorId) return;
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .select(`
+          id, class_datetime, duration_minutes, status,
+          student:profiles!student_id(full_name)
+        `)
+        .eq('professor_id', professorId)
+        .gte('class_datetime', getBrazilDate().toISOString())
+        .in('status', ['scheduled', 'pending', 'rescheduled']);
+
+      if (error) {
+        console.error('Error fetching future appointments:', error);
+        return;
+      }
+
+      setFutureAppointments(data || []);
+
+      // Mapear appointments para slots
+      const occupancy = {};
+      (data || []).forEach(apt => {
+        const aptDate = parseISO(apt.class_datetime);
+        const dayOfWeek = getDay(aptDate);
+        const time = format(aptDate, 'HH:mm:ss');
+        const duration = apt.duration_minutes || 30;
+        const slotsNeeded = Math.ceil(duration / 15);
+
+        // Marcar slot inicial e consecutivos
+        for (let i = 0; i < slotsNeeded; i++) {
+          const slotTime = add(aptDate, { minutes: i * 15 });
+          const slotTimeStr = format(slotTime, 'HH:mm:ss');
+          const slotKey = `${dayOfWeek}-${slotTimeStr}`;
+
+          occupancy[slotKey] = {
+            appointmentId: apt.id,
+            studentName: apt.student?.full_name,
+            isFirstSlot: i === 0,
+            status: apt.status
+          };
+        }
+      });
+
+      setSlotOccupancy(occupancy);
+    };
+
+    fetchFutureAppointments();
+  }, [professorId, loading]);
 
   const handleSlotToggle = (dayIndex, time) => {
     setSlots(currentSlots =>
@@ -378,42 +426,96 @@ const PreferenciasTab = ({ dashboardData }) => {
     }
   };
 
+  // Función para liberar un horario ocupado
+  const handleLiberateSlot = async (slot, occupation) => {
+    const slotKey = `${slot.day_of_week}-${slot.start_time}`;
+
+    try {
+      // Se há occupation (appointment agendado)
+      if (occupation?.appointmentId) {
+        const studentName = occupation.studentName || 'Aluno desconhecido';
+
+        // Confirmar com o usuário
+        if (!window.confirm(
+          `Este horário está ocupado por: ${studentName}\n\n` +
+          `Ao liberar este horário:\n` +
+          `• O agendamento será CANCELADO\n` +
+          `• O horário ficará DISPONÍVEL\n\n` +
+          `Deseja continuar?`
+        )) {
+          return;
+        }
+
+        setLiberatingSlot(slotKey);
+
+        // Cancelar o appointment
+        const { error: cancelError } = await supabase
+          .from('appointments')
+          .update({ status: 'cancelled' })
+          .eq('id', occupation.appointmentId);
+
+        if (cancelError) throw cancelError;
+
+        toast({
+          title: 'Horário liberado!',
+          description: `O horário foi liberado. Agendamento de ${studentName} foi cancelado.`
+        });
+
+      } else {
+        // Liberar slot filled (pacote personalizado)
+        if (!window.confirm(
+          `Deseja liberar este horário?\n\n` +
+          `O horário ficará disponível para novos agendamentos.`
+        )) {
+          return;
+        }
+
+        setLiberatingSlot(slotKey);
+
+        const { error: updateError } = await supabase
+          .from('class_slots')
+          .update({ status: 'active' })
+          .eq('id', slot.id);
+
+        if (updateError) throw updateError;
+
+        toast({
+          title: 'Horário liberado!',
+          description: 'O horário foi liberado com sucesso.'
+        });
+      }
+
+      // Recarregar dados
+      if (onUpdate) onUpdate();
+
+    } catch (error) {
+      console.error('Error liberating slot:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao liberar horário',
+        description: error.message
+      });
+    } finally {
+      setLiberatingSlot(null);
+    }
+  };
+
   // Funções de exclusão e reversão (esta função DEVE fazer o update no banco de dados)
-  const handleDeleteLog = useCallback(async (log, skipConfirmation = false) => {
+  const handleDeleteLog = useCallback(async (log) => {
     const { id: logId, student_id: studentId, package_id: packageId } = log;
 
-    // DEBUG: Log para verificar el ID y el objeto log completo
-    console.log("=== DEBUG handleDeleteLog ===");
-    console.log("Log ID a actualizar:", logId);
-    console.log("Objeto log completo:", log);
-    console.log("Student ID:", studentId);
-    console.log("Package ID:", packageId);
-
-    // Se a confirmação já foi feita (skipConfirmation = true), não exibe novamente
-    if (!skipConfirmation && !window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. CANCELAR a fatura ativa mais recente.\n3. EXCLUIR TODAS AS AULAS FUTURAS agendadas.\n4. LIBERAR OS HORÁRIOS RECORRENTES (slots).\n\nConfirma a operação?")) {
-      return false;
+    if (!window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. CANCELAR a fatura ativa mais recente.\n3. EXCLUIR TODAS AS AULAS FUTURAS agendadas.\n4. LIBERAR OS HORÁRIOS RECORRENTES (slots).\n\nConfirma a operação?")) {
+      return;
     }
 
     try {
-      // Step 1: Mark as Cancelado - IMPORTANTE: Verificar que el update realmente fue exitoso
-      const { data: updateData, error: updateError, count } = await supabase
+      // Step 1: Mark as Cancelado
+      const { error: updateError } = await supabase
         .from('assigned_packages_log')
         .update({ status: 'Cancelado' })
-        .eq('id', logId)
-        .select(); // Agregar .select() para obtener el registro actualizado
+        .eq('id', logId);
 
-      if (updateError) {
-        console.error("Error updating status:", updateError);
-        throw updateError;
-      }
-
-      // Verificar que realmente se actualizó un registro
-      if (!updateData || updateData.length === 0) {
-        console.error("No se encontró el registro para actualizar, logId:", logId);
-        throw new Error("No se pudo encontrar el registro para actualizar. Verifique que el ID existe.");
-      }
-
-      console.log("Status actualizado correctamente:", updateData);
+      if (updateError) throw updateError;
 
       // ... Resto da lógica de exclusão no Supabase (omitida para brevidade, mas está no arquivo original) ...
 
@@ -426,7 +528,7 @@ const PreferenciasTab = ({ dashboardData }) => {
         .select('id')
         .eq('user_id', studentId)
         .eq('package_id', packageId)
-        .gte('end_date', format(new Date(), 'yyyy-MM-dd'))
+        .gte('end_date', format(getBrazilDate(), 'yyyy-MM-dd'))
         .order('purchase_date', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -447,7 +549,7 @@ const PreferenciasTab = ({ dashboardData }) => {
         .from('appointments')
         .delete({ count: 'exact' })
         .eq('student_id', studentId)
-        .gte('class_datetime', new Date().toISOString())
+        .gte('class_datetime', getBrazilDate().toISOString())
         .in('status', ['scheduled', 'pending', 'rescheduled']);
 
       if (aptDeleteError) throw aptDeleteError;
@@ -513,8 +615,6 @@ const PreferenciasTab = ({ dashboardData }) => {
       // Chama onUpdate para recarregar o histórico e a lista de alunos
       if (onUpdate) onUpdate();
 
-      return true; // Operação bem-sucedida
-
     } catch (error) {
       console.error("Error in handleDeleteLog:", error);
       toast({
@@ -522,7 +622,6 @@ const PreferenciasTab = ({ dashboardData }) => {
         title: 'Erro ao desfazer pacote',
         description: `Ocorreu um erro: ${error.message}`
       });
-      return false; // Operação falhou
     }
   }, [professorId, toast, onUpdate]);
 
@@ -620,6 +719,48 @@ const PreferenciasTab = ({ dashboardData }) => {
 
         if (slotsError) throw slotsError;
 
+        // *** NUEVA VALIDACIÓN: Verificar si los horarios seleccionados ya están ocupados ***
+        const conflictingSlots = [];
+        const selectedDaysNames = days.map(d => daysOfWeek[d]);
+
+        for (const dayIndex of days) {
+          const startTimeFull = `${time}:00`;
+
+          for (let i = 0; i < slotsPerClass; i++) {
+            const slotTimeObj = parse(startTimeFull, 'HH:mm:ss', new Date());
+            const slotTime = format(add(slotTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
+
+            const matchingSlot = allSlots.find(s =>
+              s.day_of_week === dayIndex && s.start_time === slotTime
+            );
+
+            if (matchingSlot && matchingSlot.status === 'filled') {
+              conflictingSlots.push({
+                day: daysOfWeek[dayIndex],
+                time: slotTime.substring(0, 5)
+              });
+            }
+          }
+        }
+
+        // Si hay conflictos, mostrar alerta y cancelar la operación
+        if (conflictingSlots.length > 0) {
+          const conflictMessage = conflictingSlots
+            .map(c => `${c.day} às ${c.time}`)
+            .join(', ');
+
+          toast({
+            variant: 'destructive',
+            title: '⚠️ Horário já ocupado!',
+            description: `Os seguintes horários já estão ocupados: ${conflictMessage}. Por favor, escolha outros horários.`,
+            duration: 8000,
+          });
+
+          setIsSubmittingPackage(false);
+          return;
+        }
+        // *** FIM DA VALIDAÇÃO ***
+
         const appointmentInserts = [];
         let currentDate = new Date(finalPurchaseDate);
         let classesScheduled = 0;
@@ -629,7 +770,7 @@ const PreferenciasTab = ({ dashboardData }) => {
           .from('appointments')
           .select('class_datetime, duration_minutes')
           .eq('professor_id', professorId)
-          .gte('class_datetime', format(new Date(), 'yyyy-MM-dd'))
+          .gte('class_datetime', format(getBrazilDate(), 'yyyy-MM-dd'))
           .in('status', ['scheduled', 'rescheduled']);
 
         if (aptError) console.error("Error checking for appointments:", aptError);
@@ -705,11 +846,46 @@ const PreferenciasTab = ({ dashboardData }) => {
         // FIM DO LOOP DE AGENDAMENTO CORRIGIDO
 
         if (appointmentInserts.length > 0) {
-          // Insere as aulas agendadas (sem lock permanente nos slots)
+          // Insere as aulas agendadas
           const { error: insertError } = await supabase.from('appointments').insert(appointmentInserts);
           if (insertError) throw new Error(`Falha ao criar aulas agendadas. Se houver conflitos de horário, parte do agendamento pode ter sido ignorada. Detalhes: ${insertError.message}`);
 
-          toast({ variant: 'info', title: 'Agendamento Automático!', description: `${appointmentInserts.length} aulas foram agendadas.` });
+          // *** NOVA FUNCIONALIDAD: Bloquear los horarios en la pestaña de preferencias ***
+          const slotIdsToBlock = new Set();
+
+          for (const dayIndex of days) {
+            const startTimeFull = `${time}:00`;
+
+            for (let i = 0; i < slotsPerClass; i++) {
+              const slotTimeObj = parse(startTimeFull, 'HH:mm:ss', new Date());
+              const slotTime = format(add(slotTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
+
+              const matchingSlot = allSlots.find(s =>
+                s.day_of_week === dayIndex && s.start_time === slotTime
+              );
+
+              if (matchingSlot) {
+                slotIdsToBlock.add(matchingSlot.id);
+              }
+            }
+          }
+
+          // Actualizar los slots a 'filled' (bloqueados)
+          if (slotIdsToBlock.size > 0) {
+            const { error: blockError } = await supabase
+              .from('class_slots')
+              .update({ status: 'filled' })
+              .in('id', Array.from(slotIdsToBlock));
+
+            if (blockError) {
+              console.error('Error blocking slots:', blockError);
+            } else {
+              console.log(`${slotIdsToBlock.size} horários bloqueados com sucesso`);
+            }
+          }
+          // *** FIM DO BLOQUEIO DE HORÁRIOS ***
+
+          toast({ variant: 'info', title: 'Agendamento Automático!', description: `${appointmentInserts.length} aulas foram agendadas e os horários foram bloqueados.` });
         } else {
           toast({ variant: 'warning', title: 'Agendamento Falhou', description: 'Nenhum horário disponível encontrado dentro do período para este pacote.' });
         }
@@ -740,9 +916,9 @@ const PreferenciasTab = ({ dashboardData }) => {
       setSelectedPackage(null);
       setCustomClassCount('');
       setObservation('');
-      setPurchaseDate(new Date());
-      setEndDate(addMonths(new Date(), 1));
-      setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0].substring(0, 5), days: [], price: '', startDate: new Date(), endDate: addMonths(new Date(), 1) });
+      setPurchaseDate(getBrazilDate());
+      setEndDate(addMonths(getBrazilDate(), 1));
+      setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0].substring(0, 5), days: [], price: '', startDate: getBrazilDate(), endDate: addMonths(getBrazilDate(), 1) });
 
       if (onUpdate) onUpdate();
     }
@@ -759,338 +935,377 @@ const PreferenciasTab = ({ dashboardData }) => {
 
 
   return (
-    <div className="space-y-8">
-      <div className="bg-white p-6 rounded-lg shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">Incluir Aulas para Aluno</h3>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline"><History className="mr-2 h-4 w-4" /> Ver Histórico</Button>
-            </DialogTrigger>
-            {/* Passa a função onDelete que será responsável por fazer a atualização no Supabase */}
-            <AssignedPackagesHistory professorId={professorId} onDelete={handleDeleteLog} />
-          </Dialog>
-        </div>
-        <form onSubmit={handleAssignPackage} className="space-y-4 max-w-2xl">
-          <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" role="combobox" aria-expanded={popoverOpen} className="w-full justify-between">
-                {selectedStudent ? selectedStudent.full_name : "Selecione um alumno..."}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-              <Command>
-                <CommandInput placeholder="Buscar alumno..." />
-                <CommandList>
-                  <CommandEmpty>Nenhum alumno encontrado.</CommandEmpty>
-                  <CommandGroup>
-                    {/* CORREÇÃO: Usa students extraído */}
-                    {students.map((student) => (
-                      <CommandItem
-                        key={student.id}
-                        value={student.full_name}
-                        onSelect={() => {
-                          setSelectedStudentId(student.id);
-                          setPopoverOpen(false);
-                        }}
-                      >
-                        <Check className={cn("mr-2 h-4 w-4", selectedStudentId === student.id ? "opacity-100" : "opacity-0")} />
-                        {student.full_name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Select onValueChange={(value) => { setSelectedPackage(value); setCustomClassCount(''); }} value={selectedPackage || ''}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um pacote" />
-              </SelectTrigger>
-              <SelectContent>
-                {packages.map((pkg) => (
-                  <SelectItem key={pkg.id} value={pkg.id.toString()}>{pkg.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Data de Início (Purchase Date) - Visível apenas para pacotes NÃO automáticos */}
-            {!isAutomaticScheduling && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !purchaseDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {purchaseDate ? format(purchaseDate, "PPP", { locale: ptBR }) : <span>Data de Início</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={purchaseDate}
-                    onSelect={setPurchaseDate}
-                    initialFocus
-                    locale={ptBR}
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-
-            {/* Data de Fim (End Date) - OCULTA se for Pacote Personalizado */}
-            {!isAutomaticScheduling && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "PPP", { locale: ptBR }) : <span>Data de Fim</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={setEndDate}
-                    initialFocus
-                    locale={ptBR}
-                  />
-                </PopoverContent>
-              </Popover>
-            )}
-
+    <div className="flex justify-center">
+      <div className="w-full max-w-[1400px] space-y-8">
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold">Incluir Aulas para Aluno</h3>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline"><History className="mr-2 h-4 w-4" /> Ver Histórico</Button>
+              </DialogTrigger>
+              {/* Passa a função onDelete que será responsável por fazer a atualização no Supabase */}
+              <AssignedPackagesHistory professorId={professorId} onDelete={handleDeleteLog} />
+            </Dialog>
           </div>
-
-          {/* --- NOVO BLOCO PCKPERSONAL (AGORA 'PERSONALIZADO') --- */}
-          {isAutomaticScheduling ? (
-            <motion.div
-              key="pck-personal-details" // Key is crucial for motion.div to work on unmount/mount
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50"
-            >
-              <h4 className="text-lg font-semibold text-sky-800">Detalhes do Pacote Personalizado</h4>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Preço Pago */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-price">Preço Pago (R$)</Label>
-                  <Input
-                    id="pck-price"
-                    type="number"
-                    placeholder="Ex: 500.00"
-                    value={price || ''}
-                    onChange={(e) => handlePckPersonalChange('price', e.target.value)}
-                    required
-                    min="0"
-                  />
-                </div>
-                {/* Total de Aulas */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-total-classes">Total de Aulas</Label>
-                  <Input
-                    id="pck-total-classes"
-                    type="number"
-                    placeholder="Ex: 12"
-                    value={totalClasses || ''}
-                    onChange={(e) => handlePckPersonalChange('totalClasses', e.target.value)}
-                    required
-                    min="1"
-                  />
-                </div>
-              </div>
-
-              {/* Duração e Horário */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Data de Início do Personalizado */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-start-date">Data de Início</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn("w-full justify-start text-left font-normal")}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(pckStartDate, "PPP", { locale: ptBR })}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={pckStartDate}
-                        onSelect={(date) => handlePckPersonalChange('startDate', date)}
-                        initialFocus
-                        locale={ptBR}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                {/* Duração da Aula */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-duration">Duração (Minutos)</Label>
-                  <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
-                    <SelectTrigger id="pck-duration">
-                      <SelectValue placeholder="Duração" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="30">30 Minutos</SelectItem>
-                      <SelectItem value="45">45 Minutos</SelectItem>
-                      <SelectItem value="60">60 Minutos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Horário de Início */}
-                <div className="space-y-2">
-                  <Label htmlFor="pck-time">Horário de Início Fixo</Label>
-                  <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
-                    <SelectTrigger id="pck-time">
-                      <SelectValue placeholder="Horário (Ex: 10:00)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
-                        <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
+          <form onSubmit={handleAssignPackage} className="space-y-4 max-w-2xl">
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={popoverOpen} className="w-full justify-between">
+                  {selectedStudent ? selectedStudent.full_name : "Selecione um alumno..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                <Command>
+                  <CommandInput placeholder="Buscar alumno..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum alumno encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      {/* CORREÇÃO: Usa students extraído */}
+                      {students.map((student) => (
+                        <CommandItem
+                          key={student.id}
+                          value={student.full_name}
+                          onSelect={() => {
+                            setSelectedStudentId(student.id);
+                            setPopoverOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", selectedStudentId === student.id ? "opacity-100" : "opacity-0")} />
+                          {student.full_name}
+                        </CommandItem>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {/* Validade do Pacote */}
-                <div className="space-y-2">
-                  <Label>Validade (Término)</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn("w-full justify-start text-left font-normal")}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {format(pckEndDate, "PPP", { locale: ptBR })}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={pckEndDate}
-                        onSelect={(date) => handlePckPersonalChange('endDate', date)}
-                        initialFocus
-                        locale={ptBR}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
 
-              {/* Dias da Semana */}
-              <div className="space-y-2">
-                <Label>Dias da Semana Fixos</Label>
-                <div className="flex flex-wrap gap-2">
-                  {daysOfWeek.map((day, index) => (
-                    <Button
-                      key={index}
-                      type="button"
-                      variant={days.includes(index) ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => handleDayTogglePckPersonal(index)}
-                    >
-                      {day.substring(0, 3)}
-                    </Button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Select onValueChange={(value) => { setSelectedPackage(value); setCustomClassCount(''); }} value={selectedPackage || ''}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um pacote" />
+                </SelectTrigger>
+                <SelectContent>
+                  {packages.map((pkg) => (
+                    <SelectItem key={pkg.id} value={pkg.id.toString()}>{pkg.name}</SelectItem>
                   ))}
-                </div>
-                {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
-              </div>
-            </motion.div>
-          ) : null}
-          {/* --- FIM DO NOVO BLOCO PCKPERSONAL --- */}
+                </SelectContent>
+              </Select>
 
-          <Textarea placeholder="Observação (motivo da inclusão)" value={observation} onChange={(e) => setObservation(e.target.value)} />
+              {/* Data de Início (Purchase Date) - Visível apenas para pacotes NÃO automáticos */}
+              {!isAutomaticScheduling && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !purchaseDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {purchaseDate ? format(purchaseDate, "PPP", { locale: ptBR }) : <span>Data de Início</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={purchaseDate}
+                      onSelect={setPurchaseDate}
+                      initialFocus
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+              )}
 
-          <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700" disabled={isSubmittingPackage}>
-            {isSubmittingPackage ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Incluindo...</> : 'Incluir Pacote'}
-          </Button>
-        </form>
-      </div>
+              {/* Data de Fim (End Date) - OCULTA se for Pacote Personalizado */}
+              {!isAutomaticScheduling && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !endDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {endDate ? format(endDate, "PPP", { locale: ptBR }) : <span>Data de Fim</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={setEndDate}
+                      initialFocus
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+              )}
 
-      <div className="bg-white p-6 rounded-lg shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="text-xl font-bold">Preferências de Horários</h3>
-            <p className="text-sm text-slate-600 mt-1">Ative ou desative os horários de aula para o ciclo semanal.</p>
-          </div>
-          <Button onClick={handleSaveChanges} disabled={isSavingSlots}>
-            {isSavingSlots ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : 'Salvar Alterações'}
-          </Button>
-        </div>
-        <div className="space-y-6 mt-6">
-          {daysOfWeek.map((day, index) => {
-            const daySlots = slots?.filter(s => s.day_of_week === index);
-            const areAllActive = daySlots?.filter(s => s.status !== 'filled').every(s => s.status === 'active');
-            return (
-              <div key={day}>
-                <div className="flex justify-between items-center mb-3 border-b pb-2">
-                  <h4 className="font-semibold text-lg">{day}</h4>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-500">
-                      {areAllActive ? 'Desativar todos' : 'Ativar todos'}
-                    </span>
-                    <Switch
-                      checked={areAllActive}
-                      onCheckedChange={(checked) => handleDayToggle(index, checked)}
-                      aria-label={`Ativar/desativar todos os horários de ${day}`}
+            </div>
+
+            {/* --- NOVO BLOCO PCKPERSONAL (AGORA 'PERSONALIZADO') --- */}
+            {isAutomaticScheduling ? (
+              <motion.div
+                key="pck-personal-details" // Key is crucial for motion.div to work on unmount/mount
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50"
+              >
+                <h4 className="text-lg font-semibold text-sky-800">Detalhes do Pacote Personalizado</h4>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Preço Pago */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-price">Preço Pago (R$)</Label>
+                    <Input
+                      id="pck-price"
+                      type="number"
+                      placeholder="Ex: 500.00"
+                      value={price || ''}
+                      onChange={(e) => handlePckPersonalChange('price', e.target.value)}
+                      required
+                      min="0"
+                    />
+                  </div>
+                  {/* Total de Aulas */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-total-classes">Total de Aulas</Label>
+                    <Input
+                      id="pck-total-classes"
+                      type="number"
+                      placeholder="Ex: 12"
+                      value={totalClasses || ''}
+                      onChange={(e) => handlePckPersonalChange('totalClasses', e.target.value)}
+                      required
+                      min="1"
                     />
                   </div>
                 </div>
-                {loading ? ( // CORREÇÃO: Usa o 'loading' do dashboardData
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                ) : (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
-                    {daySlots?.map(slot => {
-                      const isFilled = slot.status === 'filled';
-                      const isActive = slot.status === 'active';
-                      return (
-                        <div
-                          key={slot.start_time}
-                          className={cn(
-                            "flex items-center justify-between gap-2 p-2 rounded-md border",
-                            isFilled ? "bg-slate-200" : (isActive ? "bg-sky-50" : "bg-slate-50")
-                          )}
+
+                {/* Duração e Horário */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Data de Início do Personalizado */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-start-date">Data de Início</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn("w-full justify-start text-left font-normal")}
                         >
-                          <span className={cn("text-sm font-medium", isFilled ? "text-slate-500" : "text-slate-700")}>
-                            {slot.start_time.substring(0, 5)}
-                          </span>
-                          {isFilled ? (
-                            <Lock className="h-4 w-4 text-slate-500" title="Horário agendado" />
-                          ) : (
-                            <Switch
-                              checked={isActive}
-                              onCheckedChange={() => handleSlotToggle(slot.day_of_week, slot.start_time)}
-                              aria-label={`Ativar/desativar ${slot.start_time}`}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(pckStartDate, "PPP", { locale: ptBR })}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={pckStartDate}
+                          onSelect={(date) => handlePckPersonalChange('startDate', date)}
+                          initialFocus
+                          locale={ptBR}
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                )}
-              </div>
-            );
-          })}
+                  {/* Duração da Aula */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-duration">Duração (Minutos)</Label>
+                    <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
+                      <SelectTrigger id="pck-duration">
+                        <SelectValue placeholder="Duração" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30 Minutos</SelectItem>
+                        <SelectItem value="45">45 Minutos</SelectItem>
+                        <SelectItem value="60">60 Minutos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Horário de Início */}
+                  <div className="space-y-2">
+                    <Label htmlFor="pck-time">Horário de Início Fixo</Label>
+                    <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
+                      <SelectTrigger id="pck-time">
+                        <SelectValue placeholder="Horário (Ex: 10:00)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
+                          <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Validade do Pacote */}
+                  <div className="space-y-2">
+                    <Label>Validade (Término)</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn("w-full justify-start text-left font-normal")}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {format(pckEndDate, "PPP", { locale: ptBR })}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={pckEndDate}
+                          onSelect={(date) => handlePckPersonalChange('endDate', date)}
+                          initialFocus
+                          locale={ptBR}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+
+                {/* Dias da Semana */}
+                <div className="space-y-2">
+                  <Label>Dias da Semana Fixos</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {daysOfWeek.map((day, index) => (
+                      <Button
+                        key={index}
+                        type="button"
+                        variant={days.includes(index) ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleDayTogglePckPersonal(index)}
+                      >
+                        {day.substring(0, 3)}
+                      </Button>
+                    ))}
+                  </div>
+                  {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
+                </div>
+              </motion.div>
+            ) : null}
+            {/* --- FIM DO NOVO BLOCO PCKPERSONAL --- */}
+
+            <Textarea placeholder="Observação (motivo da inclusão)" value={observation} onChange={(e) => setObservation(e.target.value)} />
+
+            <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700" disabled={isSubmittingPackage}>
+              {isSubmittingPackage ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Incluindo...</> : 'Incluir Pacote'}
+            </Button>
+          </form>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-xl font-bold">Preferências de Horários</h3>
+              <p className="text-sm text-slate-600 mt-1">Ative ou desative os horários de aula para o ciclo semanal.</p>
+            </div>
+            <Button onClick={handleSaveChanges} disabled={isSavingSlots}>
+              {isSavingSlots ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</> : 'Salvar Alterações'}
+            </Button>
+          </div>
+          <div className="space-y-6 mt-6">
+            {daysOfWeek.map((day, index) => {
+              const daySlots = slots?.filter(s => s.day_of_week === index);
+              const areAllActive = daySlots?.filter(s => s.status !== 'filled').every(s => s.status === 'active');
+              return (
+                <div key={day}>
+                  <div className="flex justify-between items-center mb-3 border-b pb-2">
+                    <h4 className="font-semibold text-lg">{day}</h4>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-500">
+                        {areAllActive ? 'Desativar todos' : 'Ativar todos'}
+                      </span>
+                      <Switch
+                        checked={areAllActive}
+                        onCheckedChange={(checked) => handleDayToggle(index, checked)}
+                        aria-label={`Ativar/desativar todos os horários de ${day}`}
+                      />
+                    </div>
+                  </div>
+                  {loading ? ( // CORREÇÃO: Usa o 'loading' do dashboardData
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
+                      {daySlots?.map(slot => {
+                        const slotKey = `${slot.day_of_week}-${slot.start_time}`;
+                        const occupation = slotOccupancy[slotKey];
+                        const isFilled = slot.status === 'filled';
+                        const isOccupied = !!occupation;
+                        const isActive = slot.status === 'active';
+                        const isInactive = slot.status === 'inactive';
+
+                        return (
+                          <div
+                            key={slot.start_time}
+                            className={cn(
+                              "flex flex-col gap-1 p-2 rounded-md border",
+                              isOccupied ? "bg-sky-100 border-sky-300" :
+                                isFilled ? "bg-sky-100 border-sky-300" :
+                                  isInactive ? "bg-slate-200 border-slate-300" :
+                                    "bg-white border-slate-200"
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className={cn(
+                                "text-sm font-medium",
+                                (isOccupied || isFilled) ? "text-sky-700" :
+                                  isInactive ? "text-slate-500" :
+                                    "text-slate-700"
+                              )}>
+                                {slot.start_time.substring(0, 5)}
+                              </span>
+
+                              {!isOccupied && !isFilled && (
+                                <Switch
+                                  checked={isActive}
+                                  onCheckedChange={() => handleSlotToggle(slot.day_of_week, slot.start_time)}
+                                  aria-label={`Ativar/desativar ${slot.start_time}`}
+                                  className="h-4 w-7"
+                                />
+                              )}
+                            </div>
+
+                            {(isOccupied || isFilled) && (
+                              <>
+                                <div className="text-xs text-sky-700 font-medium truncate">
+                                  {occupation?.studentName || "Ocupado"}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs hover:bg-red-100 hover:text-red-700"
+                                  onClick={() => handleLiberateSlot(slot, occupation)}
+                                  disabled={liberatingSlot === slotKey}
+                                  title="Clique para liberar este horário"
+                                >
+                                  {liberatingSlot === slotKey ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    'Liberar'
+                                  )}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

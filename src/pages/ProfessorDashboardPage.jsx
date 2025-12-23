@@ -17,10 +17,11 @@ import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
+import { getBrazilDate } from '@/lib/dateUtils';
 
 // Função de busca de dados
 const fetchProfessorDashboardData = async (professorId) => {
-    const today = new Date().toISOString();
+    const today = getBrazilDate().toISOString();
 
     // 1. Fetch del perfil del profesor (solo nombre)
     const { data: professorProfile, error: profProfileError } = await supabase
@@ -39,12 +40,12 @@ const fetchProfessorDashboardData = async (professorId) => {
         .order('solicitud_id', { ascending: true });
     if (reqError) throw reqError;
 
-    // 3. Fetch de TODAS as Próximas Aulas agendadas (para HomeTab)
+    // 3. Fetch de TODAS as Próximas Aulas agendadas (para HomeTab) - Inclui aulas reagendadas
     const { data: upcomingClasses, error: upcomingClassesError } = await supabase
         .from('appointments')
         .select(`*, student:profiles!student_id(full_name, spanish_level)`)
         .eq('professor_id', professorId)
-        .eq('status', 'scheduled')
+        .in('status', ['scheduled', 'rescheduled'])
         .gte('class_datetime', today)
         .order('class_datetime', { ascending: true });
     if (upcomingClassesError && upcomingClassesError.code !== 'PGRST116') throw upcomingClassesError;
@@ -136,6 +137,7 @@ const ProfessorDashboardPage = () => {
     const [dashboardData, setDashboardData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
+    const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
     const handleLogout = async () => {
         await signOut();
@@ -241,6 +243,94 @@ const ProfessorDashboardPage = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // Buscar mensagens não lidas
+    useEffect(() => {
+        const checkUnreadMessages = async () => {
+            if (!user?.id) return;
+
+            try {
+                // 1. Buscar os IDs dos chats que pertencem a este professor
+                const { data: chats, error: chatsError } = await supabase
+                    .from('chats')
+                    .select('chat_id')
+                    .eq('profesor_id', user.id);
+
+                if (chatsError) throw chatsError;
+                if (!chats || chats.length === 0) {
+                    setHasUnreadMessages(false);
+                    return;
+                }
+
+                const chatIds = chats.map(c => c.chat_id);
+
+                // 2. Contar mensagens não lidas nesses chats (que não foram enviadas pelo professor)
+                const { count, error: msgError } = await supabase
+                    .from('mensajes')
+                    .select('mensaje_id', { count: 'exact', head: true })
+                    .in('chat_id', chatIds)
+                    .neq('remitente_id', user.id)
+                    .eq('leido', false);
+
+                if (msgError) throw msgError;
+                setHasUnreadMessages(count > 0);
+            } catch (err) {
+                console.error('Erro ao verificar mensagens não lidas:', err);
+            }
+        };
+
+        checkUnreadMessages();
+
+        // Realtime para atualizar quando novas mensagens chegam
+        const messagesChannel = supabase
+            .channel('messages-changes')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'mensajes'
+            }, () => {
+                checkUnreadMessages();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(messagesChannel);
+        };
+    }, [user?.id]);
+
+    // Marcar mensagens como lidas quando abrir a aba Conversas
+    useEffect(() => {
+        if (activeTab === 'conversas' && hasUnreadMessages && user?.id) {
+            // Dar um pequeno delay para garantir que o usuário realmente abriu a aba
+            const timer = setTimeout(async () => {
+                try {
+                    // 1. Buscar os IDs dos chats que pertencem a este professor
+                    const { data: chats } = await supabase
+                        .from('chats')
+                        .select('chat_id')
+                        .eq('profesor_id', user.id);
+
+                    if (chats && chats.length > 0) {
+                        const chatIds = chats.map(c => c.chat_id);
+
+                        // 2. Marcar mensagens não lidas desses chats como lidas
+                        await supabase
+                            .from('mensajes')
+                            .update({ leido: true })
+                            .in('chat_id', chatIds)
+                            .neq('remitente_id', user.id)
+                            .eq('leido', false);
+                    }
+
+                    setHasUnreadMessages(false);
+                } catch (err) {
+                    console.error('Erro ao marcar mensagens como lidas:', err);
+                }
+            }, 1000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [activeTab, hasUnreadMessages, user?.id]);
+
     const navItems = [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
@@ -278,12 +368,19 @@ const ProfessorDashboardPage = () => {
                             }}
                             className={`w-full justify-start text-lg px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === item.id
                                 ? 'bg-blue-600 text-white shadow-lg'
-                                : 'text-gray-300 hover:bg-gray-800'
+                                : item.id === 'conversas' && hasUnreadMessages
+                                    ? 'text-blue-800 font-bold hover:bg-gray-800'
+                                    : 'text-gray-300 hover:bg-gray-800'
                                 }`}
                             disabled={isLoading}
                         >
                             <item.icon className="h-5 w-5 mr-3" />
                             {item.label}
+                            {item.id === 'conversas' && hasUnreadMessages && (
+                                <span className="ml-auto bg-blue-600 text-white text-xs px-2 py-1 rounded-full">
+                                    Nova
+                                </span>
+                            )}
                         </TabsTrigger>
                     ))}
                 </TabsList>
@@ -395,11 +492,18 @@ const ProfessorDashboardPage = () => {
                                             className={`relative flex items-center text-base px-4 py-3 mr-2 rounded-none transition-all duration-200 border-b-2 border-transparent 
                                                 ${activeTab === item.id
                                                     ? 'text-sky-600 border-sky-600 font-semibold'
-                                                    : 'text-gray-600 hover:text-gray-800'
+                                                    : item.id === 'conversas' && hasUnreadMessages
+                                                        ? 'text-blue-800 font-bold hover:text-blue-900'
+                                                        : 'text-gray-600 hover:text-gray-800'
                                                 }`}
                                         >
                                             <item.icon className="h-5 w-5 mr-2" />
                                             {item.label}
+                                            {item.id === 'conversas' && hasUnreadMessages && (
+                                                <span className="ml-2 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">
+                                                    Nova
+                                                </span>
+                                            )}
                                         </TabsTrigger>
                                     ))}
                                 </TabsList>

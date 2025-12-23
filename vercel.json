@@ -1,4 +1,9 @@
 {
+  "buildCommand": "npx vite build",
+  "devCommand": "npx vite",
+  "installCommand": "npm ci --legacy-peer-deps",
+  "framework": null,
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/(.*)",

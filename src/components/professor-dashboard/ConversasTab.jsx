@@ -28,7 +28,7 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
       .select('*')
       .eq('chat_id', activeChat.chat_id)
       .order('enviado_en', { ascending: true });
-    
+
     if (error) {
       toast({ variant: 'destructive', title: 'Erro ao carregar mensagens.' });
     } else {
@@ -40,23 +40,23 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
   useEffect(() => {
     fetchMessages();
     const channel = supabase.channel(`professor-chat-${activeChat.chat_id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: `chat_id=eq.${activeChat.chat_id}`}, 
-      (payload) => {
-        if (payload.new.remitente_id !== professorId) {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: `chat_id=eq.${activeChat.chat_id}` },
+        (payload) => {
+          if (payload.new.remitente_id !== professorId) {
             setMessages((prev) => [...prev, payload.new]);
-        }
-      }).subscribe();
-      
+          }
+        }).subscribe();
+
     return () => supabase.removeChannel(channel);
   }, [activeChat, fetchMessages, professorId]);
 
   useEffect(scrollToBottom, [messages]);
-  
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
     setSending(true);
-    
+
     const tempMessage = newMessage;
     setNewMessage('');
 
@@ -68,8 +68,8 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
       enviado_en: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, localMessage]);
-    
-    const { error } = await supabase.from('mensajes').insert({ 
+
+    const { error } = await supabase.from('mensajes').insert({
       chat_id: activeChat.chat_id,
       remitente_id: professorId,
       contenido: tempMessage.trim(),
@@ -92,40 +92,44 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
     }
     setSending(false);
   };
-  
+
   return (
-    <div className="bg-white rounded-lg shadow-sm flex flex-col h-[75vh]">
-      <header className="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-10">
-        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5"/></Button>
-        <Avatar><AvatarImage src={activeChat.alumno_avatar_url} /><AvatarFallback>{activeChat.alumno_full_name?.[0] || 'A'}</AvatarFallback></Avatar>
-        <h3 className="font-bold">{activeChat.alumno_full_name}</h3>
-      </header>
-      <main className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-4">
-        {loadingMessages ? <div className="flex justify-center items-center h-full"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div> : messages.length > 0 ? messages.map((msg) => {
-            const isSender = msg.remitente_id === professorId;
-            return (
-              <div key={msg.mensaje_id} className={cn("flex", isSender ? "justify-end" : "justify-start")}>
-                <div className={cn("rounded-lg px-4 py-2 max-w-[80%]", isSender ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-800")}>
-                  <p className="text-sm">{msg.contenido}</p>
+    <div className="flex justify-center">
+      <div className="w-full max-w-[1400px]">
+        <div className="bg-white rounded-lg shadow-sm flex flex-col h-[75vh]">
+          <header className="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-10">
+            <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
+            <Avatar><AvatarImage src={activeChat.alumno_avatar_url} /><AvatarFallback>{activeChat.alumno_full_name?.[0] || 'A'}</AvatarFallback></Avatar>
+            <h3 className="font-bold">{activeChat.alumno_full_name}</h3>
+          </header>
+          <main className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-4">
+            {loadingMessages ? <div className="flex justify-center items-center h-full"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div> : messages.length > 0 ? messages.map((msg) => {
+              const isSender = msg.remitente_id === professorId;
+              return (
+                <div key={msg.mensaje_id} className={cn("flex", isSender ? "justify-end" : "justify-start")}>
+                  <div className={cn("rounded-lg px-4 py-2 max-w-[80%]", isSender ? "bg-sky-600 text-white" : "bg-slate-200 text-slate-800")}>
+                    <p className="text-sm">{msg.contenido}</p>
+                  </div>
                 </div>
-              </div>
-            )
-        }) : (
-            <div className="flex flex-col items-center justify-center h-full text-center text-slate-400">
+              )
+            }) : (
+              <div className="flex flex-col items-center justify-center h-full text-center text-slate-400">
                 <p>Nenhuma mensagem nesta conversa ainda.</p>
                 <p className="text-sm">Envie a primeira mensagem para começar.</p>
-            </div>
-        )}
-        <div ref={chatEndRef} />
-      </main>
-      <footer className="p-4 border-t bg-white">
-        <form onSubmit={handleSendMessage} className="flex gap-2">
-          <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Digite sua mensagem..." autoComplete="off" disabled={sending} />
-          <Button type="submit" disabled={sending || !newMessage.trim()}>
-            {sending ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}
-          </Button>
-        </form>
-      </footer>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </main>
+          <footer className="p-4 border-t bg-white">
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+              <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Digite sua mensagem..." autoComplete="off" disabled={sending} />
+              <Button type="submit" disabled={sending || !newMessage.trim()}>
+                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </form>
+          </footer>
+        </div>
+      </div>
     </div>
   );
 };
@@ -147,20 +151,20 @@ const ConversasTab = ({ dashboardData }) => {
     // Otimização: A lista de chats deve vir do componente pai (ProfessorDashboardPage)
     // Se a lista já foi carregada, usaremos ela para evitar re-fetch desnecessário
     if (chatListData.length > 0 && !loading) {
-        setChatList(chatListData);
-        return;
+      setChatList(chatListData);
+      return;
     }
-    
+
     // Se não houver dados ou estiver carregando, forçar a busca (fallback)
     // No entanto, no escopo deste exercício, confiaremos que o pai fará o fetch inicial.
     // Manteremos a busca aqui caso o pai não passe a lista de chats completa (chatList)
     if (!loading) {
       const { data, error } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
       if (error) {
-          console.error("Error fetching chat list:", error);
-          toast({ variant: 'destructive', title: 'Erro ao carregar conversas', description: error.message });
+        console.error("Error fetching chat list:", error);
+        toast({ variant: 'destructive', title: 'Erro ao carregar conversas', description: error.message });
       } else {
-          setChatList(data || []);
+        setChatList(data || []);
       }
     }
   }, [professorId, chatListData.length, loading, toast]); // Adiciona dependências de chatListData e loading
@@ -168,15 +172,15 @@ const ConversasTab = ({ dashboardData }) => {
   useEffect(() => {
     // Se o pai passar a lista, use-a.
     if (chatListData.length > 0 && chatList.length === 0) {
-        setChatList(chatListData);
+      setChatList(chatListData);
     }
-    
+
     // Configuração de Realtime para inserções de mensagens/chats
     if (!professorId) return;
-    
+
     const handleInserts = (payload) => {
-        // CORREÇÃO: Força o re-fetch da lista de chats para atualizar last_message e unreadCount (se implementado)
-        fetchChatList(); 
+      // CORREÇÃO: Força o re-fetch da lista de chats para atualizar last_message e unreadCount (se implementado)
+      fetchChatList();
     };
 
     const channel = supabase.channel('professor-chat-list')
@@ -193,29 +197,33 @@ const ConversasTab = ({ dashboardData }) => {
   }
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm">
-      <h3 className="text-xl font-bold mb-4">Conversas com Alunos</h3>
-      <div className="space-y-2 max-h-[70vh] overflow-y-auto">
-        {loading ? <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div> :
-         chatList.length > 0 ? chatList.map(chat => (
-          <div key={chat.chat_id} onClick={() => setActiveChat(chat)} className="flex items-start gap-4 p-3 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors border">
-            <Avatar><AvatarImage src={chat.alumno_avatar_url} /><AvatarFallback>{chat.alumno_full_name?.[0] || 'A'}</AvatarFallback></Avatar>
-            <div className="flex-1 overflow-hidden">
-              <div className="flex justify-between items-center">
-                <p className="font-semibold text-slate-800 truncate">{chat.alumno_full_name}</p>
-                {chat.last_message_time && (
-                    <p className="text-xs text-slate-400 flex-shrink-0 ml-2">{formatDistanceToNow(new Date(chat.last_message_time), { addSuffix: true, locale: ptBR })}</p>
-                )}
-              </div>
-              <p className="text-sm text-slate-500 truncate">{chat.last_message_content || 'Nenhuma mensagem ainda.'}</p>
-            </div>
+    <div className="flex justify-center">
+      <div className="w-full max-w-[1400px]">
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <h3 className="text-xl font-bold mb-4">Conversas com Alunos</h3>
+          <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+            {loading ? <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div> :
+              chatList.length > 0 ? chatList.map(chat => (
+                <div key={chat.chat_id} onClick={() => setActiveChat(chat)} className="flex items-start gap-4 p-3 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors border">
+                  <Avatar><AvatarImage src={chat.alumno_avatar_url} /><AvatarFallback>{chat.alumno_full_name?.[0] || 'A'}</AvatarFallback></Avatar>
+                  <div className="flex-1 overflow-hidden">
+                    <div className="flex justify-between items-center">
+                      <p className="font-semibold text-slate-800 truncate">{chat.alumno_full_name}</p>
+                      {chat.last_message_time && (
+                        <p className="text-xs text-slate-400 flex-shrink-0 ml-2">{formatDistanceToNow(new Date(chat.last_message_time), { addSuffix: true, locale: ptBR })}</p>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-500 truncate">{chat.last_message_content || 'Nenhuma mensagem ainda.'}</p>
+                  </div>
+                </div>
+              )) :
+                <div className="flex flex-col items-center justify-center h-64 text-center text-slate-500">
+                  <MessageSquareText className="w-16 h-16 mb-4" />
+                  <p className="text-lg">Nenhuma conversa iniciada.</p>
+                  <p className="text-sm">Quando um aluno enviar uma mensagem, ela aparecerá aqui.</p>
+                </div>}
           </div>
-        )) : 
-        <div className="flex flex-col items-center justify-center h-64 text-center text-slate-500">
-            <MessageSquareText className="w-16 h-16 mb-4"/>
-            <p className="text-lg">Nenhuma conversa iniciada.</p>
-            <p className="text-sm">Quando um aluno enviar uma mensagem, ela aparecerá aqui.</p>
-        </div>}
+        </div>
       </div>
     </div>
   );
