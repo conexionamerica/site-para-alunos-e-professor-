@@ -33,9 +33,17 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
       toast({ variant: 'destructive', title: 'Erro ao carregar mensagens.' });
     } else {
       setMessages(data || []);
+
+      // Marcar mensagens do aluno como lidas
+      await supabase
+        .from('mensajes')
+        .update({ leido: true })
+        .eq('chat_id', activeChat.chat_id)
+        .neq('remitente_id', professorId)
+        .eq('leido', false);
     }
     setLoadingMessages(false);
-  }, [activeChat, toast]);
+  }, [activeChat, toast, professorId]);
 
   useEffect(() => {
     fetchMessages();
@@ -144,6 +152,7 @@ const ConversasTab = ({ dashboardData }) => {
 
   const [chatList, setChatList] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
+  const [unreadCounts, setUnreadCounts] = useState({}); // Contagem de não lidas por chat_id
   const { toast } = useToast();
 
   const fetchChatList = useCallback(async () => {
@@ -169,6 +178,29 @@ const ConversasTab = ({ dashboardData }) => {
     }
   }, [professorId, chatListData.length, loading, toast]); // Adiciona dependências de chatListData e loading
 
+  // Função para buscar contagem de mensagens não lidas por chat
+  const fetchUnreadCounts = useCallback(async () => {
+    if (!professorId || chatList.length === 0) return;
+
+    const chatIds = chatList.map(c => c.chat_id);
+    const counts = {};
+
+    for (const chatId of chatIds) {
+      const { count, error } = await supabase
+        .from('mensajes')
+        .select('mensaje_id', { count: 'exact', head: true })
+        .eq('chat_id', chatId)
+        .neq('remitente_id', professorId)
+        .eq('leido', false);
+
+      if (!error) {
+        counts[chatId] = count || 0;
+      }
+    }
+
+    setUnreadCounts(counts);
+  }, [professorId, chatList]);
+
   useEffect(() => {
     // Se o pai passar a lista, use-a.
     if (chatListData.length > 0 && chatList.length === 0) {
@@ -179,8 +211,9 @@ const ConversasTab = ({ dashboardData }) => {
     if (!professorId) return;
 
     const handleInserts = (payload) => {
-      // CORREÇÃO: Força o re-fetch da lista de chats para atualizar last_message e unreadCount (se implementado)
+      // CORREÇÃO: Força o re-fetch da lista de chats para atualizar last_message e unreadCount
       fetchChatList();
+      fetchUnreadCounts(); // Atualiza contagem de não lidas
     };
 
     const channel = supabase.channel('professor-chat-list')
@@ -190,7 +223,14 @@ const ConversasTab = ({ dashboardData }) => {
 
     return () => supabase.removeChannel(channel);
 
-  }, [professorId, fetchChatList, chatListData]);
+  }, [professorId, fetchChatList, fetchUnreadCounts, chatListData]);
+
+  // Buscar contagem de mensagens não lidas quando a lista de chats mudar
+  useEffect(() => {
+    if (chatList.length > 0) {
+      fetchUnreadCounts();
+    }
+  }, [chatList, fetchUnreadCounts]);
 
   if (activeChat) {
     return <ChatInterface activeChat={activeChat} professorId={professorId} professorName={professorName} onBack={() => setActiveChat(null)} />;
@@ -204,16 +244,23 @@ const ConversasTab = ({ dashboardData }) => {
           <div className="space-y-2 max-h-[70vh] overflow-y-auto">
             {loading ? <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div> :
               chatList.length > 0 ? chatList.map(chat => (
-                <div key={chat.chat_id} onClick={() => setActiveChat(chat)} className="flex items-start gap-4 p-3 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors border">
+                <div key={chat.chat_id} onClick={() => setActiveChat(chat)} className={cn("flex items-start gap-4 p-3 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors border", unreadCounts[chat.chat_id] > 0 && "bg-sky-50 border-sky-200")}>
                   <Avatar><AvatarImage src={chat.alumno_avatar_url} /><AvatarFallback>{chat.alumno_full_name?.[0] || 'A'}</AvatarFallback></Avatar>
                   <div className="flex-1 overflow-hidden">
                     <div className="flex justify-between items-center">
-                      <p className="font-semibold text-slate-800 truncate">{chat.alumno_full_name}</p>
-                      {chat.last_message_time && (
-                        <p className="text-xs text-slate-400 flex-shrink-0 ml-2">{formatDistanceToNow(new Date(chat.last_message_time), { addSuffix: true, locale: ptBR })}</p>
-                      )}
+                      <p className={cn("font-semibold text-slate-800 truncate", unreadCounts[chat.chat_id] > 0 && "text-sky-800")}>{chat.alumno_full_name}</p>
+                      <div className="flex items-center gap-2">
+                        {unreadCounts[chat.chat_id] > 0 && (
+                          <span className="bg-sky-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                            {unreadCounts[chat.chat_id]}
+                          </span>
+                        )}
+                        {chat.last_message_time && (
+                          <p className="text-xs text-slate-400 flex-shrink-0">{formatDistanceToNow(new Date(chat.last_message_time), { addSuffix: true, locale: ptBR })}</p>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-sm text-slate-500 truncate">{chat.last_message_content || 'Nenhuma mensagem ainda.'}</p>
+                    <p className={cn("text-sm truncate", unreadCounts[chat.chat_id] > 0 ? "text-slate-700 font-medium" : "text-slate-500")}>{chat.last_message_content || 'Nenhuma mensagem ainda.'}</p>
                   </div>
                 </div>
               )) :
