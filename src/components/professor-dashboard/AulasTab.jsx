@@ -531,7 +531,8 @@ const AulasTab = ({ dashboardData }) => {
         switch (status) {
             case 'scheduled': return <Badge className="bg-sky-500 hover:bg-sky-600 text-white">Agendada</Badge>;
             case 'completed': return <Badge className="bg-green-500 hover:bg-green-600 text-white">Realizada</Badge>;
-            case 'canceled': return <Badge variant="destructive">Cancelada</Badge>;
+            case 'canceled':
+            case 'cancelled': return <Badge variant="destructive">Cancelada</Badge>;
             case 'missed': return <Badge className="bg-orange-500 hover:bg-orange-600 text-white">Falta</Badge>;
             case 'rescheduled': return <Badge className="bg-purple-500 hover:bg-purple-600 text-white">Reagendada</Badge>;
             default: return <Badge variant="secondary">{status}</Badge>;
@@ -577,8 +578,8 @@ const AulasTab = ({ dashboardData }) => {
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem
                                                     onClick={() => handleOpenReschedule(apt)}
-                                                    // CORREÇÃO: Permite reagendamento para status 'scheduled', 'missed' OU 'canceled'
-                                                    disabled={!['scheduled', 'missed', 'canceled'].includes(apt.status)}
+                                                    // CORREÇÃO: Permite reagendamento para status 'scheduled', 'missed', 'canceled' OU 'cancelled'
+                                                    disabled={!['scheduled', 'missed', 'canceled', 'cancelled'].includes(apt.status)}
                                                 >
                                                     <RotateCcw className="mr-2 h-4 w-4" /> Reagendar
                                                 </DropdownMenuItem>
