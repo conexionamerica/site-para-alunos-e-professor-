@@ -577,8 +577,8 @@ const AulasTab = ({ dashboardData }) => {
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem
                                                     onClick={() => handleOpenReschedule(apt)}
-                                                    // CORREÇÃO: Permite reagendamento para status 'scheduled' OU 'missed'
-                                                    disabled={!['scheduled', 'missed'].includes(apt.status)}
+                                                    // CORREÇÃO: Permite reagendamento para status 'scheduled', 'missed' OU 'canceled'
+                                                    disabled={!['scheduled', 'missed', 'canceled'].includes(apt.status)}
                                                 >
                                                     <RotateCcw className="mr-2 h-4 w-4" /> Reagendar
                                                 </DropdownMenuItem>
