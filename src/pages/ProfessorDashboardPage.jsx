@@ -21,7 +21,8 @@ import { getBrazilDate } from '@/lib/dateUtils';
 
 // Função de busca de dados
 const fetchProfessorDashboardData = async (professorId) => {
-    const today = getBrazilDate().toISOString();
+    // Usar fecha UTC directamente ya que las aulas están guardadas en UTC
+    const nowISO = new Date().toISOString();
 
     // 1. Fetch del perfil del profesor (solo nombre)
     const { data: professorProfile, error: profProfileError } = await supabase
@@ -40,15 +41,29 @@ const fetchProfessorDashboardData = async (professorId) => {
         .order('solicitud_id', { ascending: true });
     if (reqError) throw reqError;
 
+<<<<<<< HEAD
     // 3. Fetch de TODAS as Próximas Aulas agendadas (para HomeTab) - Inclui aulas reagendadas
     const { data: upcomingClasses, error: upcomingClassesError } = await supabase
+=======
+    // 3. Fetch de Próxima Aula (para HomeTab) - Inclui aulas reagendadas
+    // Usa la fecha UTC porque las aulas están guardadas en UTC en el DB
+    const { data: nextClass, error: nextClassError } = await supabase
+>>>>>>> 156aa386 (fix: sincronizar dados entre abas e adicionar indicadores visuais na agenda)
         .from('appointments')
         .select(`*, student:profiles!student_id(full_name, spanish_level)`)
         .eq('professor_id', professorId)
         .in('status', ['scheduled', 'rescheduled'])
+<<<<<<< HEAD
         .gte('class_datetime', today)
         .order('class_datetime', { ascending: true });
     if (upcomingClassesError && upcomingClassesError.code !== 'PGRST116') throw upcomingClassesError;
+=======
+        .gte('class_datetime', nowISO)
+        .order('class_datetime', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+    if (nextClassError && nextClassError.code !== 'PGRST116') throw nextClassError;
+>>>>>>> 156aa386 (fix: sincronizar dados entre abas e adicionar indicadores visuais na agenda)
 
     // 4. Fetch de TODOS los Perfiles (para AdmTab y AlunosTab)
     const { data: allProfiles, error: allProfilesError } = await supabase

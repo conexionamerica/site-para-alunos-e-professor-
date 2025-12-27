@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
-import { format, formatDistanceToNowStrict, parseISO, getDay, add, parse } from 'date-fns';
+import { format, formatDistanceToNowStrict, parseISO, getDay, add, parse, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getBrazilDate } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,9 @@ const HomeTab = ({ dashboardData }) => {
   const upcomingClasses = data.upcomingClasses || [];
   const nextClass = upcomingClasses.length > 0 ? upcomingClasses[0] : null;
 
+  // SINCRONIZAÇÃO: Usar appointments do dashboardData como fonte única
+  const allAppointments = data?.appointments || [];
+
   // CORREÇÃO: Sincroniza as solicitações do pai, mas agora com a verificação de array
   useEffect(() => {
     if (Array.isArray(data?.scheduleRequests)) {
@@ -47,36 +50,28 @@ const HomeTab = ({ dashboardData }) => {
     }
   }, [data?.scheduleRequests]);
 
-  // Buscar aulas das próximas 24 horas
+  // SINCRONIZAÇÃO: Calcular as próximas 24 horas a partir dos appointments centralizados
+  // Isso garante consistência com a Agenda e Aulas
   useEffect(() => {
-    const fetchNext24Hours = async () => {
-      if (!professorId) return;
+    if (!allAppointments || allAppointments.length === 0) {
+      setNext24Hours([]);
+      return;
+    }
 
-      const now = getBrazilDate();
-      const next24 = add(now, { hours: 24 });
+    const now = new Date();
+    const next24 = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-      const { data: appointments, error } = await supabase
-        .from('appointments')
-        .select(`
-          id, class_datetime, duration_minutes,
-          student:profiles!student_id(full_name)
-        `)
-        .eq('professor_id', professorId)
-        .gte('class_datetime', now.toISOString())
-        .lte('class_datetime', next24.toISOString())
-        .in('status', ['scheduled', 'rescheduled'])
-        .order('class_datetime', { ascending: true });
+    const filtered = allAppointments.filter(apt => {
+      if (!apt.class_datetime) return false;
+      const aptDate = new Date(apt.class_datetime);
+      const status = apt.status;
+      return aptDate >= now &&
+        aptDate <= next24 &&
+        ['scheduled', 'rescheduled'].includes(status);
+    }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
 
-      if (error) {
-        console.error('Error fetching next 24 hours:', error);
-        return;
-      }
-
-      setNext24Hours(appointments || []);
-    };
-
-    fetchNext24Hours();
-  }, [professorId, loading]);
+    setNext24Hours(filtered);
+  }, [allAppointments]);
 
   const handleUpdateRequestStatus = async (solicitudId, newStatus) => {
     setUpdatingRequestId(solicitudId);

@@ -1,9 +1,8 @@
 // Archivo: src/components/professor-dashboard/AgendaTab.jsx
-// Vista de Calendario Semanal - Inspirado en el diseño proporcionado
+// Vista de Calendario Semanal - Sincronizado con dashboardData
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '@/lib/customSupabaseClient';
-import { format, parseISO, getDay, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { format, parseISO, getDay, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, addMonths, subMonths, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2, ChevronLeft, ChevronRight, Grid3x3, List, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,14 +36,25 @@ const TIME_SLOTS = generateTimeSlots();
 const AgendaTab = ({ dashboardData }) => {
     const professorId = dashboardData?.professorId;
     const onUpdate = dashboardData?.onUpdate;
+    const loading = dashboardData?.loading || false;
+
+    // SINCRONIZAÇÃO: Usar appointments do dashboardData como fonte única
+    const allAppointments = dashboardData?.data?.appointments || [];
 
     const today = useMemo(() => getBrazilDate(), []);
 
     // Estados
     const [currentDate, setCurrentDate] = useState(today);
-    const [viewMode, setViewMode] = useState('week'); // 'week' o 'list'
-    const [appointments, setAppointments] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [viewMode, setViewMode] = useState('week');
+    // Usar hora local do navegador para mostrar a linha vermelha consistente com o relógio do usuário
+    const [currentTime, setCurrentTime] = useState(() => {
+        const now = new Date();
+        return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    });
+
+    // Ref para scroll automático à hora atual
+    const currentTimeRef = useRef(null);
+    const gridContainerRef = useRef(null);
 
     // Calcular inicio y fin de la semana
     const weekStart = useMemo(() => startOfWeek(currentDate, { weekStartsOn: 0 }), [currentDate]);
@@ -59,42 +69,64 @@ const AgendaTab = ({ dashboardData }) => {
         return days;
     }, [weekStart]);
 
-    // Fetch appointments para la semana
-    const fetchWeekAppointments = useCallback(async () => {
-        if (!professorId) return;
+    // Filtrar appointments para a semana atual (usando dados centralizados)
+    const weekAppointments = useMemo(() => {
+        const startStr = format(weekStart, 'yyyy-MM-dd');
+        const endStr = format(weekEnd, 'yyyy-MM-dd');
 
-        setIsLoading(true);
+        return allAppointments.filter(apt => {
+            if (!apt.class_datetime) return false;
+            const aptDateStr = apt.class_datetime.substring(0, 10);
+            const status = apt.status;
+            return aptDateStr >= startStr &&
+                aptDateStr <= endStr &&
+                ['scheduled', 'completed', 'rescheduled', 'missed'].includes(status);
+        });
+    }, [allAppointments, weekStart, weekEnd]);
 
-        try {
-            const startStr = format(weekStart, 'yyyy-MM-dd');
-            const endStr = format(weekEnd, 'yyyy-MM-dd');
-
-            const { data, error } = await supabase
-                .from('appointments')
-                .select(`
-                    id, class_datetime, status, duration_minutes,
-                    student:profiles!student_id(full_name, spanish_level)
-                `)
-                .eq('professor_id', professorId)
-                .gte('class_datetime', `${startStr}T00:00:00-03:00`)
-                .lte('class_datetime', `${endStr}T23:59:59-03:00`)
-                .in('status', ['scheduled', 'completed', 'rescheduled', 'missed'])
-                .order('class_datetime', { ascending: true });
-
-            if (error) throw error;
-
-            setAppointments(data || []);
-        } catch (error) {
-            console.error('Error fetching appointments:', error);
-            setAppointments([]);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [professorId, weekStart, weekEnd]);
-
+    // Atualizar hora atual a cada minuto
     useEffect(() => {
-        fetchWeekAppointments();
-    }, [fetchWeekAppointments]);
+        const interval = setInterval(() => {
+            const now = new Date();
+            setCurrentTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+        }, 60000); // Atualiza a cada 1 minuto
+
+        return () => clearInterval(interval);
+    }, []);
+
+    // Scroll automático para a hora atual ao carregar
+    useEffect(() => {
+        if (currentTimeRef.current && gridContainerRef.current && isSameWeekAsToday()) {
+            setTimeout(() => {
+                currentTimeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 500);
+        }
+    }, [viewMode]);
+
+    // Verificar se a semana atual contém hoje
+    const isSameWeekAsToday = () => {
+        return weekDays.some(day => isSameDay(day, today));
+    };
+
+    // Calcular posição da linha de hora atual (em porcentagem dentro do slot de 15min)
+    const getCurrentTimePosition = () => {
+        const [hours, minutes] = currentTime.split(':').map(Number);
+        const currentTotalMinutes = hours * 60 + minutes;
+        const slotStartMinutes = 7 * 60; // 07:00
+        const slotEndMinutes = 24 * 60; // 24:00
+
+        if (currentTotalMinutes < slotStartMinutes || currentTotalMinutes > slotEndMinutes) {
+            return null;
+        }
+
+        // Encontrar qual slot de 15 minutos estamos
+        const minutesSinceStart = currentTotalMinutes - slotStartMinutes;
+        const slotIndex = Math.floor(minutesSinceStart / 15);
+        const minutesIntoSlot = minutesSinceStart % 15;
+        const percentageIntoSlot = (minutesIntoSlot / 15) * 100;
+
+        return { slotIndex, percentageIntoSlot };
+    };
 
     // Navegación
     const goToPreviousWeek = () => setCurrentDate(subWeeks(currentDate, 1));
@@ -105,7 +137,7 @@ const AgendaTab = ({ dashboardData }) => {
 
     // Obtener appointments para un día y hora específicos
     const getAppointmentsForSlot = (day, timeSlot) => {
-        return appointments.filter(apt => {
+        return weekAppointments.filter(apt => {
             const aptDate = parseISO(apt.class_datetime);
             const aptTime = format(aptDate, 'HH:mm');
             return isSameDay(aptDate, day) && aptTime === timeSlot;
@@ -115,7 +147,7 @@ const AgendaTab = ({ dashboardData }) => {
     // Calcular la altura del bloque de aula basado en la duración
     const getBlockHeight = (duration) => {
         const slots = Math.ceil(duration / 15);
-        return `${slots * 60}px`; // 60px por cada slot de 15 minutos
+        return `${slots * 60}px`;
     };
 
     // Renderizar bloque de aula
@@ -213,7 +245,6 @@ const AgendaTab = ({ dashboardData }) => {
                         {/* Botón Actualizar */}
                         <Button
                             onClick={() => {
-                                fetchWeekAppointments();
                                 if (onUpdate) onUpdate();
                             }}
                             className="bg-blue-500 hover:bg-blue-600 text-white"
@@ -249,7 +280,7 @@ const AgendaTab = ({ dashboardData }) => {
                 {viewMode === 'week' && (
                     <div className="overflow-x-auto">
                         <div className="min-w-[1000px] mx-auto">
-                            {/* Header de días */}
+                            {/* Header de días - DIA DE HOJE DESTACADO */}
                             <div className="grid grid-cols-8 border-b bg-slate-50" style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}>
                                 <div className="p-2 text-center text-sm font-medium text-slate-600 border-r">
                                     Horário
@@ -261,18 +292,19 @@ const AgendaTab = ({ dashboardData }) => {
                                             key={idx}
                                             className={cn(
                                                 "p-2 text-center border-r last:border-r-0",
-                                                isToday && "bg-sky-50"
+                                                isToday ? "bg-orange-100 border-b-2 border-orange-500" : ""
                                             )}
                                         >
                                             <div className={cn(
                                                 "text-sm font-medium",
-                                                isToday ? "text-sky-600" : "text-slate-700"
+                                                isToday ? "text-orange-700 font-bold" : "text-slate-700"
                                             )}>
                                                 {daysOfWeekMapShort[getDay(day)]}
+                                                {isToday && <span className="ml-1 text-xs bg-orange-500 text-white px-1.5 py-0.5 rounded">HOJE</span>}
                                             </div>
                                             <div className={cn(
-                                                "text-xs",
-                                                isToday ? "text-sky-500 font-semibold" : "text-slate-500"
+                                                "text-xs mt-0.5",
+                                                isToday ? "text-orange-600 font-bold" : "text-slate-500"
                                             )}>
                                                 {format(day, 'dd/MM')}
                                             </div>
@@ -281,40 +313,69 @@ const AgendaTab = ({ dashboardData }) => {
                                 })}
                             </div>
 
-                            {/* Grid de horarios */}
-                            <div className="relative" style={{ maxHeight: '600px', overflowY: 'auto' }}>
-                                {isLoading ? (
+                            {/* Grid de horarios com linha de hora atual */}
+                            <div ref={gridContainerRef} className="relative" style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                                {loading ? (
                                     <div className="flex justify-center items-center h-64">
                                         <Loader2 className="h-8 w-8 animate-spin text-sky-600" />
                                     </div>
                                 ) : (
-                                    TIME_SLOTS.map((timeSlot, timeIdx) => (
-                                        <div key={timeSlot} className="grid grid-cols-8 border-b hover:bg-slate-50" style={{ minHeight: '60px', gridTemplateColumns: '80px repeat(7, 1fr)' }}>
-                                            {/* Columna de hora */}
-                                            <div className="p-2 text-center text-xs text-slate-600 border-r bg-slate-50 font-medium">
-                                                {timeSlot}
-                                            </div>
+                                    TIME_SLOTS.map((timeSlot, timeIdx) => {
+                                        const timePosition = getCurrentTimePosition();
+                                        const isCurrentTimeSlot = timePosition && timePosition.slotIndex === timeIdx;
 
-                                            {/* Columnas de días */}
-                                            {weekDays.map((day, dayIdx) => {
-                                                const isToday = isSameDay(day, today);
-                                                const aptsForSlot = getAppointmentsForSlot(day, timeSlot);
-
-                                                return (
+                                        return (
+                                            <div
+                                                key={timeSlot}
+                                                className="grid grid-cols-8 border-b hover:bg-slate-50 relative"
+                                                style={{ minHeight: '60px', gridTemplateColumns: '80px repeat(7, 1fr)' }}
+                                                ref={isCurrentTimeSlot ? currentTimeRef : null}
+                                            >
+                                                {/* LINHA VERMELHA DE HORA ATUAL */}
+                                                {isCurrentTimeSlot && isSameWeekAsToday() && (
                                                     <div
-                                                        key={dayIdx}
-                                                        className={cn(
-                                                            "relative border-r last:border-r-0",
-                                                            isToday && "bg-sky-50/30"
-                                                        )}
-                                                        style={{ minHeight: '60px' }}
+                                                        className="absolute left-0 right-0 z-20 pointer-events-none"
+                                                        style={{ top: `${timePosition.percentageIntoSlot}%` }}
                                                     >
-                                                        {aptsForSlot.map(apt => renderAppointmentBlock(apt))}
+                                                        <div className="flex items-center">
+                                                            <div className="w-[80px] flex items-center justify-end pr-1">
+                                                                <span className="text-[10px] text-red-600 font-bold bg-red-100 px-1 rounded">
+                                                                    {currentTime}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex-1 h-0.5 bg-red-500 relative">
+                                                                <div className="absolute left-0 -top-1 w-2 h-2 bg-red-500 rounded-full"></div>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                    ))
+                                                )}
+
+                                                {/* Columna de hora */}
+                                                <div className="p-2 text-center text-xs text-slate-600 border-r bg-slate-50 font-medium">
+                                                    {timeSlot}
+                                                </div>
+
+                                                {/* Columnas de días */}
+                                                {weekDays.map((day, dayIdx) => {
+                                                    const isToday = isSameDay(day, today);
+                                                    const aptsForSlot = getAppointmentsForSlot(day, timeSlot);
+
+                                                    return (
+                                                        <div
+                                                            key={dayIdx}
+                                                            className={cn(
+                                                                "relative border-r last:border-r-0",
+                                                                isToday && "bg-orange-50/50"
+                                                            )}
+                                                            style={{ minHeight: '60px' }}
+                                                        >
+                                                            {aptsForSlot.map(apt => renderAppointmentBlock(apt))}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>
@@ -324,13 +385,13 @@ const AgendaTab = ({ dashboardData }) => {
                 {/* Vista de Lista (alternativa) */}
                 {viewMode === 'list' && (
                     <div className="p-4">
-                        {isLoading ? (
+                        {loading ? (
                             <div className="flex justify-center items-center h-64">
                                 <Loader2 className="h-8 w-8 animate-spin text-sky-600" />
                             </div>
-                        ) : appointments.length > 0 ? (
+                        ) : weekAppointments.length > 0 ? (
                             <div className="space-y-2">
-                                {appointments.map(apt => {
+                                {weekAppointments.map(apt => {
                                     const aptDate = parseISO(apt.class_datetime);
                                     const bgColor = apt.status === 'completed' ? 'bg-green-100 border-green-300' :
                                         apt.status === 'rescheduled' ? 'bg-blue-200 border-blue-400' :
