@@ -199,8 +199,8 @@ const AgendaTab = ({ dashboardData }) => {
     }
 
     return (
-        <div className="flex justify-center">
-            <div className="w-full max-w-[1400px] bg-white rounded-lg shadow-sm">
+        <div className="w-full px-4 lg:px-8">
+            <div className="w-full bg-white rounded-lg shadow-sm">
                 {/* Header */}
                 <div className="p-4 border-b flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-4">

@@ -590,8 +590,8 @@ const AlunosTab = ({ dashboardData }) => {
     };
 
     return (
-        <div className="flex justify-center">
-            <div className="w-full max-w-[1400px]">
+        <div className="w-full">
+            <div className="w-full px-4 lg:px-8">
                 <div className="bg-white p-6 rounded-lg shadow-sm">
                     <h3 className="font-bold mb-4">Gerenciar Alunos ({filteredStudents.length})</h3>
                     <div className="flex justify-between items-center mb-4 gap-4 flex-wrap">

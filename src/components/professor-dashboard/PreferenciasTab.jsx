@@ -935,8 +935,8 @@ const PreferenciasTab = ({ dashboardData }) => {
 
 
   return (
-    <div className="flex justify-center">
-      <div className="w-full max-w-[1400px] space-y-8">
+    <div className="w-full px-4 lg:px-8">
+      <div className="w-full space-y-8">
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-xl font-bold">Incluir Aulas para Aluno</h3>

@@ -319,10 +319,10 @@ const HomeTab = ({ dashboardData }) => {
   };
 
   return (
-    <div className="flex justify-center">
-      <div className="w-full max-w-[1400px]">
+    <div className="w-full">
+      <div className="w-full px-4 lg:px-8">
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8 px-4 lg:px-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8">
           <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
             <h3 className="font-bold mb-4">Solicitações de Agendamento ({solicitudes.length})</h3>
             {loading ? <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin" /></div> :

@@ -481,9 +481,9 @@ const ProfessorDashboardPage = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header/Navegação Desktop (Topo) */}
                 <header className="flex flex-col bg-white shadow-md">
-                    {/* Linha superior: Logo e Dropdown - Fundo Branco e Conteúdo Centralizado */}
+                    {/* Linha superior: Logo e Dropdown - Fundo Branco e Conteúdo */}
                     <div className="w-full flex justify-center items-center h-16 bg-white border-b border-slate-200">
-                        <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 flex justify-between items-center">
+                        <div className="w-full px-4 lg:px-8 flex justify-between items-center">
                             <Logo />
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -522,7 +522,7 @@ const ProfessorDashboardPage = () => {
 
                     {/* Linha inferior: TabsList para Navegação Desktop - Fundo Branco e Alinhamento */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
-                        <div className="w-full max-w-7xl mx-auto px-4 lg:px-8">
+                        <div className="w-full px-4 lg:px-8">
                             <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
                                 <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
                                     {navItems.map(item => (
@@ -585,10 +585,10 @@ const ProfessorDashboardPage = () => {
 
                 </header>
 
-                {/* Conteúdo da main (CORREÇÃO DE LAYOUT) */}
+                {/* Conteúdo da main (LAYOUT FULL-WIDTH RESPONSIVO) */}
                 <main className="flex-1 overflow-x-hidden overflow-y-auto w-full">
-                    {/* Aplica max-width e centralização (mx-auto). O padding horizontal foi REMOVIDO daqui. */}
-                    <div className="w-full max-w-7xl mx-auto py-4 lg:py-8">
+                    {/* Container fluido com padding responsivo */}
+                    <div className="w-full py-4 lg:py-8">
                         <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
                             {/* Tabs Content */}
                             {navItems.map(item => (

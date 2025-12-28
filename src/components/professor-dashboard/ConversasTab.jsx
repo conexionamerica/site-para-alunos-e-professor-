@@ -108,8 +108,8 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
   };
 
   return (
-    <div className="flex justify-center">
-      <div className="w-full max-w-[1400px]">
+    <div className="w-full">
+      <div className="w-full px-4 lg:px-8">
         <div className="bg-white rounded-lg shadow-sm flex flex-col h-[75vh]">
           <header className="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-10">
             <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
@@ -250,8 +250,8 @@ const ConversasTab = ({ dashboardData }) => {
   }
 
   return (
-    <div className="flex justify-center">
-      <div className="w-full max-w-[1400px]">
+    <div className="w-full">
+      <div className="w-full px-4 lg:px-8">
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h3 className="text-xl font-bold mb-4">Conversas com Alunos</h3>
           <div className="space-y-2 max-h-[70vh] overflow-y-auto">

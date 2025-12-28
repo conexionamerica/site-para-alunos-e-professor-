@@ -656,8 +656,8 @@ const AulasTab = ({ dashboardData }) => {
     };
 
     return (
-        // CORREÇÃO: Adiciona padding horizontal (px-4 lg:px-8) à div raiz para alinhar ao cabeçalho
-        <div className="bg-white p-6 rounded-lg shadow-sm px-4 lg:px-8">
+        // LAYOUT FULL-WIDTH: Padding horizontal para alinhar ao cabeçalho
+        <div className="w-full px-4 lg:px-8 bg-white p-6 rounded-lg shadow-sm">
             {/* Header */}
             <div className="mb-6">
                 <h2 className="text-2xl font-bold text-slate-800">Aulas</h2>
