@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
-import { format, parseISO, parse, isValid, getDay, add, isAfter } from 'date-fns';
+import { format, parseISO, parse, isValid, getDay, add, isAfter, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -452,10 +452,16 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
 const AulasTab = ({ dashboardData }) => {
     const { toast } = useToast();
     const [nameFilter, setNameFilter] = useState("");
-    const [dateFilter, setDateFilter] = useState(null);
+    const [dateFilter, setDateFilter] = useState(null); // For calendar picker
+    const [quickDateFilter, setQuickDateFilter] = useState("TODAS"); // HOJE, AMANHA, TODAS
+    const [statusFilter, setStatusFilter] = useState("all"); // Status filter - 'all' para todos
     const [selectedAppointment, setSelectedAppointment] = useState(null);
     const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
     const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
+
+    // Paginação
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     // Extração segura das propriedades a partir de dashboardData
     const data = dashboardData?.data || {};
@@ -465,6 +471,15 @@ const AulasTab = ({ dashboardData }) => {
     const appointments = data.appointments || [];
     const packages = data.packages || [];
 
+    // Status options para o filtro
+    const statusOptions = [
+        { value: 'all', label: 'Todos os status' },
+        { value: 'scheduled', label: 'Agendada' },
+        { value: 'completed', label: 'Concluída' },
+        { value: 'missed', label: 'Faltou' },
+        { value: 'canceled', label: 'Cancelada' },
+        { value: 'refunded', label: 'Reembolsada' },
+    ];
 
     const handleUpdate = () => {
         if (onUpdate) onUpdate(); // Executa o onUpdate se existir
@@ -474,6 +489,28 @@ const AulasTab = ({ dashboardData }) => {
     const customPackageId = useMemo(() => {
         return packages.find(p => p.name === 'Personalizado')?.id;
     }, [packages]);
+
+    // Função para obter a data de hoje no formato yyyy-MM-dd
+    const getTodayStr = () => format(new Date(), 'yyyy-MM-dd');
+
+    // Função para obter a data de amanhã no formato yyyy-MM-dd
+    const getTomorrowStr = () => format(addDays(new Date(), 1), 'yyyy-MM-dd');
+
+    // Handler para limpar todos os filtros
+    const handleClearFilters = () => {
+        setNameFilter("");
+        setDateFilter(null);
+        setQuickDateFilter("TODAS");
+        setStatusFilter("all");
+        setCurrentPage(1);
+    };
+
+    // Handler para filtro rápido de data
+    const handleQuickDateFilter = (filter) => {
+        setQuickDateFilter(filter);
+        setDateFilter(null); // Limpa o date picker quando usa filtro rápido
+        setCurrentPage(1);
+    };
 
     const handleMarkAsMissed = async (appointment) => {
         // CORREÇÃO: Verifica se o aluno existe antes de acessar full_name
@@ -514,12 +551,45 @@ const AulasTab = ({ dashboardData }) => {
         setIsRescheduleDialogOpen(true);
     }
 
-    // Filtra appointments usando a variável appointments extraída
-    const filteredAppointments = (appointments || []).filter(apt => {
-        const nameMatch = apt.student?.full_name?.toLowerCase().includes(nameFilter.toLowerCase());
-        const dateMatch = !dateFilter || (apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === format(new Date(dateFilter), 'yyyy-MM-dd'));
-        return nameMatch && dateMatch;
-    }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
+    // Filtra appointments usando os novos filtros
+    const filteredAppointments = useMemo(() => {
+        return (appointments || []).filter(apt => {
+            // Filtro por nome
+            const nameMatch = !nameFilter || apt.student?.full_name?.toLowerCase().includes(nameFilter.toLowerCase());
+
+            // Filtro por data (date picker ou filtro rápido)
+            let dateMatch = true;
+            if (dateFilter) {
+                dateMatch = apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === format(new Date(dateFilter), 'yyyy-MM-dd');
+            } else if (quickDateFilter === 'HOJE') {
+                dateMatch = apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === getTodayStr();
+            } else if (quickDateFilter === 'AMANHA') {
+                dateMatch = apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === getTomorrowStr();
+            }
+            // TODAS não filtra por data
+
+            // Filtro por status
+            let statusMatch = true;
+            if (statusFilter && statusFilter !== 'all') {
+                statusMatch = apt.status === statusFilter ||
+                    (statusFilter === 'canceled' && (apt.status === 'canceled' || apt.status === 'cancelled'));
+            }
+
+            return nameMatch && dateMatch && statusMatch;
+        }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
+    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter]);
+
+    // Paginação
+    const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
+    const paginatedAppointments = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredAppointments.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredAppointments, currentPage, itemsPerPage]);
+
+    // Atualiza página quando filtros mudam
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [nameFilter, dateFilter, quickDateFilter, statusFilter]);
 
     const openFeedbackDialog = (appointment) => {
         // Passa o customPackageId e professorId para o FeedbackDialog 
@@ -530,11 +600,12 @@ const AulasTab = ({ dashboardData }) => {
     const StatusBadge = ({ status }) => {
         switch (status) {
             case 'scheduled': return <Badge className="bg-sky-500 hover:bg-sky-600 text-white">Agendada</Badge>;
-            case 'completed': return <Badge className="bg-green-500 hover:bg-green-600 text-white">Realizada</Badge>;
+            case 'completed': return <Badge className="bg-green-500 hover:bg-green-600 text-white">Concluída</Badge>;
             case 'canceled':
             case 'cancelled': return <Badge variant="destructive">Cancelada</Badge>;
-            case 'missed': return <Badge className="bg-orange-500 hover:bg-orange-600 text-white">Falta</Badge>;
+            case 'missed': return <Badge className="bg-orange-500 hover:bg-orange-600 text-white">Faltou</Badge>;
             case 'rescheduled': return <Badge className="bg-purple-500 hover:bg-purple-600 text-white">Reagendada</Badge>;
+            case 'refunded': return <Badge className="bg-pink-500 hover:bg-pink-600 text-white">Reembolsada</Badge>;
             default: return <Badge variant="secondary">{status}</Badge>;
         }
     };
@@ -542,59 +613,305 @@ const AulasTab = ({ dashboardData }) => {
     return (
         // CORREÇÃO: Adiciona padding horizontal (px-4 lg:px-8) à div raiz para alinhar ao cabeçalho
         <div className="bg-white p-6 rounded-lg shadow-sm px-4 lg:px-8">
-            <h3 className="font-bold mb-4">Todas as Aulas ({filteredAppointments.length})</h3>
-            <div className="flex gap-4 mb-4">
-                <Input placeholder="Filtrar por nome do aluno..." value={nameFilter} onChange={e => setNameFilter(e.target.value)} />
-                <Input type="date" value={dateFilter || ''} onChange={e => setDateFilter(e.target.value)} />
-                <Button variant="outline" onClick={() => { setNameFilter(""); setDateFilter("") }}>Limpar</Button>
+            {/* Header */}
+            <div className="mb-6">
+                <h2 className="text-2xl font-bold text-slate-800">Aulas</h2>
+                <p className="text-sm text-slate-500">Por aqui é possível visualizar todas as aulas.</p>
             </div>
+
+            {/* Barra de Filtros */}
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+                {/* Barra de Pesquisa */}
+                <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+                    <svg
+                        className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <Input
+                        placeholder="Pesquisar por Aluno"
+                        value={nameFilter}
+                        onChange={e => setNameFilter(e.target.value)}
+                        className="pl-10 border-slate-300 focus:border-sky-500 focus:ring-sky-500"
+                    />
+                </div>
+
+                {/* Botões de Filtro Rápido de Data */}
+                <div className="flex items-center border rounded-lg overflow-hidden">
+                    <Button
+                        variant={quickDateFilter === 'HOJE' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => handleQuickDateFilter('HOJE')}
+                        className={cn(
+                            "rounded-none border-r px-4 h-10",
+                            quickDateFilter === 'HOJE'
+                                ? "bg-sky-500 hover:bg-sky-600 text-white"
+                                : "text-slate-600 hover:bg-slate-100"
+                        )}
+                    >
+                        Hoje
+                    </Button>
+                    <Button
+                        variant={quickDateFilter === 'AMANHA' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => handleQuickDateFilter('AMANHA')}
+                        className={cn(
+                            "rounded-none border-r px-4 h-10",
+                            quickDateFilter === 'AMANHA'
+                                ? "bg-sky-500 hover:bg-sky-600 text-white"
+                                : "text-slate-600 hover:bg-slate-100"
+                        )}
+                    >
+                        Amanhã
+                    </Button>
+                    <Button
+                        variant={quickDateFilter === 'TODAS' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => handleQuickDateFilter('TODAS')}
+                        className={cn(
+                            "rounded-none px-4 h-10",
+                            quickDateFilter === 'TODAS'
+                                ? "bg-sky-500 hover:bg-sky-600 text-white"
+                                : "text-slate-600 hover:bg-slate-100"
+                        )}
+                    >
+                        Todas
+                    </Button>
+                </div>
+
+                {/* Dropdown de Status */}
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[220px] border-slate-300">
+                        <SelectValue placeholder="Selecione o status da aula" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {statusOptions.map(option => (
+                            <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
+                {/* Botão Filtros (limpar) */}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearFilters}
+                    className="flex items-center gap-2 h-10 px-4 border-slate-300 text-slate-600 hover:bg-slate-100"
+                >
+                    <svg
+                        className="h-4 w-4"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                    Filtros
+                </Button>
+            </div>
+
+            {/* Tabla de Aulas */}
             <div className="border rounded-lg overflow-hidden">
                 <Table>
                     <TableHeader className="bg-slate-50">
                         <TableRow>
                             <TableHead>Aluno</TableHead>
                             <TableHead>Matéria</TableHead>
+                            <TableHead>Tipo de aula</TableHead>
                             <TableHead>Data</TableHead>
-                            <TableHead>Hora</TableHead>
+                            <TableHead>Horário</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="text-right">Ações</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {loading ? <TableRow><TableCell colSpan="6" className="text-center p-8"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow> :
-                            filteredAppointments.length > 0 ? filteredAppointments.map(apt => (
-                                <TableRow key={apt.id}>
-                                    <TableCell className="font-medium">{apt.student?.full_name || 'N/A'}</TableCell>
-                                    <TableCell>{apt.student?.spanish_level ? 'Espanhol' : 'Inglês'}</TableCell>
-                                    <TableCell>{apt.class_datetime ? format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR }) : 'N/A'}</TableCell>
-                                    <TableCell>{apt.class_datetime ? format(parseISO(apt.class_datetime), 'HH:mm') : 'N/A'}</TableCell>
-                                    <TableCell><StatusBadge status={apt.status} /></TableCell>
-                                    <TableCell className="text-right">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
-                                            <DropdownMenuContent>
-                                                <DropdownMenuItem onClick={() => openFeedbackDialog(apt)} disabled={!['scheduled', 'rescheduled'].includes(apt.status)}>
-                                                    <Star className="mr-2 h-4 w-4" /> Marcar como Concluída
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    onClick={() => handleOpenReschedule(apt)}
-                                                    // CORREÇÃO: Permite reagendamento para status 'scheduled', 'missed', 'canceled' OU 'cancelled'
-                                                    disabled={!['scheduled', 'missed', 'canceled', 'cancelled'].includes(apt.status)}
-                                                >
-                                                    <RotateCcw className="mr-2 h-4 w-4" /> Reagendar
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleMarkAsMissed(apt)} disabled={!['scheduled'].includes(apt.status)} className="text-orange-600 focus:text-orange-700 focus:bg-orange-50">
-                                                    <UserX className="mr-2 h-4 w-4" /> Marcar Falta
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
-                            )) : <TableRow><TableCell colSpan="6" className="text-center p-8 text-slate-500">Nenhuma aula encontrada com o filtro atual.</TableCell></TableRow>}
+                        {loading ? (
+                            <TableRow>
+                                <TableCell colSpan="7" className="text-center p-8">
+                                    <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                                </TableCell>
+                            </TableRow>
+                        ) : paginatedAppointments.length > 0 ? (
+                            paginatedAppointments.map(apt => {
+                                // Calcular horario de fin basado en duration_minutes
+                                const startTime = apt.class_datetime ? parseISO(apt.class_datetime) : null;
+                                const endTime = startTime && apt.duration_minutes
+                                    ? new Date(startTime.getTime() + apt.duration_minutes * 60000)
+                                    : null;
+                                const timeRange = startTime && endTime
+                                    ? `${format(startTime, 'HH\'h\'mm')} - ${format(endTime, 'HH\'h\'mm')}`
+                                    : 'N/A';
+
+                                return (
+                                    <TableRow key={apt.id}>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarImage src={apt.student?.avatar_url} />
+                                                    <AvatarFallback className="bg-pink-100 text-pink-600 text-xs">
+                                                        {apt.student?.full_name?.[0] || 'A'}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <p className="text-xs text-slate-400">{apt.student?.username || 'N/A'}</p>
+                                                    <p className="font-medium text-slate-800">{apt.student?.full_name || 'N/A'}</p>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-slate-600">
+                                            {apt.student?.spanish_level ? 'Espanhol' : 'Inglês'}
+                                        </TableCell>
+                                        <TableCell className="text-slate-600">Efetiva</TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-1 text-slate-600">
+                                                <CalendarIcon className="h-4 w-4 text-slate-400" />
+                                                {apt.class_datetime ? format(parseISO(apt.class_datetime), 'dd/MM/yyyy') : 'N/A'}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-1 text-slate-600">
+                                                <Clock className="h-4 w-4 text-slate-400" />
+                                                {timeRange}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell><StatusBadge status={apt.status} /></TableCell>
+                                        <TableCell className="text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <MoreVertical className="w-4 h-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuItem
+                                                        onClick={() => openFeedbackDialog(apt)}
+                                                        disabled={!['scheduled', 'rescheduled'].includes(apt.status)}
+                                                    >
+                                                        <Star className="mr-2 h-4 w-4" /> Marcar como Concluída
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => handleOpenReschedule(apt)}
+                                                        disabled={!['scheduled', 'missed', 'canceled', 'cancelled'].includes(apt.status)}
+                                                    >
+                                                        <RotateCcw className="mr-2 h-4 w-4" /> Reagendar
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => handleMarkAsMissed(apt)}
+                                                        disabled={!['scheduled'].includes(apt.status)}
+                                                        className="text-orange-600 focus:text-orange-700 focus:bg-orange-50"
+                                                    >
+                                                        <UserX className="mr-2 h-4 w-4" /> Marcar Falta
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan="7" className="text-center p-8 text-slate-500">
+                                    Nenhuma aula encontrada com o filtro atual.
+                                </TableCell>
+                            </TableRow>
+                        )}
                     </TableBody>
                 </Table>
             </div>
-            <FeedbackDialog appointment={selectedAppointment} isOpen={isFeedbackDialogOpen} onClose={() => setIsFeedbackDialogOpen(false)} onFeedbackSent={handleUpdate} />
+
+            {/* Barra de Paginação */}
+            <div className="flex items-center justify-between mt-4 text-sm text-slate-600">
+                <div className="flex items-center gap-2">
+                    <span>Total: {filteredAppointments.length}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                    {/* Selector de items por página */}
+                    <div className="flex items-center gap-2">
+                        <span>por página:</span>
+                        <Select value={String(itemsPerPage)} onValueChange={(val) => setItemsPerPage(Number(val))}>
+                            <SelectTrigger className="w-[70px] h-8 border-slate-300">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="10">10</SelectItem>
+                                <SelectItem value="20">20</SelectItem>
+                                <SelectItem value="50">50</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Indicador de página */}
+                    <span className="min-w-[80px] text-center">
+                        {filteredAppointments.length > 0
+                            ? `${(currentPage - 1) * itemsPerPage + 1} - ${Math.min(currentPage * itemsPerPage, filteredAppointments.length)}`
+                            : '0 - 0'
+                        }
+                    </span>
+
+                    {/* Controles de navegación */}
+                    <div className="flex items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setCurrentPage(1)}
+                            disabled={currentPage === 1}
+                        >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                            </svg>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                        >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage >= totalPages}
+                        >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={currentPage >= totalPages}
+                        >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                            </svg>
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            <FeedbackDialog
+                appointment={selectedAppointment}
+                isOpen={isFeedbackDialogOpen}
+                onClose={() => setIsFeedbackDialogOpen(false)}
+                onFeedbackSent={handleUpdate}
+            />
             {/* Diálogo de Reagendamento */}
             {selectedAppointment && (
                 <RescheduleDialog

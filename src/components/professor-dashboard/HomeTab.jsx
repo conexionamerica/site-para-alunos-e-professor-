@@ -34,12 +34,40 @@ const HomeTab = ({ dashboardData }) => {
   const loading = dashboardData?.loading || false;
   const onUpdate = dashboardData?.onUpdate;
 
-  // Extrair as coleções de dados - Agora busca TODAS as próximas aulas
-  const upcomingClasses = data.upcomingClasses || [];
-  const nextClass = upcomingClasses.length > 0 ? upcomingClasses[0] : null;
-
   // SINCRONIZAÇÃO: Usar appointments do dashboardData como fonte única
   const allAppointments = data?.appointments || [];
+
+  // CORREÇÃO: Calcular nextClass a partir dos appointments centralizados
+  // Isso garante que a "Próxima Aula" seja consistente com as outras abas
+  const nextClass = useMemo(() => {
+    if (!allAppointments || allAppointments.length === 0) return null;
+
+    const now = new Date();
+
+    const futureClasses = allAppointments.filter(apt => {
+      if (!apt.class_datetime) return false;
+      const aptDate = new Date(apt.class_datetime);
+      const status = apt.status;
+      return aptDate >= now && ['scheduled', 'rescheduled'].includes(status);
+    }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
+
+    return futureClasses.length > 0 ? futureClasses[0] : null;
+  }, [allAppointments]);
+
+  // CORREÇÃO: Calcular upcomingClasses a partir dos appointments centralizados
+  // Isso garante consistência com o card "Todas as Aulas Agendadas"
+  const upcomingClasses = useMemo(() => {
+    if (!allAppointments || allAppointments.length === 0) return [];
+
+    const now = new Date();
+
+    return allAppointments.filter(apt => {
+      if (!apt.class_datetime) return false;
+      const aptDate = new Date(apt.class_datetime);
+      const status = apt.status;
+      return aptDate >= now && ['scheduled', 'rescheduled'].includes(status);
+    }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
+  }, [allAppointments]);
 
   // CORREÇÃO: Sincroniza as solicitações do pai, mas agora com a verificação de array
   useEffect(() => {
@@ -72,6 +100,7 @@ const HomeTab = ({ dashboardData }) => {
 
     setNext24Hours(filtered);
   }, [allAppointments]);
+
 
   const handleUpdateRequestStatus = async (solicitudId, newStatus) => {
     setUpdatingRequestId(solicitudId);
@@ -347,8 +376,8 @@ const HomeTab = ({ dashboardData }) => {
                 <>
                   <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
                   <h3 className="text-lg font-bold mt-1">{nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
-                  <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student.full_name}</p>
-                  <p className="text-sm"><strong>Nível:</strong> {nextClass.student.spanish_level || 'Não definido'}</p>
+                  <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student?.full_name || 'Não definido'}</p>
+                  <p className="text-sm"><strong>Nível:</strong> {nextClass.student?.spanish_level || 'Não definido'}</p>
                   <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
                 </>
               ) : (
