@@ -4,8 +4,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { format, parseISO, getDay, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, addMonths, subMonths, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, ChevronLeft, ChevronRight, Grid3x3, List, RefreshCw } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Grid3x3, List, RefreshCw, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { getBrazilDate } from '@/lib/dateUtils';
 
@@ -37,6 +38,8 @@ const AgendaTab = ({ dashboardData }) => {
     const professorId = dashboardData?.professorId;
     const onUpdate = dashboardData?.onUpdate;
     const loading = dashboardData?.loading || false;
+    const isSuperadmin = dashboardData?.isSuperadmin || false;
+    const professors = dashboardData?.data?.professors || [];
 
     // SINCRONIZAÇÃO: Usar appointments do dashboardData como fonte única
     const allAppointments = dashboardData?.data?.appointments || [];
@@ -46,6 +49,7 @@ const AgendaTab = ({ dashboardData }) => {
     // Estados
     const [currentDate, setCurrentDate] = useState(today);
     const [viewMode, setViewMode] = useState('week');
+    const [professorFilter, setProfessorFilter] = useState('all');
     // Usar hora local do navegador para mostrar a linha vermelha consistente com o relógio do usuário
     const [currentTime, setCurrentTime] = useState(() => {
         const now = new Date();
@@ -78,11 +82,17 @@ const AgendaTab = ({ dashboardData }) => {
             if (!apt.class_datetime) return false;
             const aptDateStr = apt.class_datetime.substring(0, 10);
             const status = apt.status;
+
+            // Filtro de professor para superadmin
+            if (isSuperadmin && professorFilter !== 'all' && apt.professor_id !== professorFilter) {
+                return false;
+            }
+
             return aptDateStr >= startStr &&
                 aptDateStr <= endStr &&
                 ['scheduled', 'completed', 'rescheduled', 'missed'].includes(status);
         });
-    }, [allAppointments, weekStart, weekEnd]);
+    }, [allAppointments, weekStart, weekEnd, isSuperadmin, professorFilter]);
 
     // Atualizar hora atual a cada minuto
     useEffect(() => {
@@ -193,7 +203,27 @@ const AgendaTab = ({ dashboardData }) => {
             <div className="w-full max-w-[1400px] bg-white rounded-lg shadow-sm">
                 {/* Header */}
                 <div className="p-4 border-b flex items-center justify-between flex-wrap gap-4">
-                    <h2 className="text-xl font-bold text-slate-800">Horários de Aula</h2>
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-xl font-bold text-slate-800">Horários de Aula</h2>
+
+                        {/* Filtro de professor para superadmin */}
+                        {isSuperadmin && professors.length > 0 && (
+                            <Select value={professorFilter} onValueChange={setProfessorFilter}>
+                                <SelectTrigger className="w-[200px]">
+                                    <Filter className="h-4 w-4 mr-2" />
+                                    <SelectValue placeholder="Filtrar professor" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos os professores</SelectItem>
+                                    {professors.map(prof => (
+                                        <SelectItem key={prof.id} value={prof.id}>
+                                            {prof.full_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
                         {/* Navegación de mes */}

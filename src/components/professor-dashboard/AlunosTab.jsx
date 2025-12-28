@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Loader2, MoreVertical, UserCheck, UserX, MessageSquare, Send, Calendar, Clock } from 'lucide-react';
+import { Search, Package, Loader2, MoreVertical, UserCheck, UserX, MessageSquare, Send, Calendar, Clock, Filter } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const daysOfWeekMap = {
@@ -354,6 +354,11 @@ const AlunosTab = ({ dashboardData }) => {
     const loading = dashboardData?.loading || false;
     const professorId = dashboardData?.professorId;
     const onUpdate = dashboardData?.onUpdate;
+    const isSuperadmin = dashboardData?.isSuperadmin || false;
+    const professors = data.professors || [];
+
+    // Estado para filtro de professor (solo superadmin)
+    const [professorFilter, setProfessorFilter] = useState('all');
 
     // Asignaciones seguras
     const students = data.students || [];
@@ -411,9 +416,19 @@ const AlunosTab = ({ dashboardData }) => {
         });
     }, [students, allBillings, allAppointments, assignedLogs]);
 
-    const filteredStudents = studentsWithData.filter(s =>
-        s.full_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredStudents = studentsWithData.filter(s => {
+        const matchesSearch = s.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
+
+        // Filtro de professor para superadmin
+        if (isSuperadmin && professorFilter !== 'all') {
+            const hasAppointmentWithProfessor = allAppointments.some(
+                apt => apt.student_id === s.id && apt.professor_id === professorFilter
+            );
+            return matchesSearch && hasAppointmentWithProfessor;
+        }
+
+        return matchesSearch;
+    });
 
     // Función para activar/inactivar alumno
     const handleToggleActive = async (student) => {
@@ -578,17 +593,36 @@ const AlunosTab = ({ dashboardData }) => {
         <div className="flex justify-center">
             <div className="w-full max-w-[1400px]">
                 <div className="bg-white p-6 rounded-lg shadow-sm">
-                    <h3 className="font-bold mb-4">Gerenciar Alunos ({students.length})</h3>
-                    <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold mb-4">Gerenciar Alunos ({filteredStudents.length})</h3>
+                    <div className="flex justify-between items-center mb-4 gap-4 flex-wrap">
                         <div className="relative w-full max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                             <Input placeholder="Buscar por nome..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
                         </div>
+
+                        {/* Filtro de professor para superadmin */}
+                        {isSuperadmin && professors.length > 0 && (
+                            <Select value={professorFilter} onValueChange={setProfessorFilter}>
+                                <SelectTrigger className="w-[200px]">
+                                    <Filter className="h-4 w-4 mr-2" />
+                                    <SelectValue placeholder="Filtrar professor" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos os professores</SelectItem>
+                                    {professors.map(prof => (
+                                        <SelectItem key={prof.id} value={prof.id}>
+                                            {prof.full_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
                     </div>
                     <div className="border rounded-lg overflow-hidden">
                         <Table>
                             <TableHeader className="bg-slate-50">
                                 <TableRow>
+                                    <TableHead>Código</TableHead>
                                     <TableHead>Nome</TableHead>
                                     <TableHead>Idade</TableHead>
                                     <TableHead>Nível</TableHead>
@@ -600,9 +634,12 @@ const AlunosTab = ({ dashboardData }) => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {loading ? <TableRow><TableCell colSpan="8" className="text-center"><Loader2 className="mx-auto my-4 h-6 w-6 animate-spin" /></TableCell></TableRow> :
+                                {loading ? <TableRow><TableCell colSpan="9" className="text-center"><Loader2 className="mx-auto my-4 h-6 w-6 animate-spin" /></TableCell></TableRow> :
                                     filteredStudents.length > 0 ? filteredStudents.map(student => (
                                         <TableRow key={student.id}>
+                                            <TableCell className="font-mono text-sm text-slate-600">
+                                                {student.student_code || '-'}
+                                            </TableCell>
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center gap-3">
                                                     <Avatar className="h-8 w-8"><AvatarImage src={student.avatar_url} /><AvatarFallback>{student.full_name?.[0] || 'A'}</AvatarFallback></Avatar>
@@ -679,7 +716,7 @@ const AlunosTab = ({ dashboardData }) => {
                                                 </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
-                                    )) : <TableRow><TableCell colSpan="8" className="text-center py-8 text-slate-500">Nenhum aluno encontrado.</TableCell></TableRow>}
+                                    )) : <TableRow><TableCell colSpan="9" className="text-center py-8 text-slate-500">Nenhum aluno encontrado.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </div>

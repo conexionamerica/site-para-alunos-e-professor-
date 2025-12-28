@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Loader2, Star, Calendar, Clock, RotateCcw, UserX, Calendar as CalendarIcon } from 'lucide-react';
+import { MoreVertical, Loader2, Star, Calendar, Clock, RotateCcw, UserX, Calendar as CalendarIcon, Filter } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -468,13 +468,18 @@ const AulasTab = ({ dashboardData }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
-    // Extração segura das propriedades a partir de dashboardData
+    // Extracción segura das propriedades a partir de dashboardData
     const data = dashboardData?.data || {};
     const loading = dashboardData?.loading || false;
     const professorId = dashboardData?.professorId;
     const onUpdate = dashboardData?.onUpdate; // Obtém onUpdate do objeto
+    const isSuperadmin = dashboardData?.isSuperadmin || false;
+    const professors = data.professors || [];
     const appointments = data.appointments || [];
     const packages = data.packages || [];
+
+    // Estado para filtro de professor (solo superadmin)
+    const [professorFilter, setProfessorFilter] = useState('all');
 
     // Status options para o filtro
     const statusOptions = [
@@ -509,6 +514,7 @@ const AulasTab = ({ dashboardData }) => {
         setStatusFilter("all");
         setStartDateFilter("");
         setEndDateFilter("");
+        setProfessorFilter('all');
         setCurrentPage(1);
     };
 
@@ -608,9 +614,15 @@ const AulasTab = ({ dashboardData }) => {
                     (statusFilter === 'canceled' && (apt.status === 'canceled' || apt.status === 'cancelled'));
             }
 
-            return nameMatch && dateMatch && statusMatch;
+            // Filtro de professor para superadmin
+            let professorMatch = true;
+            if (isSuperadmin && professorFilter !== 'all') {
+                professorMatch = apt.professor_id === professorFilter;
+            }
+
+            return nameMatch && dateMatch && statusMatch && professorMatch;
         }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
-    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter]);
+    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter, isSuperadmin, professorFilter]);
 
     // Paginação
     const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
@@ -729,6 +741,24 @@ const AulasTab = ({ dashboardData }) => {
                         ))}
                     </SelectContent>
                 </Select>
+
+                {/* Filtro de professor para superadmin */}
+                {isSuperadmin && professors.length > 0 && (
+                    <Select value={professorFilter} onValueChange={setProfessorFilter}>
+                        <SelectTrigger className="w-[200px] border-slate-300">
+                            <Filter className="h-4 w-4 mr-2" />
+                            <SelectValue placeholder="Filtrar professor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Todos os professores</SelectItem>
+                            {professors.map(prof => (
+                                <SelectItem key={prof.id} value={prof.id}>
+                                    {prof.full_name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
 
                 {/* Botão Filtros (abre modal) */}
                 <Button

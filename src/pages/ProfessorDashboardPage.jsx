@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle } from 'lucide-react';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -15,39 +15,51 @@ import AgendaTab from '@/components/professor-dashboard/AgendaTab';
 import AlunosTab from '@/components/professor-dashboard/AlunosTab';
 import ConversasTab from '@/components/professor-dashboard/ConversasTab';
 import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
+import AdminTab from '@/components/professor-dashboard/AdminTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 import { getBrazilDate } from '@/lib/dateUtils';
 
-// Função de busca de dados
-const fetchProfessorDashboardData = async (professorId) => {
+// Función de busca de datos
+const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) => {
     const today = getBrazilDate().toISOString();
 
-    // 1. Fetch del perfil del profesor (solo nombre)
-    const { data: professorProfile, error: profProfileError } = await supabase
+    // 1. Fetch del perfil del usuario (solo nombre y rol)
+    const { data: userProfile, error: profProfileError } = await supabase
         .from('profiles')
-        .select('full_name')
+        .select('full_name, role')
         .eq('id', professorId)
         .maybeSingle();
     if (profProfileError) throw profProfileError;
 
     // 2. Fetch de Solicitacoes (para HomeTab)
-    const { data: scheduleRequests, error: reqError } = await supabase
+    // Superadmin ve TODAS las solicitudes, profesor solo las suyas
+    let scheduleRequestsQuery = supabase
         .from('solicitudes_clase')
-        .select(`*, profile:profiles!alumno_id(*)`)
-        .eq('profesor_id', professorId)
+        .select(`*, profile:profiles!alumno_id(*), profesor:profiles!profesor_id(full_name)`)
         .eq('status', 'Pendiente')
         .order('solicitud_id', { ascending: true });
+
+    if (!isSuperadmin) {
+        scheduleRequestsQuery = scheduleRequestsQuery.eq('profesor_id', professorId);
+    }
+
+    const { data: scheduleRequests, error: reqError } = await scheduleRequestsQuery;
     if (reqError) throw reqError;
 
-    // 3. Fetch de TODAS as Próximas Aulas agendadas (para HomeTab) - Inclui aulas reagendadas
-    const { data: upcomingClasses, error: upcomingClassesError } = await supabase
+    // 3. Fetch de TODAS as Próximas Aulas agendadas (para HomeTab)
+    let upcomingClassesQuery = supabase
         .from('appointments')
-        .select(`*, student:profiles!student_id(full_name, spanish_level)`)
-        .eq('professor_id', professorId)
+        .select(`*, student:profiles!student_id(full_name, spanish_level), professor:profiles!professor_id(full_name)`)
         .in('status', ['scheduled', 'rescheduled'])
         .gte('class_datetime', today)
         .order('class_datetime', { ascending: true });
+
+    if (!isSuperadmin) {
+        upcomingClassesQuery = upcomingClassesQuery.eq('professor_id', professorId);
+    }
+
+    const { data: upcomingClasses, error: upcomingClassesError } = await upcomingClassesQuery;
     if (upcomingClassesError && upcomingClassesError.code !== 'PGRST116') throw upcomingClassesError;
 
     // 4. Fetch de TODOS los Perfiles (para AdmTab y AlunosTab)
@@ -58,8 +70,9 @@ const fetchProfessorDashboardData = async (professorId) => {
         .order('full_name', { ascending: true });
     if (allProfilesError) throw allProfilesError;
 
-    // Filter students from all profiles
+    // Filter students and professors from all profiles
     const students = allProfiles.filter(p => p.role === 'student');
+    const professors = allProfiles.filter(p => p.role === 'professor');
 
     // 5. Fetch de Pacotes (para PreferenciasTab)
     const { data: packages, error: packagesError } = await supabase
@@ -68,24 +81,28 @@ const fetchProfessorDashboardData = async (professorId) => {
     if (packagesError) throw packagesError;
 
     // 6. Fetch de Slots (para PreferenciasTab)
-    const { data: classSlots, error: slotsError } = await supabase
-        .from('class_slots')
-        .select('*')
-        .eq('professor_id', professorId);
+    // Superadmin ve todos los slots, profesor solo los suyos
+    let classSlotsQuery = supabase.from('class_slots').select('*');
+    if (!isSuperadmin) {
+        classSlotsQuery = classSlotsQuery.eq('professor_id', professorId);
+    }
+    const { data: classSlots, error: slotsError } = await classSlotsQuery;
     if (slotsError) throw slotsError;
 
     // 7. Fetch de Todos los Agendamentos (para AulasTab, AlunosTab)
-    const { data: appointments, error: appointmentsError } = await supabase
+    let appointmentsQuery = supabase
         .from('appointments')
-        .select(`*, student:profiles!student_id(full_name, spanish_level)`)
-        .eq('professor_id', professorId)
+        .select(`*, student:profiles!student_id(full_name, spanish_level), professor:profiles!professor_id(full_name)`)
         .order('class_datetime', { ascending: false });
-    // CORREÇÃO DE ESTABILIDADE: Captura o erro aqui para evitar travamento total
-    if (appointmentsError) {
-        console.error("Erro no fetch de appointments:", appointmentsError);
-        // Não lança o erro, permite que o dashboard continue
+
+    if (!isSuperadmin) {
+        appointmentsQuery = appointmentsQuery.eq('professor_id', professorId);
     }
 
+    const { data: appointments, error: appointmentsError } = await appointmentsQuery;
+    if (appointmentsError) {
+        console.error("Erro no fetch de appointments:", appointmentsError);
+    }
 
     // 8. Fetch de Faturas y Logs (para AlunosTab, PreferenciasTab)
     const { data: allBillings, error: billingsError } = await supabase
@@ -105,14 +122,17 @@ const fetchProfessorDashboardData = async (professorId) => {
 
     return {
         professorId,
-        professorName: professorProfile?.full_name || 'Professor(a)',
+        professorName: userProfile?.full_name || (isSuperadmin ? 'Administrador' : 'Professor(a)'),
+        userRole: userProfile?.role || 'professor',
+        isSuperadmin,
         scheduleRequests: scheduleRequests || [],
         upcomingClasses: upcomingClasses || [],
         students: students || [],
+        professors: professors || [],
         allProfiles: allProfiles || [],
         packages: packages || [],
         classSlots: classSlots || [],
-        appointments: appointments || [], // Retorna dado, mesmo que possa estar vazio em caso de erro
+        appointments: appointments || [],
         allBillings: allBillings || [],
         assignedLogs: assignedLogs || [],
         chatList: chatList || [],
@@ -154,11 +174,22 @@ const ProfessorDashboardPage = () => {
         setIsLoading(true);
         setHasError(false);
         try {
-            const data = await fetchProfessorDashboardData(currentUserId);
+            // Primero verificar si el usuario es superadmin
+            const { data: userProfile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', currentUserId)
+                .maybeSingle();
+
+            const isSuperadmin = userProfile?.role === 'superadmin';
+
+            const data = await fetchProfessorDashboardData(currentUserId, isSuperadmin);
             setDashboardData({
                 data: data,
                 professorId: data.professorId,
                 professorName: data.professorName,
+                userRole: data.userRole,
+                isSuperadmin: data.isSuperadmin,
                 loading: false,
                 onUpdate: fetchData
             });
@@ -331,7 +362,17 @@ const ProfessorDashboardPage = () => {
         }
     }, [activeTab, hasUnreadMessages, user?.id]);
 
-    const navItems = [
+    // Pestañas dinámicas según el rol
+    const isSuperadmin = dashboardData?.isSuperadmin || false;
+
+    const navItems = isSuperadmin ? [
+        { id: 'home', icon: Home, label: 'Início', component: HomeTab },
+        { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
+        { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab },
+        { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab },
+        { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab },
+        { id: 'administracao', icon: Shield, label: 'Administração', component: AdminTab },
+    ] : [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
         { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab },

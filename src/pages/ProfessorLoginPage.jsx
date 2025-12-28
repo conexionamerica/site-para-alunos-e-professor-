@@ -35,7 +35,7 @@ const ProfessorLoginForm = ({ onLogin, loading }) => {
         </div>
       </div>
       <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700 text-white" disabled={loading}>
-        {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Verificando...</> : 'Entrar'}
+        {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verificando...</> : 'Entrar'}
       </Button>
     </form>
   );
@@ -59,12 +59,18 @@ const ProfessorLoginPage = () => {
 
     const { data: profileData, error: profileError } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single();
 
-    if (profileError || profileData?.role !== 'professor') {
+    // Permitir acceso a profesores Y superadmins
+    const allowedRoles = ['professor', 'superadmin'];
+
+    if (profileError || !allowedRoles.includes(profileData?.role)) {
       toast({ variant: "destructive", title: "Acesso Negado", description: "Você não tem permissão para acessar este painel." });
       await supabase.auth.signOut();
     } else {
       setProfessorSession(true);
-      toast({ variant: "info", title: "Login bem-sucedido!", description: "Bem-vindo ao painel do professor." });
+      const welcomeMessage = profileData.role === 'superadmin'
+        ? "Bem-vindo ao painel administrativo."
+        : "Bem-vindo ao painel do professor.";
+      toast({ variant: "info", title: "Login bem-sucedido!", description: welcomeMessage });
       navigate('/professor-dashboard');
     }
     setLoading(false);
@@ -91,7 +97,7 @@ const ProfessorLoginPage = () => {
           <h1 className="text-3xl font-bold text-white mt-4">Portal do Professor</h1>
           <p className="text-slate-400">Acesso exclusivo para administradores.</p>
         </div>
-        
+
         <div className="mt-6">
           <ProfessorLoginForm onLogin={handleLogin} loading={loading} />
         </div>
