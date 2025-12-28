@@ -459,6 +459,11 @@ const AulasTab = ({ dashboardData }) => {
     const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
     const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
 
+    // Modal de filtros avanzados
+    const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false);
+    const [startDateFilter, setStartDateFilter] = useState(""); // Data de Inicio
+    const [endDateFilter, setEndDateFilter] = useState(""); // Data Fim
+
     // Paginação
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -502,6 +507,18 @@ const AulasTab = ({ dashboardData }) => {
         setDateFilter(null);
         setQuickDateFilter("TODAS");
         setStatusFilter("all");
+        setStartDateFilter("");
+        setEndDateFilter("");
+        setCurrentPage(1);
+    };
+
+    // Handler para aplicar filtros do modal
+    const handleApplyDateRangeFilter = () => {
+        // Al aplicar filtro de rango, desactivar los filtros rápidos
+        if (startDateFilter || endDateFilter) {
+            setQuickDateFilter("TODAS");
+        }
+        setIsFiltersModalOpen(false);
         setCurrentPage(1);
     };
 
@@ -557,9 +574,25 @@ const AulasTab = ({ dashboardData }) => {
             // Filtro por nome
             const nameMatch = !nameFilter || apt.student?.full_name?.toLowerCase().includes(nameFilter.toLowerCase());
 
-            // Filtro por data (date picker ou filtro rápido)
+            // Filtro por data (rango de fechas, date picker ou filtro rápido)
             let dateMatch = true;
-            if (dateFilter) {
+
+            // Prioridad: 1. Rango de fechas, 2. Filtro rápido
+            if (startDateFilter || endDateFilter) {
+                // Filtro por rango de fechas
+                if (apt.class_datetime) {
+                    const aptDate = format(parseISO(apt.class_datetime), 'yyyy-MM-dd');
+                    if (startDateFilter && endDateFilter) {
+                        dateMatch = aptDate >= startDateFilter && aptDate <= endDateFilter;
+                    } else if (startDateFilter) {
+                        dateMatch = aptDate >= startDateFilter;
+                    } else if (endDateFilter) {
+                        dateMatch = aptDate <= endDateFilter;
+                    }
+                } else {
+                    dateMatch = false;
+                }
+            } else if (dateFilter) {
                 dateMatch = apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === format(new Date(dateFilter), 'yyyy-MM-dd');
             } else if (quickDateFilter === 'HOJE') {
                 dateMatch = apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === getTodayStr();
@@ -577,7 +610,7 @@ const AulasTab = ({ dashboardData }) => {
 
             return nameMatch && dateMatch && statusMatch;
         }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
-    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter]);
+    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter]);
 
     // Paginação
     const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
@@ -697,11 +730,11 @@ const AulasTab = ({ dashboardData }) => {
                     </SelectContent>
                 </Select>
 
-                {/* Botão Filtros (limpar) */}
+                {/* Botão Filtros (abre modal) */}
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleClearFilters}
+                    onClick={() => setIsFiltersModalOpen(true)}
                     className="flex items-center gap-2 h-10 px-4 border-slate-300 text-slate-600 hover:bg-slate-100"
                 >
                     <svg
@@ -716,6 +749,60 @@ const AulasTab = ({ dashboardData }) => {
                     Filtros
                 </Button>
             </div>
+
+            {/* Modal de Filtros Avanzados */}
+            <Dialog open={isFiltersModalOpen} onOpenChange={setIsFiltersModalOpen}>
+                <DialogContent className="sm:max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle>Filtros</DialogTitle>
+                        <DialogDescription>
+                            Filtros tabela de aulas
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-pink-500">Data de Inicio</label>
+                                <Input
+                                    type="date"
+                                    value={startDateFilter}
+                                    onChange={(e) => setStartDateFilter(e.target.value)}
+                                    className="border-slate-300"
+                                    placeholder="dd/mm/aaaa"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-pink-500">Data Fim</label>
+                                <Input
+                                    type="date"
+                                    value={endDateFilter}
+                                    onChange={(e) => setEndDateFilter(e.target.value)}
+                                    className="border-slate-300"
+                                    placeholder="dd/mm/aaaa"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setStartDateFilter("");
+                                setEndDateFilter("");
+                            }}
+                            className="mr-2"
+                        >
+                            Limpar
+                        </Button>
+                        <Button
+                            onClick={handleApplyDateRangeFilter}
+                            className="bg-slate-700 hover:bg-slate-800 text-white"
+                        >
+                            Filtrar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Tabla de Aulas */}
             <div className="border rounded-lg overflow-hidden">
