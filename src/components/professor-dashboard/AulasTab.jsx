@@ -762,7 +762,7 @@ const AulasTab = ({ dashboardData }) => {
                     <div className="space-y-4 py-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-pink-500">Data de Inicio</label>
+                                <label className="text-sm font-medium text-sky-600">Data de Inicio</label>
                                 <Input
                                     type="date"
                                     value={startDateFilter}
@@ -772,7 +772,7 @@ const AulasTab = ({ dashboardData }) => {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-pink-500">Data Fim</label>
+                                <label className="text-sm font-medium text-sky-600">Data Fim</label>
                                 <Input
                                     type="date"
                                     value={endDateFilter}
@@ -796,7 +796,7 @@ const AulasTab = ({ dashboardData }) => {
                         </Button>
                         <Button
                             onClick={handleApplyDateRangeFilter}
-                            className="bg-slate-700 hover:bg-slate-800 text-white"
+                            className="bg-sky-600 hover:bg-sky-700 text-white"
                         >
                             Filtrar
                         </Button>
