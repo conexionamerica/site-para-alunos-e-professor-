@@ -387,7 +387,7 @@ const ProfessorDashboardPage = () => {
             initial={{ x: '-100%' }}
             animate={{ x: isSidebarOpen ? '0%' : '-100%' }}
             transition={{ duration: 0.3 }}
-            className="fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 text-white p-6 shadow-2xl lg:static lg:translate-x-0 lg:shadow-none lg:p-0 lg:w-auto"
+            className="fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 text-white p-6 shadow-2xl lg:hidden"
         >
             <div className="flex justify-between items-center mb-8 lg:hidden">
                 <h2 className="text-2xl font-bold text-blue-400">Dashboard</h2>
