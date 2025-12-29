@@ -8,7 +8,7 @@ import { Loader2, ChevronLeft, ChevronRight, Grid3x3, List, RefreshCw, Filter } 
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { getBrazilDate, getTodayBrazil } from '@/lib/dateUtils';
+import { getBrazilDate, getTodayBrazil, isTodayBrazil, getCurrentBrazilTime, getBrazilWeekStart } from '@/lib/dateUtils';
 
 const daysOfWeekMapShort = {
     0: 'Domingo',
@@ -44,24 +44,17 @@ const AgendaTab = ({ dashboardData }) => {
     // SINCRONIZAÇÃO: Usar appointments do dashboardData como fonte única
     const allAppointments = dashboardData?.data?.appointments || [];
 
-    // CORREÇÃO: Usar a string de data do Brasil para comparações consistentes
+    // CORREÇÃO: Usar funções do dateUtils que usam Intl.DateTimeFormat
+    // para garantir consistência com horário oficial de Brasília (UTC-3)
     const todayStr = useMemo(() => getTodayBrazil(), []);
     const today = useMemo(() => getBrazilDate(), []);
-
-    // Função para verificar se uma data é hoje (comparação por string)
-    const isTodayBrazil = (date) => {
-        return format(date, 'yyyy-MM-dd') === todayStr;
-    };
 
     // Estados
     const [currentDate, setCurrentDate] = useState(today);
     const [viewMode, setViewMode] = useState('week');
     const [professorFilter, setProfessorFilter] = useState('all');
-    // Usar hora local do navegador para mostrar a linha vermelha consistente com o relógio do usuário
-    const [currentTime, setCurrentTime] = useState(() => {
-        const now = new Date();
-        return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    });
+    // Usar hora de Brasília para a linha vermelha (consistência com a agenda)
+    const [currentTime, setCurrentTime] = useState(() => getCurrentBrazilTime());
 
     // Ref para scroll automático à hora atual
     const currentTimeRef = useRef(null);
@@ -101,11 +94,10 @@ const AgendaTab = ({ dashboardData }) => {
         });
     }, [allAppointments, weekStart, weekEnd, isSuperadmin, professorFilter]);
 
-    // Atualizar hora atual a cada minuto
+    // Atualizar hora atual a cada minuto (usando hora de Brasília)
     useEffect(() => {
         const interval = setInterval(() => {
-            const now = new Date();
-            setCurrentTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+            setCurrentTime(getCurrentBrazilTime());
         }, 60000); // Atualiza a cada 1 minuto
 
         return () => clearInterval(interval);
