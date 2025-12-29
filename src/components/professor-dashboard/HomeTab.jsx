@@ -589,26 +589,25 @@ const HomeTab = ({ dashboardData }) => {
         time: studentPreferences.time
       }));
 
-      // 1. Crear solicitud en solicitudes_clase para que el profesor la vea
-      const { error: solicitudError } = await supabase
-        .from('solicitudes_clase')
-        .insert({
-          student_id: selectedStudentForVinculacao.id,
-          professor_id: selectedProfessorId,
-          status: 'Pendiente',
-          horarios_propuestos: horariosPropuestos,
-          created_at: new Date().toISOString()
-        });
-
-      if (solicitudError) throw solicitudError;
-
-      // 2. Actualizar temporalmente el assigned_professor_id (pendiente de aprobación)
+      // 1. Actualizar el assigned_professor_id del estudiante
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ assigned_professor_id: selectedProfessorId })
         .eq('id', selectedStudentForVinculacao.id);
 
       if (updateError) throw updateError;
+
+      // 2. Crear notificación para el profesor
+      await supabase.from('notifications').insert({
+        user_id: selectedProfessorId,
+        type: 'new_student_assigned',
+        content: {
+          message: `Novo aluno atribuído: ${selectedStudentForVinculacao.full_name}`,
+          student_id: selectedStudentForVinculacao.id,
+          student_name: selectedStudentForVinculacao.full_name,
+          horarios_propuestos: horariosPropuestos
+        }
+      });
 
       // 3. Remover o aluno da lista de pendências localmente
       setPendenciasData(prev => ({
@@ -628,8 +627,8 @@ const HomeTab = ({ dashboardData }) => {
       setMatchedProfessors([]);
 
       toast({
-        title: 'Solicitação enviada!',
-        description: `Aguardando ${selectedProf?.full_name || 'Professor'} aceitar ${selectedStudentForVinculacao.full_name}.`,
+        title: 'Professor vinculado!',
+        description: `${selectedStudentForVinculacao.full_name} foi vinculado(a) a ${selectedProf?.full_name || 'Professor'}.`,
       });
 
     } catch (error) {
