@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield } from 'lucide-react';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import HomeTab from '@/components/professor-dashboard/HomeTab';
@@ -166,6 +167,9 @@ const ProfessorDashboardPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
     const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+
+    // NOVO: Estado para filtro global de professor (para superusuários)
+    const [globalProfessorFilter, setGlobalProfessorFilter] = useState('all');
 
     const handleLogout = async () => {
         await signOut();
@@ -378,20 +382,24 @@ const ProfessorDashboardPage = () => {
     const currentRoleSettings = dashboardData?.data?.roleSettings?.find(s => s.role === currentRole);
     const allowedTabs = currentRoleSettings?.permissions?.tabs || [];
 
+    // NOVA ESTRUTURA DE ABAS CONFORME SOLICITADO
+    // Para Superusuários: Painel, Início, Agenda, Conversas, Alunos, Aulas, Administração
+    // Para Professores: Início, Agenda, Conversas, Alunos, Aulas, Preferências
     const fullNavItems = isSuperadmin ? [
-        { id: 'home', icon: Home, label: 'Início', component: HomeTab },
-        { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
-        { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab },
-        { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab },
-        { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab },
-        { id: 'administracao', icon: Shield, label: 'Administração', component: AdminTab },
+        { id: 'painel', icon: LayoutDashboard, label: 'Painel', component: HomeTab, permission: 'painel', isPainelTab: true },
+        { id: 'home', icon: Home, label: 'Início', component: HomeTab, permission: 'inicio' },
+        { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab, permission: 'agenda' },
+        { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab, permission: 'conversas' },
+        { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab, permission: 'alunos' },
+        { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab, permission: 'aulas' },
+        { id: 'administracao', icon: Shield, label: 'Administração', component: AdminTab, permission: 'admtab' },
     ] : [
-        { id: 'home', icon: Home, label: 'Início', component: HomeTab },
-        { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
-        { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab },
-        { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab },
-        { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab },
-        { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
+        { id: 'home', icon: Home, label: 'Início', component: HomeTab, permission: 'inicio' },
+        { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab, permission: 'agenda' },
+        { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab, permission: 'conversas' },
+        { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab, permission: 'alunos' },
+        { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab, permission: 'aulas' },
+        { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab, permission: 'preferencias' },
     ];
 
     const navItems = fullNavItems.filter(item => {
@@ -399,21 +407,50 @@ const ProfessorDashboardPage = () => {
         if (isSuperadmin) return true;
         // Si no hay configuración, mostrar todo por defecto para no bloquear acceso
         if (!currentRoleSettings) return true;
+        return allowedTabs.includes(item.permission);
+    });
 
-        // Mapear el ID de la pestaña con la clave de permiso
-        const tabIdMap = {
-            'home': 'inicio',
-            'agenda': 'agenda',
-            'alunos': 'alunos',
-            'aulas': 'aulas',
-            'conversas': 'conversas',
-            'preferencias': 'preferencias',
-            'administracao': 'admtab'
+    // Preparar dashboardData com filtro de professor aplicado
+    const getFilteredDashboardData = () => {
+        if (!dashboardData) return null;
+
+        // Se não for superadmin, retorna dados normais (já filtrados no backend)
+        if (!isSuperadmin) return dashboardData;
+
+        // Se for superadmin e filtro = 'all', retorna dados completos
+        if (globalProfessorFilter === 'all') return dashboardData;
+
+        // Aplicar filtro de professor nos dados
+        const filteredData = {
+            ...dashboardData,
+            data: {
+                ...dashboardData.data,
+                // Filtrar appointments
+                appointments: (dashboardData.data?.appointments || []).filter(
+                    apt => apt.professor_id === globalProfessorFilter
+                ),
+                // Filtrar alunos vinculados ao professor
+                students: (dashboardData.data?.students || []).filter(
+                    s => s.assigned_professor_id === globalProfessorFilter
+                ),
+                // Filtrar scheduleRequests
+                scheduleRequests: (dashboardData.data?.scheduleRequests || []).filter(
+                    req => req.profesor_id === globalProfessorFilter
+                ),
+                // Filtrar classSlots
+                classSlots: (dashboardData.data?.classSlots || []).filter(
+                    slot => slot.professor_id === globalProfessorFilter
+                ),
+            },
+            // Passar o ID do professor filtrado para os componentes
+            filteredProfessorId: globalProfessorFilter,
+            globalProfessorFilter: globalProfessorFilter,
         };
 
-        const permissionId = tabIdMap[item.id] || item.id;
-        return allowedTabs.includes(permissionId);
-    });
+        return filteredData;
+    };
+
+    const filteredDashboardData = getFilteredDashboardData();
 
     // Componente Sidebar (Layout Mobile/Toggle)
     const Sidebar = () => (
@@ -554,11 +591,11 @@ const ProfessorDashboardPage = () => {
                         </div>
                     </div>
 
-                    {/* Linha inferior: TabsList para Navegação Desktop - Fundo Branco e Alinhamento */}
+                    {/* Linha inferior: TabsList para Navegação Desktop + Filtro de Professor - Fundo Branco e Alinhamento */}
                     <div className="hidden lg:block bg-white border-b border-slate-200">
-                        <div className="w-full px-4 lg:px-8">
+                        <div className="w-full px-4 lg:px-8 flex items-center justify-between">
                             <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
-                                <TabsList className="w-full justify-start h-auto p-0 bg-transparent rounded-none">
+                                <TabsList className="justify-start h-auto p-0 bg-transparent rounded-none">
                                     {navItems.map(item => (
                                         <TabsTrigger
                                             key={item.id}
@@ -583,6 +620,26 @@ const ProfessorDashboardPage = () => {
                                     ))}
                                 </TabsList>
                             </Tabs>
+
+                            {/* FILTRO GLOBAL DE PROFESSOR (apenas para superusuários) */}
+                            {isSuperadmin && activeTab !== 'painel' && (
+                                <div className="flex items-center gap-2 py-2">
+                                    <Filter className="h-4 w-4 text-slate-500" />
+                                    <Select value={globalProfessorFilter} onValueChange={setGlobalProfessorFilter}>
+                                        <SelectTrigger className="w-[220px] h-9">
+                                            <SelectValue placeholder="Filtrar por professor" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos os professores</SelectItem>
+                                            {(dashboardData?.data?.professors || []).map(prof => (
+                                                <SelectItem key={prof.id} value={prof.id}>
+                                                    {prof.full_name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
                         </div>
                     </div>
                     {/* Header Mobile */}
@@ -627,8 +684,16 @@ const ProfessorDashboardPage = () => {
                             {/* Tabs Content */}
                             {navItems.map(item => (
                                 <TabsContent key={item.id} value={item.id} className="mt-0">
-                                    {/* ATENÇÃO: O padding horizontal (px-4 lg:px-8) DEVE ser adicionado no DIV raiz de HomeTab, AgendaTab, etc., para replicar o alinhamento do cabeçalho. */}
-                                    <item.component dashboardData={dashboardData} />
+                                    {/* Passar dashboardData filtrado para os componentes */}
+                                    <item.component
+                                        dashboardData={{
+                                            ...filteredDashboardData,
+                                            // Indicar se é a aba "Painel" (para o HomeTab mostrar pendências)
+                                            showPainelView: item.isPainelTab === true,
+                                            // Indicar se é a aba "Início" normal
+                                            showHomeView: item.id === 'home' && !item.isPainelTab,
+                                        }}
+                                    />
                                 </TabsContent>
                             ))}
                         </Tabs>
