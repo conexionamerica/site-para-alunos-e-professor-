@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { ArrowLeft, Send, Loader2, MessageSquare as MessageSquareText } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getBrazilDate } from '@/lib/dateUtils';
 
 const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
   const [messages, setMessages] = useState([]);
@@ -79,7 +80,7 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
       chat_id: activeChat.chat_id,
       remitente_id: professorId,
       contenido: tempMessage,
-      enviado_en: new Date().toISOString(),
+      enviado_en: getBrazilDate().toISOString(),
     };
     setMessages((prev) => [...prev, localMessage]);
 

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { format, parseISO, parse, isValid, getDay, add, isAfter, addDays } from 'date-fns';
+import { getBrazilDate } from '@/lib/dateUtils';
 import { ptBR } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -243,7 +244,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
             const startTimeObj = parse(time, 'HH:mm', date);
 
             // Não permite agendamento no passado
-            if (isAfter(new Date(), startTimeObj)) return false;
+            if (isAfter(getBrazilDate(), startTimeObj)) return false;
 
             // Verifica se há slots consecutivos livres e preferenciais para a duração total da aula
             for (let i = 0; i < slotsPerClass; i++) {
@@ -570,10 +571,10 @@ const AulasTab = ({ dashboardData }) => {
     }, [packages]);
 
     // Função para obter a data de hoje no formato yyyy-MM-dd
-    const getTodayStr = () => format(new Date(), 'yyyy-MM-dd');
+    const getTodayStr = () => format(getBrazilDate(), 'yyyy-MM-dd');
 
     // Função para obter a data de amanhã no formato yyyy-MM-dd
-    const getTomorrowStr = () => format(addDays(new Date(), 1), 'yyyy-MM-dd');
+    const getTomorrowStr = () => format(addDays(getBrazilDate(), 1), 'yyyy-MM-dd');
 
     // Handler para limpar todos os filtros
     const handleClearFilters = () => {

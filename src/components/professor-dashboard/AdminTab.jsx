@@ -286,7 +286,6 @@ const AdminTab = ({ dashboardData }) => {
                     is_active: formData.is_active === true
                 };
 
-                console.log('Enviando atualização para o banco:', updateData);
 
                 // 1. Atualizar o vínculo do professor via RPC (Garante o salvamento saltando RLS)
                 if (formData.role === 'student' && updateData.assigned_professor_id) {
@@ -302,7 +301,6 @@ const AdminTab = ({ dashboardData }) => {
                     .eq('id', editingUser.id)
                     .select();
 
-                console.log('Update Result Data:', updatedRows);
 
                 if (updateError) {
                     console.error('Erro no update do profile:', updateError);
@@ -310,9 +308,7 @@ const AdminTab = ({ dashboardData }) => {
                 }
 
                 if (!updatedRows || updatedRows.length === 0) {
-                    console.warn('Alerta: Nenhuma linha foi atualizada via Update.');
-                } else {
-                    console.log('Update de perfil concluído com sucesso para:', updatedRows?.[0]?.full_name);
+                    // No rows updated - this is a warning condition
                 }
 
                 // Lógica de inativação avançada (limpeza de horários e cancelamento de aulas)
@@ -390,8 +386,6 @@ const AdminTab = ({ dashboardData }) => {
                 }
             } else {
                 // For new users, create via Auth
-                console.log('Creating new user via Supabase Auth...', formData.email);
-
                 try {
                     const { data: authData, error: authError } = await supabase.auth.signUp({
                         email: formData.email.trim(),
@@ -439,8 +433,6 @@ const AdminTab = ({ dashboardData }) => {
                             duration: 10000,
                         });
                     } else {
-                        console.log('User created in Auth, ensuring Profile exists...', newUser.id);
-
                         // Garantia: Inserir/Upsert manual no profiles para evitar falhas de trigger
                         const profileData = {
                             id: newUser.id,

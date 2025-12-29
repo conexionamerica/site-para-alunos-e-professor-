@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { getBrazilDate } from '@/lib/dateUtils';
 
 const ChatWidget = () => {
   const { user } = useAuth();
@@ -25,41 +26,41 @@ const ChatWidget = () => {
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
-  
+
   const getOrCreateChat = useCallback(async (currentProfessorId) => {
     if (!user || !currentProfessorId) return null;
 
     let { data: existingChat, error: fetchError } = await supabase
-        .from('chats')
-        .select('chat_id')
-        .eq('alumno_id', user.id)
-        .eq('profesor_id', currentProfessorId)
-        .maybeSingle(); 
-    
-    if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error("Error fetching chat:", fetchError);
-        toast({ variant: "destructive", title: "Erro no Chat", description: "Não foi possível carregar a conversa." });
-        return null;
-    }
-    
-    if (existingChat) {
-        return existingChat.chat_id;
-    } else {
-        const { data: newChat, error: createError } = await supabase
-            .from('chats')
-            .insert({ alumno_id: user.id, profesor_id: currentProfessorId })
-            .select('chat_id')
-            .single();
+      .from('chats')
+      .select('chat_id')
+      .eq('alumno_id', user.id)
+      .eq('profesor_id', currentProfessorId)
+      .maybeSingle();
 
-        if (createError) {
-            console.error("Error creating chat:", createError);
-            toast({ variant: "destructive", title: "Erro no Chat", description: "Não foi possível iniciar uma nova conversa." });
-            return null;
-        }
-        return newChat.chat_id;
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error("Error fetching chat:", fetchError);
+      toast({ variant: "destructive", title: "Erro no Chat", description: "Não foi possível carregar a conversa." });
+      return null;
+    }
+
+    if (existingChat) {
+      return existingChat.chat_id;
+    } else {
+      const { data: newChat, error: createError } = await supabase
+        .from('chats')
+        .insert({ alumno_id: user.id, profesor_id: currentProfessorId })
+        .select('chat_id')
+        .single();
+
+      if (createError) {
+        console.error("Error creating chat:", createError);
+        toast({ variant: "destructive", title: "Erro no Chat", description: "Não foi possível iniciar uma nova conversa." });
+        return null;
+      }
+      return newChat.chat_id;
     }
   }, [user, toast]);
-  
+
   const fetchInitialData = useCallback(async () => {
     if (!user || !isOpen) return;
 
@@ -67,27 +68,27 @@ const ChatWidget = () => {
     const { data: profData, error: profError } = await supabase.from('profiles').select('id').eq('role', 'professor').limit(1).maybeSingle();
 
     if (profError || !profData) {
-        toast({ variant: "destructive", title: "Erro no Chat", description: "Professor não cadastrado. Não é possível iniciar o chat." });
-        setLoadingInitial(false);
-        return;
+      toast({ variant: "destructive", title: "Erro no Chat", description: "Professor não cadastrado. Não é possível iniciar o chat." });
+      setLoadingInitial(false);
+      return;
     }
     const currentProfessorId = profData.id;
     setProfessorId(currentProfessorId);
 
     const currentChatId = await getOrCreateChat(currentProfessorId);
     if (!currentChatId) {
-        setLoadingInitial(false);
-        return;
+      setLoadingInitial(false);
+      return;
     }
     setChatId(currentChatId);
 
     const { data: messagesData, error: messagesError } = await supabase.from('mensajes').select('*').eq('chat_id', currentChatId).order('enviado_en', { ascending: true });
 
     if (messagesError) {
-        console.error("Error fetching messages:", messagesError);
-        toast({ variant: "destructive", title: "Erro no Chat", description: "Não foi possível carregar as mensagens." });
+      console.error("Error fetching messages:", messagesError);
+      toast({ variant: "destructive", title: "Erro no Chat", description: "Não foi possível carregar as mensagens." });
     } else {
-        setMessages(messagesData || []);
+      setMessages(messagesData || []);
     }
     setLoadingInitial(false);
   }, [user, isOpen, getOrCreateChat, toast]);
@@ -95,11 +96,11 @@ const ChatWidget = () => {
 
   useEffect(() => {
     if (isOpen) {
-        fetchInitialData();
+      fetchInitialData();
     } else {
-        setMessages([]);
-        setChatId(null);
-        setProfessorId(null);
+      setMessages([]);
+      setChatId(null);
+      setProfessorId(null);
     }
   }, [isOpen, fetchInitialData]);
 
@@ -108,11 +109,11 @@ const ChatWidget = () => {
 
     const channel = supabase
       .channel(`chat-room-${chatId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: `chat_id=eq.${chatId}`},
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: `chat_id=eq.${chatId}` },
         (payload) => {
-            if (payload.new.remitente_id !== user.id) {
-              setMessages((currentMessages) => [...currentMessages, payload.new]);
-            }
+          if (payload.new.remitente_id !== user.id) {
+            setMessages((currentMessages) => [...currentMessages, payload.new]);
+          }
         }
       )
       .subscribe();
@@ -138,7 +139,7 @@ const ChatWidget = () => {
       chat_id: chatId,
       remitente_id: user.id,
       contenido: tempMessageContent,
-      enviado_en: new Date().toISOString(),
+      enviado_en: getBrazilDate().toISOString(),
       leido: false,
     };
     setMessages((prevMessages) => [...prevMessages, localMessage]);
@@ -154,7 +155,7 @@ const ChatWidget = () => {
 
     if (error) {
       toast({ variant: "destructive", title: "Erro ao enviar", description: error.message });
-      setMessageContent(tempMessageContent); 
+      setMessageContent(tempMessageContent);
       setMessages((prevMessages) => prevMessages.filter(msg => msg.mensaje_id !== localMessage.mensaje_id));
     }
     setLoading(false);
@@ -173,7 +174,7 @@ const ChatWidget = () => {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}>
           <div className="flex flex-col h-[28rem]">
             <header className="p-4 bg-sky-600 text-white rounded-t-2xl flex items-center gap-3">
-              <div className="bg-white/20 p-2 rounded-full"><Bot className="h-6 w-6"/></div>
+              <div className="bg-white/20 p-2 rounded-full"><Bot className="h-6 w-6" /></div>
               <h3 className="font-bold text-lg">Fale com o Professor</h3>
             </header>
             <main className="flex-1 p-4 bg-slate-50 overflow-y-auto space-y-4">

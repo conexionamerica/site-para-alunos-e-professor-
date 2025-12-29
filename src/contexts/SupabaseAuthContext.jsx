@@ -69,7 +69,6 @@ export const AuthProvider = ({ children }) => {
 
     // FIX: Tentar atualizar a sessão se houver um token mas o objeto 'user' estiver ausente (erro 403: missing sub claim)
     if (currentSession && !currentUser) {
-      console.log('Session exists but user is missing, trying to refresh token...');
       const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
       if (!refreshError && refreshedSession) {
         currentUser = refreshedSession.user;

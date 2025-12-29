@@ -82,7 +82,7 @@ const HomeTab = ({ dashboardData }) => {
   // CORREÇÃO: Calcular nextClass a partir dos appointments centralizados
   const nextClass = useMemo(() => {
     if (!allAppointments || allAppointments.length === 0) return null;
-    const now = new Date();
+    const now = getBrazilDate();
     const futureClasses = allAppointments.filter(apt => {
       if (!apt.class_datetime) return false;
       const aptDate = new Date(apt.class_datetime);
@@ -95,7 +95,7 @@ const HomeTab = ({ dashboardData }) => {
   // CORREÇÃO: Calcular upcomingClasses a partir dos appointments centralizados
   const upcomingClasses = useMemo(() => {
     if (!allAppointments || allAppointments.length === 0) return [];
-    const now = new Date();
+    const now = getBrazilDate();
     return allAppointments.filter(apt => {
       if (!apt.class_datetime) return false;
       const aptDate = new Date(apt.class_datetime);
@@ -119,7 +119,7 @@ const HomeTab = ({ dashboardData }) => {
       setNext24Hours([]);
       return;
     }
-    const now = new Date();
+    const now = getBrazilDate();
     const next24 = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const filtered = allAppointments.filter(apt => {
       if (!apt.class_datetime) return false;
@@ -347,7 +347,7 @@ const HomeTab = ({ dashboardData }) => {
       descricao,
       dadosOriginais: item,
       acao: 'ignorada',
-      criadoEm: new Date().toISOString()
+      criadoEm: getBrazilDate().toISOString()
     };
 
     const novoHistorico = [novaPendencia, ...historico];
@@ -582,12 +582,6 @@ const HomeTab = ({ dashboardData }) => {
       // Buscar dados do professor
       const selectedProf = professors.find(p => p.id === selectedProfessorId);
 
-      console.log('=== VINCULANDO PROFESSOR ===');
-      console.log('Student ID:', selectedStudentForVinculacao.id);
-      console.log('Student Name:', selectedStudentForVinculacao.full_name);
-      console.log('Professor ID:', selectedProfessorId);
-      console.log('Professor Name:', selectedProf?.full_name);
-
       // Crear los horarios propuestos basados en las preferencias seleccionadas
       const horariosPropuestos = studentPreferences.days.map(dayIndex => ({
         day: daysOfWeek[dayIndex],
@@ -602,13 +596,9 @@ const HomeTab = ({ dashboardData }) => {
           p_professor_id: selectedProfessorId
         });
 
-      console.log('RPC Result:', rpcData);
 
       if (rpcError || (rpcData && rpcData.success === false)) {
-        console.error('RPC ERROR:', rpcError || rpcData?.error);
-
         // Fallback: Intentar update normal si RPC no existe o falla
-        console.log('Tentando fallback com update normal...');
         const { data: updateData, error: updateError } = await supabase
           .from('profiles')
           .update({ assigned_professor_id: selectedProfessorId })
@@ -620,7 +610,6 @@ const HomeTab = ({ dashboardData }) => {
         }
       }
 
-      console.log('Vinculação concluída com sucesso!');
 
       // 2. Crear notificación para el profesor
       const { error: notifError } = await supabase.from('notifications').insert({
@@ -724,7 +713,7 @@ const HomeTab = ({ dashboardData }) => {
 
         const appointmentInserts = [];
         const slotIdsToUpdate = new Set();
-        let currentDate = new Date();
+        let currentDate = getBrazilDate();
         let classesScheduled = 0;
 
         while (currentDate <= endDate && classesScheduled < totalClassesInPackage) {

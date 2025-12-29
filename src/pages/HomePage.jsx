@@ -244,7 +244,7 @@ const HomePage = () => {
       mensaje_id: `temp-${Date.now()}`,
       remitente_id: user.id,
       contenido: newChatMessage,
-      enviado_en: new Date().toISOString()
+      enviado_en: getBrazilDate().toISOString()
     };
     setChatMessages(prev => [...prev, tempMessage]);
     const messageToSend = newChatMessage;
@@ -279,7 +279,7 @@ const HomePage = () => {
     });
 
     // Filtrar feedbacks dos últimos 30 dias
-    const thirtyDaysAgo = new Date();
+    const thirtyDaysAgo = getBrazilDate();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const recentFeedbacks = feedbacks.filter(f => {
@@ -391,7 +391,7 @@ const HomePage = () => {
 
         if (isStartSlotAvailableAcrossDays) {
           const isBlockContinuouslyAvailable = selectedDays.every(day => {
-            const startTimeObj = parse(startTime, 'HH:mm:ss', new Date());
+            const startTimeObj = parse(startTime, 'HH:mm:ss', getBrazilDate());
 
             for (let i = 0; i < slotsPerClass; i++) {
               const currentSlotTime = format(add(startTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
