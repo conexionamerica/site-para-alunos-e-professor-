@@ -780,6 +780,7 @@ const AdminTab = ({ dashboardData }) => {
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <h4 className="font-semibold text-slate-800">Aluno (student)</h4>
+                                            <p className="text-sm text-slate-500">Acesso ao portal do aluno</p>
                                             <div className="mt-2 flex flex-wrap gap-1">
                                                 {['dashboard', 'clases', 'chat', 'desempenho', 'faturas'].map(tab => {
                                                     const isAllowed = roleSettings.find(s => s.role === 'student')?.permissions?.tabs?.includes(tab);
@@ -805,28 +806,35 @@ const AdminTab = ({ dashboardData }) => {
                                 </div>
 
                                 {/* Perfil Professor */}
-                                <div className="border rounded-lg p-4">
+                                <div className="border rounded-lg p-4 border-sky-200 bg-sky-50/50">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <h4 className="font-semibold text-slate-800">Professor (professor)</h4>
-                                            <p className="text-sm text-slate-500">Acesso completo ao painel do professor</p>
+                                            <h4 className="font-semibold text-sky-800">Professor (professor)</h4>
+                                            <p className="text-sm text-sky-600">Acesso ao painel do professor (dados próprios)</p>
                                             <div className="mt-2 flex flex-wrap gap-1">
-                                                {['inicio', 'agenda', 'alunos', 'aulas', 'conversas', 'preferencias'].map(tab => {
-                                                    const isAllowed = roleSettings.find(s => s.role === 'professor')?.permissions?.tabs?.includes(tab);
+                                                {[
+                                                    { id: 'inicio', label: 'Início' },
+                                                    { id: 'agenda', label: 'Agenda' },
+                                                    { id: 'conversas', label: 'Conversas' },
+                                                    { id: 'alunos', label: 'Alunos' },
+                                                    { id: 'aulas', label: 'Aulas' },
+                                                    { id: 'preferencias', label: 'Preferências' }
+                                                ].map(tab => {
+                                                    const isAllowed = roleSettings.find(s => s.role === 'professor')?.permissions?.tabs?.includes(tab.id);
                                                     return (
                                                         <Badge
-                                                            key={tab}
+                                                            key={tab.id}
                                                             variant={isAllowed ? "default" : "outline"}
-                                                            className={`text-xs capitalize ${!isAllowed ? 'opacity-40 text-slate-400' : 'border-sky-200 text-sky-700 bg-sky-50'}`}
+                                                            className={`text-xs ${!isAllowed ? 'opacity-40 text-slate-400' : 'border-sky-300 text-sky-700 bg-sky-100'}`}
                                                         >
-                                                            {tab}
+                                                            {tab.label}
                                                         </Badge>
                                                     );
                                                 })}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3">
-                                            <Badge variant="default">{professors.length} usuários</Badge>
+                                            <Badge className="bg-sky-600">{professors.length} usuários</Badge>
                                             <Button variant="outline" size="sm" onClick={() => handleEditRole('professor')}>
                                                 <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
                                             </Button>
@@ -839,12 +847,29 @@ const AdminTab = ({ dashboardData }) => {
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <h4 className="font-semibold text-purple-800">Administrador (superadmin)</h4>
-                                            <p className="text-sm text-purple-600">Acesso total a todos os recursos e dados</p>
+                                            <p className="text-sm text-purple-600">Acesso total com visão global e filtro por professor</p>
                                             <div className="mt-2 flex flex-wrap gap-1">
-                                                <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">Todas as abas do Professor</Badge>
-                                                <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">Administração</Badge>
-                                                <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">Visão Global</Badge>
+                                                {[
+                                                    { id: 'painel', label: 'Painel' },
+                                                    { id: 'inicio', label: 'Início' },
+                                                    { id: 'agenda', label: 'Agenda' },
+                                                    { id: 'conversas', label: 'Conversas' },
+                                                    { id: 'alunos', label: 'Alunos' },
+                                                    { id: 'aulas', label: 'Aulas' },
+                                                    { id: 'admtab', label: 'Administração' }
+                                                ].map(tab => (
+                                                    <Badge
+                                                        key={tab.id}
+                                                        variant="outline"
+                                                        className="text-xs border-purple-300 text-purple-700 bg-purple-100"
+                                                    >
+                                                        {tab.label}
+                                                    </Badge>
+                                                ))}
                                             </div>
+                                            <p className="text-xs text-purple-500 mt-2">
+                                                + Filtro global por professor em todas as abas
+                                            </p>
                                         </div>
                                         <Badge variant="destructive">
                                             {allProfiles.filter(p => p.role === 'superadmin').length} usuários
@@ -855,7 +880,7 @@ const AdminTab = ({ dashboardData }) => {
 
                             <div className="mt-6 p-4 bg-slate-50 rounded-lg">
                                 <p className="text-sm text-slate-600">
-                                    <strong>Nota:</strong> A gestão avançada de perfis e permissões personalizadas será implementada em versões futuras.
+                                    <strong>Nota:</strong> Superusuários têm acesso a todas as abas com a possibilidade de filtrar por professor específico. Professores veem apenas seus próprios dados.
                                 </p>
                             </div>
                         </CardContent>
