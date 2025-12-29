@@ -186,6 +186,11 @@ const AgendaTab = ({ dashboardData }) => {
                 <div className="text-slate-600 text-[10px]">
                     {isSpanish ? 'Espanhol' : 'Inglês'}
                 </div>
+                {isSuperadmin && (
+                    <div className="text-slate-500 text-[10px] truncate">
+                        Prof: {professors.find(p => p.id === apt.professor_id)?.full_name || '—'}
+                    </div>
+                )}
             </div>
         );
     };

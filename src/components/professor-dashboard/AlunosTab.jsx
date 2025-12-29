@@ -430,100 +430,7 @@ const AlunosTab = ({ dashboardData }) => {
         return matchesSearch;
     });
 
-    // Función para activar/inactivar alumno
-    const handleToggleActive = async (student) => {
-        const isCurrentlyActive = student.is_active !== false;
-        const newStatus = !isCurrentlyActive;
-        const action = newStatus ? 'ativar' : 'inativar';
 
-        if (!window.confirm(`Tem certeza que deseja ${action} o aluno ${student.full_name}?`)) {
-            return;
-        }
-
-        try {
-            const { error: profileError } = await supabase
-                .from('profiles')
-                .update({ is_active: newStatus })
-                .eq('id', student.id);
-
-            if (profileError) throw profileError;
-
-            if (!newStatus) {
-                const { data: futureAppointments, error: apptError } = await supabase
-                    .from('appointments')
-                    .select('class_slot_id, duration_minutes, class_datetime')
-                    .eq('student_id', student.id)
-                    .gte('class_datetime', getBrazilDate().toISOString())
-                    .in('status', ['scheduled', 'pending', 'rescheduled']);
-
-                if (apptError) {
-                    console.error('Error fetching appointments:', apptError);
-                } else if (futureAppointments && futureAppointments.length > 0) {
-                    const slotIdsToFree = new Set();
-
-                    for (const apt of futureAppointments) {
-                        if (apt.class_slot_id) {
-                            slotIdsToFree.add(apt.class_slot_id);
-
-                            const slotsNeeded = Math.ceil((apt.duration_minutes || 30) / 15);
-                            if (slotsNeeded > 1) {
-                                const { data: consecutiveSlots } = await supabase
-                                    .from('class_slots')
-                                    .select('id, day_of_week, start_time')
-                                    .eq('professor_id', professorId)
-                                    .eq('status', 'filled');
-
-                                consecutiveSlots?.forEach(slot => slotIdsToFree.add(slot.id));
-                            }
-                        }
-                    }
-
-                    if (slotIdsToFree.size > 0) {
-                        const { error: updateSlotsError } = await supabase
-                            .from('class_slots')
-                            .update({ status: 'active' })
-                            .in('id', Array.from(slotIdsToFree));
-
-                        if (updateSlotsError) {
-                            console.error('Error liberating slots:', updateSlotsError);
-                            toast({
-                                variant: 'warning',
-                                title: 'Aviso',
-                                description: 'Aluno inativado, mas alguns horários podem não ter sido liberados.'
-                            });
-                        } else {
-                            toast({
-                                title: 'Sucesso!',
-                                description: `Aluno inativado e ${slotIdsToFree.size} horário(s) liberado(s) com sucesso.`
-                            });
-                        }
-                    }
-
-                    await supabase
-                        .from('appointments')
-                        .update({ status: 'cancelled' })
-                        .eq('student_id', student.id)
-                        .gte('class_datetime', getBrazilDate().toISOString())
-                        .in('status', ['scheduled', 'pending', 'rescheduled']);
-                }
-            } else {
-                toast({
-                    title: 'Sucesso!',
-                    description: `Aluno ativado com sucesso.`
-                });
-            }
-
-            if (onUpdate) onUpdate();
-
-        } catch (error) {
-            console.error('Error toggling student status:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Erro',
-                description: `Não foi possível ${action} o aluno: ${error.message}`
-            });
-        }
-    };
 
     const handleOpenMessageDialog = (student) => {
         setSelectedStudent(student);
@@ -626,6 +533,7 @@ const AlunosTab = ({ dashboardData }) => {
                                     <TableHead>Nome</TableHead>
                                     <TableHead>Idade</TableHead>
                                     <TableHead>Nível</TableHead>
+                                    <TableHead>Professor</TableHead>
                                     <TableHead>Dias de Aula</TableHead>
                                     <TableHead>Aulas Agendadas</TableHead>
                                     <TableHead>Estado</TableHead>
@@ -648,6 +556,9 @@ const AlunosTab = ({ dashboardData }) => {
                                             </TableCell>
                                             <TableCell>{student.age || 'N/A'}</TableCell>
                                             <TableCell>{student.spanish_level || 'N/A'}</TableCell>
+                                            <TableCell>
+                                                {professors.find(p => p.id === student.assigned_professor_id)?.full_name || '—'}
+                                            </TableCell>
                                             <TableCell>
                                                 {Object.keys(student.daySchedules).length > 0 ? (
                                                     <div className="flex flex-col gap-1">
@@ -700,14 +611,7 @@ const AlunosTab = ({ dashboardData }) => {
                                                                 <DropdownMenuSeparator />
                                                             </>
                                                         )}
-                                                        <DropdownMenuItem onClick={() => handleToggleActive(student)}>
-                                                            {student.is_active !== false ? (
-                                                                <><UserX className="mr-2 h-4 w-4 text-orange-600" /> Inativar Aluno</>
-                                                            ) : (
-                                                                <><UserCheck className="mr-2 h-4 w-4 text-green-600" /> Ativar Aluno</>
-                                                            )}
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
+
                                                         <DropdownMenuItem onClick={() => handleOpenMessageDialog(student)}>
                                                             <MessageSquare className="mr-2 h-4 w-4 text-sky-600" />
                                                             Enviar Mensagem
@@ -716,7 +620,7 @@ const AlunosTab = ({ dashboardData }) => {
                                                 </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
-                                    )) : <TableRow><TableCell colSpan="9" className="text-center py-8 text-slate-500">Nenhum aluno encontrado.</TableCell></TableRow>}
+                                    )) : <TableRow><TableCell colSpan="10" className="text-center py-8 text-slate-500">Nenhum aluno encontrado.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </div>

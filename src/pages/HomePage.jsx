@@ -106,6 +106,7 @@ const HomePage = () => {
   const [newChatMessage, setNewChatMessage] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
+  const [roleSettings, setRoleSettings] = useState(null);
 
   const chatEndRef = React.useRef(null);
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -128,7 +129,7 @@ const HomePage = () => {
       if (!currentProfessorId) { setLoading(false); return; }
       setProfessorId(currentProfessorId);
 
-      const [appointmentsRes, activeBillingsRes, pastBillingsRes, assignedLogsRes, pendingReqRes, nextClassRes, feedbacksRes, chatRes] = await Promise.all([
+      const [appointmentsRes, activeBillingsRes, pastBillingsRes, assignedLogsRes, pendingReqRes, nextClassRes, feedbacksRes, chatRes, roleSettingsRes] = await Promise.all([
         supabase.from('appointments').select('*').eq('student_id', user.id).order('class_datetime', { ascending: true }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).gte('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).lt('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
@@ -137,6 +138,7 @@ const HomePage = () => {
         supabase.from('appointments').select(`*, student:profiles!student_id(full_name, spanish_level)`).eq('student_id', user.id).in('status', ['scheduled', 'rescheduled']).gte('class_datetime', today).order('class_datetime', { ascending: true }).limit(1).maybeSingle(),
         supabase.from('class_feedback').select(`*, appointment:appointments!fk_appointment(class_datetime)`).eq('student_id', user.id).order('created_at', { ascending: false }),
         supabase.from('chats').select('*').eq('alumno_id', user.id).maybeSingle(),
+        supabase.from('role_settings').select('*').eq('role', 'student').maybeSingle(),
       ]);
 
       const errors = [appointmentsRes.error, activeBillingsRes.error, pastBillingsRes.error, assignedLogsRes.error, pendingReqRes.error, nextClassRes.error].filter(Boolean).filter(e => e.code !== 'PGRST116');
@@ -151,6 +153,7 @@ const HomePage = () => {
       setActiveBillings(activeBillingsData);
       setPastBillings(pastBillingsRes.data || []);
       setFeedbacks(feedbacksRes.data || []);
+      setRoleSettings(roleSettingsRes?.data || null);
 
       if (chatRes.data) {
         setChat(chatRes.data);
@@ -215,6 +218,7 @@ const HomePage = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_clase', filter: `alumno_id=eq.${user.id}` }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'assigned_packages_log', filter: `student_id=eq.${user.id}` }, fetchData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'class_slots', filter: `professor_id=eq.${professorId}` }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'role_settings', filter: `role=eq.student` }, fetchData)
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [fetchData, user, professorId]);
@@ -546,11 +550,24 @@ const HomePage = () => {
 
         <Tabs defaultValue="agenda" className="w-full mt-8">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 bg-slate-200">
-            <TabsTrigger value="agenda"><Package className="mr-2 h-4 w-4 hidden sm:block" />Agenda</TabsTrigger>
-            <TabsTrigger value="aulas"><BookOpen className="mr-2 h-4 w-4 hidden sm:block" />Aulas</TabsTrigger>
-            <TabsTrigger value="conversas"><MessageIcon className="mr-2 h-4 w-4 hidden sm:block" />Conversas</TabsTrigger>
-            <TabsTrigger value="desempenho"><BarChart3 className="mr-2 h-4 w-4 hidden sm:block" />Desempenho</TabsTrigger>
-            <TabsTrigger value="faturas"><FileText className="mr-2 h-4 w-4 hidden sm:block" />Faturas</TabsTrigger>
+            {/* Abas dinâmicas baseadas em permissões */}
+            {(() => {
+              const allowedTabs = roleSettings?.permissions?.tabs || ['dashboard', 'clases', 'chat', 'desempenho', 'faturas'];
+              const tabsDef = [
+                { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Agenda' },
+                { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas' },
+                { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Conversas' },
+                { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Desempenho' },
+                { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas' },
+              ];
+
+              return tabsDef.filter(t => allowedTabs.includes(t.permission)).map(tab => (
+                <TabsTrigger key={tab.id} value={tab.value}>
+                  <tab.icon className="mr-2 h-4 w-4 hidden sm:block" />
+                  {tab.label}
+                </TabsTrigger>
+              ));
+            })()}
           </TabsList>
 
           <TabsContent value="faturas" className="mt-4 space-y-6">

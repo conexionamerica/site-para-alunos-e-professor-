@@ -116,9 +116,16 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         .select('*');
     if (logsError) throw logsError;
 
-    // 9. Fetch de la lista de Chats (para ConversasTab)
     const { data: chatList, error: chatListError } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
     if (chatListError && chatListError.code !== '42883') throw chatListError;
+
+    // 10. Fetch de configurações de role (permissões de abas)
+    const { data: roleSettings, error: roleSettingsError } = await supabase
+        .from('role_settings')
+        .select('*');
+    if (roleSettingsError && roleSettingsError.code !== 'PGRST116') {
+        console.error("Erro ao buscar role_settings:", roleSettingsError);
+    }
 
     return {
         professorId,
@@ -136,6 +143,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         allBillings: allBillings || [],
         assignedLogs: assignedLogs || [],
         chatList: chatList || [],
+        roleSettings: roleSettings || [],
     };
 };
 
@@ -248,7 +256,7 @@ const ProfessorDashboardPage = () => {
         const profilesChannel = supabase
             .channel('profiles-changes')
             .on('postgres_changes', {
-                event: 'UPDATE',
+                event: '*',
                 schema: 'public',
                 table: 'profiles'
             }, () => {
@@ -365,7 +373,12 @@ const ProfessorDashboardPage = () => {
     // Pestañas dinámicas según el rol
     const isSuperadmin = dashboardData?.isSuperadmin || false;
 
-    const navItems = isSuperadmin ? [
+    // Pestañas dinámicas según el rol y configurações de permissão
+    const currentRole = profile?.role || dashboardData?.userRole;
+    const currentRoleSettings = dashboardData?.data?.roleSettings?.find(s => s.role === currentRole);
+    const allowedTabs = currentRoleSettings?.permissions?.tabs || [];
+
+    const fullNavItems = isSuperadmin ? [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab },
         { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab },
@@ -380,6 +393,27 @@ const ProfessorDashboardPage = () => {
         { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab },
         { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab },
     ];
+
+    const navItems = fullNavItems.filter(item => {
+        // Superadmin siempre ve todo
+        if (isSuperadmin) return true;
+        // Si no hay configuración, mostrar todo por defecto para no bloquear acceso
+        if (!currentRoleSettings) return true;
+
+        // Mapear el ID de la pestaña con la clave de permiso
+        const tabIdMap = {
+            'home': 'inicio',
+            'agenda': 'agenda',
+            'alunos': 'alunos',
+            'aulas': 'aulas',
+            'conversas': 'conversas',
+            'preferencias': 'preferencias',
+            'administracao': 'admtab'
+        };
+
+        const permissionId = tabIdMap[item.id] || item.id;
+        return allowedTabs.includes(permissionId);
+    });
 
     // Componente Sidebar (Layout Mobile/Toggle)
     const Sidebar = () => (

@@ -121,15 +121,18 @@ export const AuthProvider = ({ children }) => {
             return;
           }
 
-          if (userProfile?.role === 'professor') {
-            // Handled by ProfessorLoginPage
+          if (userProfile?.role === 'professor' || userProfile?.role === 'superadmin') {
+            // Handled by ProfessorLoginPage or by staying on current route if already in dashboard
           } else {
-            toast({
-              variant: "info",
-              title: "Login bem-sucedido! 😊",
-              description: "Bem-vindo(a) de volta ao seu painel.",
-            });
-            navigate('/');
+            // Only redirect to / if we are on the login page
+            if (window.location.pathname === '/login') {
+              toast({
+                variant: "info",
+                title: "Login bem-sucedido! 😊",
+                description: "Bem-vindo(a) de volta ao seu painel.",
+              });
+              navigate('/');
+            }
           }
         } else if (_event === 'SIGNED_OUT') {
           setProfessorSession(false);

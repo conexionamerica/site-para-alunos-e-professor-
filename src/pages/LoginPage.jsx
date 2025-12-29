@@ -150,12 +150,7 @@ const LoginPage = () => {
             {loading ? 'Entrando...' : 'Entrar'}
           </Button>
         </form>
-        <p className="text-sm text-center text-slate-500">
-          Não tem uma conta?{' '}
-          <Link to="/register" className="font-medium text-sky-600 hover:underline">
-            Registre-se
-          </Link>
-        </p>
+        {/* Registro desabilitado no portal do aluno por solicitação do administrador */}
       </div>
     </motion.div>
   );
