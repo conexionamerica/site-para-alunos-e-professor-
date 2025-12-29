@@ -858,86 +858,115 @@ const AdminTab = ({ dashboardData }) => {
             <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
-                        <DialogTitle>{editingUser ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
+                        <DialogTitle>{editingUser ? 'Gerenciar Usuário' : 'Novo Usuário'}</DialogTitle>
                         <DialogDescription>
-                            {editingUser ? 'Atualize as informações do usuário.' : 'Preencha os dados do novo usuário.'}
+                            {editingUser ? 'Gerencie o vínculo com professor e status da conta.' : 'Preencha os dados do novo usuário.'}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="full_name">Nome completo *</Label>
-                            <Input
-                                id="full_name"
-                                value={formData.full_name}
-                                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                                placeholder="Nome do usuário"
-                            />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="username">Username</Label>
-                            <Input
-                                id="username"
-                                value={formData.username}
-                                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                placeholder="username"
-                            />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input
-                                id="email"
-                                type="email"
-                                value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                placeholder="seu@email.com"
-                            />
-                        </div>
+                        {/* Solo mostrar campos de nombre/email/etc cuando es NUEVO usuario */}
                         {!editingUser && (
-                            <div className="p-3 bg-slate-100 rounded-lg space-y-2">
-                                <Label className="text-xs text-slate-500 uppercase">Senha Gerada Aleatoriamente</Label>
-                                <div className="flex items-center gap-2">
-                                    <Input value={generatedPassword} readOnly className="font-mono text-sm bg-white" />
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(generatedPassword);
-                                            toast({ title: "Copiado!", description: "Senha copiada para a área de transferência." });
-                                        }}
-                                    >
-                                        Copiar
-                                    </Button>
-                                </div>
-                                <p className="text-[10px] text-slate-400">Esta senha será usada para o primeiro acesso do usuário.</p>
-                            </div>
-                        )}
-                        <div className="grid gap-2">
-                            <Label htmlFor="role">Tipo de usuário</Label>
-                            <Select
-                                value={formData.role}
-                                onValueChange={(value) => setFormData({ ...formData, role: value })}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o tipo" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="student">Aluno</SelectItem>
-                                    <SelectItem value="professor">Professor</SelectItem>
-                                    <SelectItem value="superadmin">Administrador</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {formData.role === 'student' && (
-                            <div className="grid gap-4 py-2">
+                            <>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="student_code">Código do Aluno</Label>
+                                    <Label htmlFor="full_name">Nome completo *</Label>
                                     <Input
-                                        id="student_code"
-                                        value={formData.student_code || ''}
-                                        onChange={(e) => setFormData({ ...formData, student_code: e.target.value })}
-                                        placeholder="EX: 0101010"
+                                        id="full_name"
+                                        value={formData.full_name}
+                                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                                        placeholder="Nome do usuário"
                                     />
                                 </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="username">Username</Label>
+                                    <Input
+                                        id="username"
+                                        value={formData.username}
+                                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                        placeholder="username"
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="email">Email</Label>
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        placeholder="seu@email.com"
+                                    />
+                                </div>
+                                <div className="p-3 bg-slate-100 rounded-lg space-y-2">
+                                    <Label className="text-xs text-slate-500 uppercase">Senha Gerada Aleatoriamente</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input value={generatedPassword} readOnly className="font-mono text-sm bg-white" />
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(generatedPassword);
+                                                toast({ title: "Copiado!", description: "Senha copiada para a área de transferência." });
+                                            }}
+                                        >
+                                            Copiar
+                                        </Button>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400">Esta senha será usada para o primeiro acesso do usuário.</p>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="role">Tipo de usuário</Label>
+                                    <Select
+                                        value={formData.role}
+                                        onValueChange={(value) => setFormData({ ...formData, role: value })}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecione o tipo" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="student">Aluno</SelectItem>
+                                            <SelectItem value="professor">Professor</SelectItem>
+                                            <SelectItem value="superadmin">Administrador</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {formData.role === 'student' && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="student_code">Código do Aluno</Label>
+                                        <Input
+                                            id="student_code"
+                                            value={formData.student_code || ''}
+                                            onChange={(e) => setFormData({ ...formData, student_code: e.target.value })}
+                                            placeholder="EX: 0101010"
+                                        />
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* Cuando es EDICIÓN, mostrar solo info y opciones de gestión */}
+                        {editingUser && (
+                            <>
+                                {/* Info del usuario (solo lectura) */}
+                                <div className="p-3 bg-slate-50 rounded-lg border space-y-1">
+                                    <p className="font-medium text-slate-900">{editingUser.full_name}</p>
+                                    <p className="text-sm text-slate-500">
+                                        {editingUser.real_email || editingUser.email || 'Sin email'}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <Badge variant={editingUser.role === 'student' ? 'default' : 'secondary'}>
+                                            {editingUser.role === 'student' ? 'Aluno' :
+                                                editingUser.role === 'professor' ? 'Professor' : 'Admin'}
+                                        </Badge>
+                                        {editingUser.student_code && (
+                                            <Badge variant="outline">Código: {editingUser.student_code}</Badge>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Selector de Profesor - para nuevos alunos y edición de alunos */}
+                        {(formData.role === 'student' || (editingUser && editingUser.role === 'student')) && (
+                            <div className="grid gap-4 py-2">
                                 <div className="grid gap-2">
                                     <Label htmlFor="professor">Professor vinculado</Label>
                                     <Select
@@ -948,7 +977,7 @@ const AdminTab = ({ dashboardData }) => {
                                             <SelectValue placeholder="Selecione um professor" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="none">Nenhum</SelectItem>
+                                            <SelectItem value="none">Nenhum (Desvincular)</SelectItem>
                                             {(professors || []).map(prof => (
                                                 <SelectItem key={prof.id} value={prof.id}>
                                                     {prof.full_name}
@@ -991,6 +1020,8 @@ const AdminTab = ({ dashboardData }) => {
                                 )}
                             </div>
                         )}
+
+                        {/* Estado da conta - solo para edición */}
                         {editingUser && (
                             <div className="flex items-center justify-between p-3 border rounded-lg bg-orange-50 border-orange-100">
                                 <div className="space-y-0.5">
