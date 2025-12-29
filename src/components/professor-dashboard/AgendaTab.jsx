@@ -8,7 +8,7 @@ import { Loader2, ChevronLeft, ChevronRight, Grid3x3, List, RefreshCw, Filter } 
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { getBrazilDate } from '@/lib/dateUtils';
+import { getBrazilDate, getTodayBrazil } from '@/lib/dateUtils';
 
 const daysOfWeekMapShort = {
     0: 'Domingo',
@@ -44,7 +44,14 @@ const AgendaTab = ({ dashboardData }) => {
     // SINCRONIZAÇÃO: Usar appointments do dashboardData como fonte única
     const allAppointments = dashboardData?.data?.appointments || [];
 
+    // CORREÇÃO: Usar a string de data do Brasil para comparações consistentes
+    const todayStr = useMemo(() => getTodayBrazil(), []);
     const today = useMemo(() => getBrazilDate(), []);
+
+    // Função para verificar se uma data é hoje (comparação por string)
+    const isTodayBrazil = (date) => {
+        return format(date, 'yyyy-MM-dd') === todayStr;
+    };
 
     // Estados
     const [currentDate, setCurrentDate] = useState(today);
@@ -321,7 +328,7 @@ const AgendaTab = ({ dashboardData }) => {
                                     Horário
                                 </div>
                                 {weekDays.map((day, idx) => {
-                                    const isToday = isSameDay(day, today);
+                                    const isToday = isTodayBrazil(day);
                                     return (
                                         <div
                                             key={idx}
