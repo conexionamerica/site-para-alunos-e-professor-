@@ -288,14 +288,31 @@ const AdminTab = ({ dashboardData }) => {
 
                 console.log('Enviando atualização para o banco:', updateData);
 
-                const { error: updateError } = await supabase
+                // 1. Atualizar o vínculo do professor via RPC (Garante o salvamento saltando RLS)
+                if (formData.role === 'student' && updateData.assigned_professor_id) {
+                    await supabase.rpc('admin_link_professor', {
+                        p_student_id: editingUser.id,
+                        p_professor_id: updateData.assigned_professor_id
+                    });
+                }
+
+                const { data: updatedRows, error: updateError } = await supabase
                     .from('profiles')
                     .update(updateData)
-                    .eq('id', editingUser.id);
+                    .eq('id', editingUser.id)
+                    .select();
+
+                console.log('Update Result Data:', updatedRows);
 
                 if (updateError) {
                     console.error('Erro no update do profile:', updateError);
                     throw updateError;
+                }
+
+                if (!updatedRows || updatedRows.length === 0) {
+                    console.warn('Alerta: Nenhuma linha foi atualizada via Update.');
+                } else {
+                    console.log('Update de perfil concluído com sucesso para:', updatedRows?.[0]?.full_name);
                 }
 
                 // Lógica de inativação avançada (limpeza de horários e cancelamento de aulas)

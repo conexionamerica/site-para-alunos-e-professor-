@@ -582,6 +582,12 @@ const HomeTab = ({ dashboardData }) => {
       // Buscar dados do professor
       const selectedProf = professors.find(p => p.id === selectedProfessorId);
 
+      console.log('=== VINCULANDO PROFESSOR ===');
+      console.log('Student ID:', selectedStudentForVinculacao.id);
+      console.log('Student Name:', selectedStudentForVinculacao.full_name);
+      console.log('Professor ID:', selectedProfessorId);
+      console.log('Professor Name:', selectedProf?.full_name);
+
       // Crear los horarios propuestos basados en las preferencias seleccionadas
       const horariosPropuestos = studentPreferences.days.map(dayIndex => ({
         day: daysOfWeek[dayIndex],
@@ -589,16 +595,35 @@ const HomeTab = ({ dashboardData }) => {
         time: studentPreferences.time
       }));
 
-      // 1. Actualizar el assigned_professor_id del estudiante
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ assigned_professor_id: selectedProfessorId })
-        .eq('id', selectedStudentForVinculacao.id);
+      // 1. Actualizar el assigned_professor_id del estudiante usando RPC para mayor seguridad
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('admin_link_professor', {
+          p_student_id: selectedStudentForVinculacao.id,
+          p_professor_id: selectedProfessorId
+        });
 
-      if (updateError) throw updateError;
+      console.log('RPC Result:', rpcData);
+
+      if (rpcError || (rpcData && rpcData.success === false)) {
+        console.error('RPC ERROR:', rpcError || rpcData?.error);
+
+        // Fallback: Intentar update normal si RPC no existe o falla
+        console.log('Tentando fallback com update normal...');
+        const { data: updateData, error: updateError } = await supabase
+          .from('profiles')
+          .update({ assigned_professor_id: selectedProfessorId })
+          .eq('id', selectedStudentForVinculacao.id)
+          .select();
+
+        if (updateError || !updateData || updateData.length === 0) {
+          throw updateError || new Error('Falha ao vincular professor via RPC e Update.');
+        }
+      }
+
+      console.log('Vinculação concluída com sucesso!');
 
       // 2. Crear notificación para el profesor
-      await supabase.from('notifications').insert({
+      const { error: notifError } = await supabase.from('notifications').insert({
         user_id: selectedProfessorId,
         type: 'new_student_assigned',
         content: {
@@ -608,6 +633,8 @@ const HomeTab = ({ dashboardData }) => {
           horarios_propuestos: horariosPropuestos
         }
       });
+
+      if (notifError) console.warn('Notification error (non-critical):', notifError);
 
       // 3. Remover o aluno da lista de pendências localmente
       setPendenciasData(prev => ({
