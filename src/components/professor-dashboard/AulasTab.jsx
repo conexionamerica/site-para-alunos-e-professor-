@@ -481,6 +481,75 @@ const AulasTab = ({ dashboardData }) => {
     // Estado para filtro de professor (solo superadmin)
     const [professorFilter, setProfessorFilter] = useState('all');
 
+    // Estado para mostrar agenda del profesor seleccionado
+    const [selectedProfessorAgenda, setSelectedProfessorAgenda] = useState(null);
+    const [loadingAgenda, setLoadingAgenda] = useState(false);
+
+    // Cargar agenda cuando se selecciona un profesor
+    useEffect(() => {
+        const loadProfessorAgenda = async () => {
+            if (!isSuperadmin || professorFilter === 'all') {
+                setSelectedProfessorAgenda(null);
+                return;
+            }
+
+            setLoadingAgenda(true);
+            try {
+                const { data: slots, error } = await supabase
+                    .from('class_slots')
+                    .select('*')
+                    .eq('professor_id', professorFilter)
+                    .in('status', ['active', 'filled']);
+
+                if (error) throw error;
+
+                // Organizar por día
+                const daysOfWeekNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                const slotsByDay = {};
+
+                for (let i = 0; i < 7; i++) {
+                    slotsByDay[i] = {
+                        name: daysOfWeekNames[i],
+                        active: [],
+                        filled: []
+                    };
+                }
+
+                (slots || []).forEach(slot => {
+                    const day = slot.day_of_week;
+                    if (slotsByDay[day]) {
+                        if (slot.status === 'active') {
+                            slotsByDay[day].active.push(slot);
+                        } else if (slot.status === 'filled') {
+                            slotsByDay[day].filled.push(slot);
+                        }
+                    }
+                });
+
+                // Ordenar slots por hora
+                Object.keys(slotsByDay).forEach(day => {
+                    slotsByDay[day].active.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+                    slotsByDay[day].filled.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+                });
+
+                const prof = professors.find(p => p.id === professorFilter);
+                setSelectedProfessorAgenda({
+                    professor: prof,
+                    slotsByDay,
+                    totalActive: (slots || []).filter(s => s.status === 'active').length,
+                    totalFilled: (slots || []).filter(s => s.status === 'filled').length
+                });
+
+            } catch (error) {
+                console.error('Error loading professor agenda:', error);
+            } finally {
+                setLoadingAgenda(false);
+            }
+        };
+
+        loadProfessorAgenda();
+    }, [professorFilter, isSuperadmin, professors]);
+
     // Status options para o filtro
     const statusOptions = [
         { value: 'all', label: 'Todos os status' },
@@ -515,6 +584,7 @@ const AulasTab = ({ dashboardData }) => {
         setStartDateFilter("");
         setEndDateFilter("");
         setProfessorFilter('all');
+        setSelectedProfessorAgenda(null);
         setCurrentPage(1);
     };
 
@@ -812,7 +882,77 @@ const AulasTab = ({ dashboardData }) => {
                 </Button>
             </div>
 
-            {/* Modal de Filtros Avanzados */}
+            {/* Agenda del Profesor Seleccionado - Solo para Superadmin */}
+            {isSuperadmin && selectedProfessorAgenda && (
+                <div className="mb-6 p-4 bg-slate-50 rounded-lg border">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                            <CalendarIcon className="h-5 w-5 text-sky-600" />
+                            Agenda de {selectedProfessorAgenda.professor?.full_name}
+                        </h3>
+                        <div className="flex gap-2">
+                            <Badge className="bg-green-500 text-white">
+                                {selectedProfessorAgenda.totalActive} disponível(is)
+                            </Badge>
+                            <Badge className="bg-blue-500 text-white">
+                                {selectedProfessorAgenda.totalFilled} ocupado(s)
+                            </Badge>
+                        </div>
+                    </div>
+
+                    {loadingAgenda ? (
+                        <div className="flex justify-center py-4">
+                            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-7 gap-2">
+                            {Object.entries(selectedProfessorAgenda.slotsByDay).map(([dayIndex, dayData]) => (
+                                <div key={dayIndex} className="text-center">
+                                    <p className="text-xs font-semibold mb-2 text-slate-700 bg-slate-200 rounded py-1">
+                                        {dayData.name}
+                                    </p>
+                                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                                        {dayData.active.length > 0 ? (
+                                            dayData.active.map((slot, idx) => (
+                                                <div
+                                                    key={`active-${idx}`}
+                                                    className="text-[10px] px-1 py-0.5 bg-green-100 text-green-700 rounded truncate"
+                                                    title={`Disponível: ${slot.start_time?.substring(0, 5)}`}
+                                                >
+                                                    {slot.start_time?.substring(0, 5)}
+                                                </div>
+                                            ))
+                                        ) : null}
+                                        {dayData.filled.length > 0 ? (
+                                            dayData.filled.map((slot, idx) => (
+                                                <div
+                                                    key={`filled-${idx}`}
+                                                    className="text-[10px] px-1 py-0.5 bg-blue-100 text-blue-600 rounded truncate"
+                                                    title={`Ocupado: ${slot.start_time?.substring(0, 5)}`}
+                                                >
+                                                    {slot.start_time?.substring(0, 5)} ✓
+                                                </div>
+                                            ))
+                                        ) : null}
+                                        {dayData.active.length === 0 && dayData.filled.length === 0 && (
+                                            <div className="text-[10px] text-slate-400 py-1">-</div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="mt-3 flex gap-4 text-xs text-slate-500">
+                        <span className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-green-100 rounded"></div> Disponível
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <div className="w-3 h-3 bg-blue-100 rounded"></div> Ocupado
+                        </span>
+                    </div>
+                </div>
+            )}
             <Dialog open={isFiltersModalOpen} onOpenChange={setIsFiltersModalOpen}>
                 <DialogContent className="sm:max-w-[450px]">
                     <DialogHeader>
