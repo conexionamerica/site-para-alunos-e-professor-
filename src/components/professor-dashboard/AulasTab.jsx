@@ -660,8 +660,40 @@ const AulasTab = ({ dashboardData }) => {
         <div className="w-full px-4 lg:px-8 bg-white p-6 rounded-lg shadow-sm">
             {/* Header */}
             <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-800">Aulas</h2>
-                <p className="text-sm text-slate-500">Por aqui é possível visualizar todas as aulas.</p>
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-800">
+                            Aulas
+                            <span className="ml-2 text-lg font-normal text-slate-500">
+                                ({filteredAppointments.length} {filteredAppointments.length === 1 ? 'aula' : 'aulas'})
+                            </span>
+                        </h2>
+                        <p className="text-sm text-slate-500">
+                            {isSuperadmin
+                                ? `Visualizando todas as aulas de todos os professores e alunos`
+                                : 'Por aqui é possível visualizar todas as suas aulas.'
+                            }
+                        </p>
+                    </div>
+
+                    {/* Badges de contagem por status - visível para superadmin */}
+                    {isSuperadmin && (
+                        <div className="flex flex-wrap gap-2">
+                            <Badge className="bg-sky-500 text-white">
+                                Agendadas: {appointments.filter(a => a.status === 'scheduled').length}
+                            </Badge>
+                            <Badge className="bg-green-500 text-white">
+                                Concluídas: {appointments.filter(a => a.status === 'completed').length}
+                            </Badge>
+                            <Badge className="bg-orange-500 text-white">
+                                Faltas: {appointments.filter(a => a.status === 'missed').length}
+                            </Badge>
+                            <Badge variant="destructive">
+                                Canceladas: {appointments.filter(a => ['canceled', 'cancelled'].includes(a.status)).length}
+                            </Badge>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Barra de Filtros */}
