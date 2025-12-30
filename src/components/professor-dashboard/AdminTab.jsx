@@ -457,6 +457,18 @@ const AdminTab = ({ dashboardData }) => {
 
     const handleConfirmDelete = async () => {
         if (!userToDelete) return;
+
+        // TRAVA DE SEGURANÇA: Só permite excluir se estiver INATIVO
+        if (userToDelete.is_active !== false) {
+            toast({
+                variant: 'destructive',
+                title: 'Exclusão Bloqueada',
+                description: 'Por segurança, inative o usuário antes de excluí-lo.'
+            });
+            setIsDeleteDialogOpen(false);
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const { error: rpcError } = await supabase.rpc('delete_user_complete', {

@@ -122,74 +122,92 @@ const AdmTab = ({ dashboardData }) => {
     const students = localProfiles.filter(p => p.role === 'student').sort((a, b) => a.full_name?.localeCompare(b.full_name));
     const professors = localProfiles.filter(p => p.role === 'professor').sort((a, b) => a.full_name?.localeCompare(b.full_name));
 
-    // CORREÇÃO: Função modificada para APENAS atualizar o estado local e notificar o usuário
+    // Função REAL para atualizar o status no Supabase
     const handleToggleActive = useCallback(async (profileId, newStatus, profileToUpdate) => {
         setIsSubmitting(true);
         const action = newStatus ? 'Ativar' : 'Inativar';
 
-        if (!window.confirm(`Confirma ${action} o perfil de ${profileToUpdate.full_name}? (Atenção: A atualização da base de dados será ignorada para evitar erros. A mudança será apenas visual para você e dependerá de uma correção manual do campo is_active no Supabase para bloquear o aluno.)`)) {
+        if (!window.confirm(`Confirma ${action} o perfil de ${profileToUpdate.full_name}?`)) {
             setIsSubmitting(false);
             return;
         }
 
         try {
-            // *** REMOVIDA A CHAMADA SUPABASE.UPDATE PARA EVITAR O ERRO RLS ***
+            const { error } = await supabase
+                .from('profiles')
+                .update({ is_active: newStatus })
+                .eq('id', profileId);
 
-            // 1. Atualizar o estado local (Simulação)
+            if (error) throw error;
+
+            // 1. Atualizar o estado local
             setLocalProfiles(prev => prev.map(p =>
                 p.id === profileId ? { ...p, is_active: newStatus } : p
             ));
 
-            // 2. Notificação (alerta sobre a simulação)
             toast({
-                variant: newStatus ? 'default' : 'destructive',
-                title: `${action} (Simulado) Concluído!`,
-                description: `Status de ${profileToUpdate.full_name} atualizado superficialmente. Verifique o RLS para o bloqueio real.`
+                variant: newStatus ? 'default' : 'success',
+                title: `${action} Concluído!`,
+                description: `O status de ${profileToUpdate.full_name} foi atualizado com sucesso.`
             });
-            // Não chama onUpdate para não forçar o pai a recarregar e perder a simulação local
+
+            if (onUpdate) onUpdate();
 
         } catch (error) {
-            console.error("Error simulating toggling status:", error);
-            toast({ variant: 'destructive', title: `Erro ao ${action}`, description: `Falha na simulação: ${error.message}` });
+            console.error(`Error ${action} profile:`, error);
+            toast({
+                variant: 'destructive',
+                title: `Erro ao ${action}`,
+                description: error.message
+            });
         } finally {
             setIsSubmitting(false);
         }
-    }, [toast]);
+    }, [toast, onUpdate]);
 
     const handleDelete = useCallback(async (profileToDelete) => {
-        if (!window.confirm(`ATENÇÃO: Confirma a exclusão COMPLETA do perfil de ${profileToDelete.full_name} (${profileToDelete.role})? 
-        
-        ISSO É IRREVERSÍVEL. O registro de perfil será deletado. O usuário DEVE ser removido do Supabase Auth manualmente para liberar o e-mail.`)) {
+        // TRAVA DE SEGURANÇA: Só permite excluir se estiver INATIVO
+        if (profileToDelete.is_active !== false) {
+            toast({
+                variant: 'destructive',
+                title: 'Exclusão Bloqueada',
+                description: 'Para sua segurança, apenas usuários com status "Inativo" podem ser excluídos.'
+            });
+            return;
+        }
+
+        if (!window.confirm(`ATENÇÃO: Confirma a exclusão COMPLETA e PERMANENTE de ${profileToDelete.full_name}? \n\nIsso removerá todo o histórico (aulas, faturas, pacotes) e o acesso do usuário ao sistema.`)) {
             return;
         }
 
         setIsSubmitting(true);
 
         try {
-            // 1. Delete all appointments linked to this user (for cleanup)
-            if (profileToDelete.role === 'student') {
-                // Deletar as aulas agendadas (foreign key constraint)
-                await supabase.from('appointments').delete().eq('student_id', profileToDelete.id);
-            }
+            // Usar o RPC que limpa tudo (Auth + Tabelas vinculadas)
+            const { error: rpcError } = await supabase.rpc('delete_user_complete', {
+                p_user_id: profileToDelete.id
+            });
 
-            // 2. Delete the profile record
-            const { error } = await supabase.from('profiles').delete().eq('id', profileToDelete.id);
+            if (rpcError) throw rpcError;
 
-            if (error) throw error;
-
-            // 3. Update local state
+            // Atualizar estado local
             setLocalProfiles(prev => prev.filter(p => p.id !== profileToDelete.id));
 
             toast({
-                variant: 'destructive',
-                title: 'Perfil Deletado!',
-                description: `O perfil de ${profileToDelete.full_name} foi removido. REMOVA MANUALMENTE o usuário no Supabase Authentication!`
+                variant: 'default',
+                title: 'Usuário Excluído!',
+                description: `O perfil de ${profileToDelete.full_name} e todos os seus dados foram removidos.`
             });
+
             if (onUpdate) onUpdate();
 
         } catch (error) {
             console.error("Error deleting profile:", error);
-            toast({ variant: 'destructive', title: 'Erro ao Deletar', description: error.message });
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao Deletar',
+                description: error.message
+            });
         } finally {
             setIsSubmitting(false);
         }
@@ -235,9 +253,9 @@ const AdmTab = ({ dashboardData }) => {
                 </Tabs>
             )}
 
-            <div className="mt-6 p-4 border-l-4 border-yellow-500 bg-yellow-50 text-sm text-yellow-900">
-                <p className="font-bold">Atenção Administrativa - Exclusão de Usuários:</p>
-                <p>O cliente Supabase não permite deletar usuários do serviço de autenticação (email/senha) via código frontend. Após deletar um perfil aqui, você deve removê-lo manualmente do painel do Supabase Authentication para liberar o e-mail para um novo cadastro.</p>
+            <div className="mt-6 p-4 border-l-4 border-purple-500 bg-purple-50 text-sm text-purple-900">
+                <p className="font-bold">Informação Administrativa:</p>
+                <p>O sistema agora utiliza uma rotina de exclusão completa que remove o usuário do Banco de Dados e do Serviço de Autenticação simultaneamente. Para garantir a integridade dos dados, um usuário só pode ser excluído após ser marcado como <strong>Inativo</strong>.</p>
             </div>
         </div>
     );
