@@ -30,24 +30,29 @@ const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
 });
 
-const AssignedPackagesHistory = ({ professorId, onDelete }) => {
+const AssignedPackagesHistory = ({ professorId, onDelete, isSuperadmin }) => {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchHistory = useCallback(async () => {
-    if (!professorId) return;
-    setLoading(true);
-
     // 1. Fetch Logs (Atribuições de Pacotes)
-    const { data: logs, error: logError } = await supabase
+    let query = supabase
       .from('assigned_packages_log')
       .select(`
         id, student_id, package_id, observation, assigned_classes, assigned_at, status, custom_package_name,
         student:profiles!student_id(full_name),
         package:packages(name)
-      `)
-      .eq('professor_id', professorId)
-      .order('assigned_at', { ascending: false });
+      `);
+
+    if (professorId && professorId !== 'all') {
+      query = query.eq('professor_id', professorId);
+    } else if (!isSuperadmin) {
+      // Se não for admin e não tiver ID, não mostra nada
+      setLoading(false);
+      return;
+    }
+
+    const { data: logs, error: logError } = await query.order('assigned_at', { ascending: false });
 
     if (logError) {
       console.error("Error fetching logs:", logError);
@@ -96,8 +101,11 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
     fetchHistory();
     // Realtime listener
     const channel = supabase.channel('assigned-packages-history')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'assigned_packages_log', filter: `professor_id=eq.${professorId}` }, fetchHistory)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'assigned_packages_log'
+      }, fetchHistory)
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -238,6 +246,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   const packages = data.packages || [];
   const classSlots = data.classSlots || [];
   const onUpdate = dashboardData?.onUpdate; // Para forçar a recarga no pai
+  const isSuperadmin = dashboardData?.isSuperadmin || false;
 
   // Estado para o professor selecionado no formulário (se o global for 'all')
   const [localProfessorId, setLocalProfessorId] = useState(null);
@@ -554,7 +563,9 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
   // Funções de exclusão e reversão (esta função DEVE fazer o update no banco de dados)
   const handleDeleteLog = useCallback(async (log) => {
-    const { id: logId, student_id: studentId, package_id: packageId } = log;
+    const { id: logId, student_id: studentId, package_id: packageId, professor_id: logProfessorId } = log;
+
+    const targetProfessorId = logProfessorId || effectiveProfessorId;
 
     if (!window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. CANCELAR a fatura ativa mais recente.\n3. EXCLUIR TODAS AS AULAS FUTURAS agendadas.\n4. LIBERAR OS HORÁRIOS RECORRENTES (slots).\n\nConfirma a operação?")) {
       return;
@@ -568,8 +579,6 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
         .eq('id', logId);
 
       if (updateError) throw updateError;
-
-      // ... Resto da lógica de exclusão no Supabase (omitida para brevidade, mas está no arquivo original) ...
 
       let billingRemoved = false;
       let slotsReverted = false;
@@ -626,7 +635,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
             const { data: slotsToRevert, error: slotsFetchError } = await supabase
               .from('class_slots')
               .select('id')
-              .eq('professor_id', effectiveProfessorId) // Usa effectiveProfessorId extraído
+              .eq('professor_id', targetProfessorId)
               .in('day_of_week', horarios.days)
               .gte('start_time', horarios.time)
               .eq('status', 'filled');
@@ -661,10 +670,8 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       if (deletedAptsCount > 0) message += ` ${deletedAptsCount} aulas futuras foram excluídas.`;
       if (slotsReverted) message += ' Os horários recorrentes foram liberados.';
 
-
       toast({ variant: 'default', title: 'Pacote Cancelado!', description: message });
 
-      // Chama onUpdate para recarregar o histórico e a lista de alunos
       if (onUpdate) onUpdate();
 
     } catch (error) {
@@ -904,12 +911,16 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
               </div>
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="outline" disabled={!effectiveProfessorId}>
+                  <Button variant="outline" disabled={!effectiveProfessorId && !isSuperadmin}>
                     <History className="mr-2 h-4 w-4" /> Ver Histórico
                   </Button>
                 </DialogTrigger>
                 {/* Passa a função onDelete que será responsável por fazer a atualização no Supabase */}
-                <AssignedPackagesHistory professorId={effectiveProfessorId} onDelete={handleDeleteLog} />
+                <AssignedPackagesHistory
+                  professorId={effectiveProfessorId}
+                  onDelete={handleDeleteLog}
+                  isSuperadmin={isSuperadmin}
+                />
               </Dialog>
             </div>
 
