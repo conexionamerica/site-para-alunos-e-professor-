@@ -385,90 +385,40 @@ const AdminTab = ({ dashboardData }) => {
                     });
                 }
             } else {
-                // For new users, create via Auth
+                // For new users, create via the new admin_create_user RPC
+                // This prevents session switching issues and centralizes creation
                 try {
-                    const { data: authData, error: authError } = await supabase.auth.signUp({
-                        email: formData.email.trim(),
-                        password: generatedPassword,
-                        options: {
-                            data: {
-                                full_name: (formData.full_name || '').trim(),
-                                username: (formData.username || '').trim(),
-                                role: formData.role,
-                                student_code: formData.role === 'student' ? (formData.student_code || null) : null,
-                                real_email: (formData.email || '').trim(),
-                                assigned_professor_id: formData.role === 'student' ? (formData.assigned_professor_id || null) : null
-                            }
-                        }
+                    const { data: newUserId, error: rpcError } = await supabase.rpc('admin_create_user', {
+                        p_email: formData.email.trim(),
+                        p_password: generatedPassword,
+                        p_full_name: (formData.full_name || '').trim(),
+                        p_role: formData.role,
+                        p_username: (formData.username || '').trim(),
+                        p_student_code: formData.role === 'student' ? (formData.student_code || null) : null,
+                        p_assigned_professor_id: formData.role === 'student' ? (formData.assigned_professor_id || null) : null
                     });
 
-                    if (authError) {
-                        console.error('Supabase Auth Error:', authError);
-                        // Traduzir mensagens de erro comuns
-                        let errorMsg = authError.message;
-                        if (authError.message.includes('already registered')) {
-                            errorMsg = 'Este e-mail já está registrado no sistema de autenticação.';
-                        } else if (authError.message.includes('Password')) {
-                            errorMsg = 'A senha não atende aos requisitos mínimos. Gerando nova senha...';
-                            // Tentar com senha mais segura
-                            const strongPass = generateRandomPassword() + 'Aa1!';
-                            setGeneratedPassword(strongPass);
-                        } else if (authError.message.includes('rate limit')) {
-                            errorMsg = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
-                        } else if (authError.message.includes('Invalid email')) {
-                            errorMsg = 'O formato do e-mail é inválido.';
+                    if (rpcError) {
+                        console.error('Error calling admin_create_user RPC:', rpcError);
+                        let errorMsg = rpcError.message;
+                        if (rpcError.message.includes('unique constraint') || rpcError.message.includes('already exists')) {
+                            errorMsg = 'Este e-mail ou nome de usuário já está registrado.';
                         }
                         throw new Error(errorMsg);
                     }
 
-                    const newUser = authData?.user;
-
-                    if (!newUser) {
-                        // Alguns provedores retornam sem erro mas sem usuário (confirmação de email pendente)
-                        console.warn('User object not returned, but no error. May need email confirmation.');
-                        toast({
-                            title: 'Usuário pendente',
-                            description: 'Usuário criado, mas pode precisar confirmar e-mail. Verifique a caixa de entrada.',
-                            variant: 'default',
-                            duration: 10000,
-                        });
-                    } else {
-                        // Garantia: Inserir/Upsert manual no profiles para evitar falhas de trigger
-                        const profileData = {
-                            id: newUser.id,
-                            full_name: (formData.full_name || '').trim(),
-                            username: (formData.username || '').trim(),
-                            role: formData.role,
-                            student_code: formData.role === 'student' ? (formData.student_code || null) : null,
-                            real_email: (formData.email || '').trim(),
-                            assigned_professor_id: formData.role === 'student' ? (formData.assigned_professor_id || null) : null,
-                            is_active: true
-                        };
-
-                        const { error: profileError } = await supabase
-                            .from('profiles')
-                            .upsert(profileData, { onConflict: 'id' });
-
-                        if (profileError) {
-                            console.error('Error creating profile manually:', profileError);
-                            // Mostrar aviso, pero no fallar completamente
-                            toast({
-                                title: 'Aviso',
-                                description: 'Usuário criado na autenticação, mas houve erro ao salvar perfil. O perfil será criado no primeiro login.',
-                                variant: 'default',
-                                duration: 8000,
-                            });
-                        }
-
-                        toast({
-                            title: 'Sucesso!',
-                            description: `Usuário criado com sucesso. Senha provisória: ${generatedPassword}`,
-                            duration: 15000,
-                        });
+                    if (!newUserId) {
+                        throw new Error('Não foi possível obter o ID do novo usuário criado.');
                     }
-                } catch (authException) {
-                    console.error('Exception during user creation:', authException);
-                    throw authException;
+
+                    toast({
+                        title: 'Sucesso!',
+                        description: `Usuário criado com sucesso. Senha provisória: ${generatedPassword}`,
+                        duration: 15000,
+                    });
+                } catch (rpcException) {
+                    console.error('Exception during user creation via RPC:', rpcException);
+                    throw rpcException;
                 }
             }
 
