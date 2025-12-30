@@ -19,6 +19,7 @@ import { format } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 import { getBrazilDate } from '@/lib/dateUtils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
@@ -46,7 +47,9 @@ const AdminTab = ({ dashboardData }) => {
         email: '',
         role: 'student',
         assigned_professor_id: '',
-        is_active: true
+        is_active: true,
+        can_manage_classes: true,
+        can_manage_students: true
     });
     const [generatedPassword, setGeneratedPassword] = useState('');
 
@@ -172,7 +175,9 @@ const AdminTab = ({ dashboardData }) => {
             role: 'student',
             student_code: nextCode,
             assigned_professor_id: '',
-            is_active: true
+            is_active: true,
+            can_manage_classes: true,
+            can_manage_students: true
         });
         setGeneratedPassword(newPassword);
         setIsUserDialogOpen(true);
@@ -197,7 +202,9 @@ const AdminTab = ({ dashboardData }) => {
             role: user.role || 'student',
             student_code: user.student_code || '',
             assigned_professor_id: user.assigned_professor_id || '',
-            is_active: user.is_active !== false
+            is_active: user.is_active !== false,
+            can_manage_classes: user.can_manage_classes !== false,
+            can_manage_students: user.can_manage_students !== false
         });
         setGeneratedPassword('');
         setIsUserDialogOpen(true);
@@ -278,7 +285,9 @@ const AdminTab = ({ dashboardData }) => {
                     role: formData.role,
                     student_code: formData.role === 'student' ? (formData.student_code?.trim() || null) : null,
                     assigned_professor_id: formData.role === 'student' ? (formData.assigned_professor_id || null) : null,
-                    is_active: formData.is_active === true
+                    is_active: formData.is_active === true,
+                    can_manage_classes: formData.can_manage_classes === true,
+                    can_manage_students: formData.can_manage_students === true
                 };
 
 
@@ -415,6 +424,12 @@ const AdminTab = ({ dashboardData }) => {
                     if (!newUserId) {
                         throw new Error('Não foi possível obter o ID do novo usuário criado.');
                     }
+
+                    // Atualizar permissões granulares para o novo usuário
+                    await supabase.from('profiles').update({
+                        can_manage_classes: formData.can_manage_classes === true,
+                        can_manage_students: formData.can_manage_students === true
+                    }).eq('id', newUserId);
 
                     toast({
                         title: 'Sucesso!',
@@ -599,6 +614,7 @@ const AdminTab = ({ dashboardData }) => {
                                     </SelectContent>
                                 </Select>
                             </div>
+
                         </CardHeader>
                         <CardContent>
                             {professorFilter !== 'all' ? (
@@ -966,29 +982,49 @@ const AdminTab = ({ dashboardData }) => {
                             </>
                         )}
 
-                        {/* Cuando es EDICIÓN, mostrar solo info y opciones de gestión */}
+                        {/* Info del usuario (solo lectura) para EDICIÓN */}
                         {editingUser && (
-                            <>
-                                {/* Info del usuario (solo lectura) */}
-                                <div className="p-3 bg-slate-50 rounded-lg border space-y-1">
-                                    <p className="font-medium text-slate-900">{editingUser.full_name}</p>
-                                    <p className="text-sm text-slate-500">
-                                        {editingUser.real_email || editingUser.email || 'Sin email'}
-                                    </p>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <Badge variant={editingUser.role === 'student' ? 'default' : 'secondary'}>
-                                            {editingUser.role === 'student' ? 'Aluno' :
-                                                editingUser.role === 'professor' ? 'Professor' : 'Admin'}
-                                        </Badge>
-                                        {editingUser.student_code && (
-                                            <Badge variant="outline">Código: {editingUser.student_code}</Badge>
-                                        )}
-                                    </div>
+                            <div className="p-3 bg-slate-50 rounded-lg border space-y-1">
+                                <p className="font-medium text-slate-900">{editingUser.full_name}</p>
+                                <p className="text-sm text-slate-500">
+                                    {editingUser.real_email || editingUser.email || 'Sin email'}
+                                </p>
+                                <div className="flex items-center gap-2 mt-2">
+                                    <Badge variant={editingUser.role === 'student' ? 'default' : 'secondary'}>
+                                        {editingUser.role === 'student' ? 'Aluno' :
+                                            editingUser.role === 'professor' ? 'Professor' : 'Admin'}
+                                    </Badge>
+                                    {editingUser.student_code && (
+                                        <Badge variant="outline">Código: {editingUser.student_code}</Badge>
+                                    )}
                                 </div>
-                            </>
+                            </div>
                         )}
 
-
+                        {/* PERMISSÕES GRANULARES (Sempre visíveis) */}
+                        <div className="space-y-3 py-4 border-t border-slate-100">
+                            <Label className="text-xs font-bold uppercase text-slate-500">Permissões de Gerenciamento</Label>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="perm_manage_classes"
+                                    checked={formData.can_manage_classes}
+                                    onCheckedChange={(checked) => setFormData({ ...formData, can_manage_classes: checked })}
+                                />
+                                <Label htmlFor="perm_manage_classes" className="text-sm font-medium leading-none cursor-pointer">
+                                    Acesso à coluna Ações (Aulas)
+                                </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="perm_manage_students"
+                                    checked={formData.can_manage_students}
+                                    onCheckedChange={(checked) => setFormData({ ...formData, can_manage_students: checked })}
+                                />
+                                <Label htmlFor="perm_manage_students" className="text-sm font-medium leading-none cursor-pointer">
+                                    Acesso à coluna Ações (Alunos)
+                                </Label>
+                            </div>
+                        </div>
 
                         {/* Estado da conta - solo para edición */}
                         {editingUser && (

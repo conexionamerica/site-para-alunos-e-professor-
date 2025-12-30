@@ -28,7 +28,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
     // 1. Fetch del perfil del usuario (solo nombre y rol)
     const { data: userProfile, error: profProfileError } = await supabase
         .from('profiles')
-        .select('full_name, role')
+        .select('full_name, role, can_manage_classes, can_manage_students')
         .eq('id', professorId)
         .maybeSingle();
     if (profProfileError) throw profProfileError;
@@ -145,6 +145,8 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         assignedLogs: assignedLogs || [],
         chatList: chatList || [],
         roleSettings: roleSettings || [],
+        can_manage_classes: userProfile?.can_manage_classes ?? true,
+        can_manage_students: userProfile?.can_manage_students ?? true,
     };
 };
 

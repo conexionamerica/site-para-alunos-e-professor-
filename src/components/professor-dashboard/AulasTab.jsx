@@ -478,6 +478,7 @@ const AulasTab = ({ dashboardData }) => {
     const professors = data.professors || [];
     const appointments = data.appointments || [];
     const packages = data.packages || [];
+    const can_manage_classes = data.can_manage_classes !== false; // Padrão true
 
     // Filtro global de professor (passado do ProfessorDashboardPage)
     const globalProfessorFilter = dashboardData?.globalProfessorFilter;
@@ -1030,13 +1031,13 @@ const AulasTab = ({ dashboardData }) => {
                             <TableHead>Data</TableHead>
                             <TableHead>Horário</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Ações</TableHead>
+                            {can_manage_classes && <TableHead className="text-right">Ações</TableHead>}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan="7" className="text-center p-8">
+                                <TableCell colSpan={can_manage_classes ? "7" : "6"} className="text-center p-8">
                                     <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                                 </TableCell>
                             </TableRow>
@@ -1084,42 +1085,44 @@ const AulasTab = ({ dashboardData }) => {
                                             </div>
                                         </TableCell>
                                         <TableCell><StatusBadge status={apt.status} /></TableCell>
-                                        <TableCell className="text-right">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
-                                                        <MoreVertical className="w-4 h-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem
-                                                        onClick={() => openFeedbackDialog(apt)}
-                                                        disabled={!['scheduled', 'rescheduled'].includes(apt.status)}
-                                                    >
-                                                        <Star className="mr-2 h-4 w-4" /> Marcar como Concluída
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        onClick={() => handleOpenReschedule(apt)}
-                                                        disabled={!['scheduled', 'missed', 'canceled', 'cancelled'].includes(apt.status)}
-                                                    >
-                                                        <RotateCcw className="mr-2 h-4 w-4" /> Reagendar
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        onClick={() => handleMarkAsMissed(apt)}
-                                                        disabled={!['scheduled'].includes(apt.status)}
-                                                        className="text-orange-600 focus:text-orange-700 focus:bg-orange-50"
-                                                    >
-                                                        <UserX className="mr-2 h-4 w-4" /> Marcar Falta
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
+                                        {can_manage_classes && (
+                                            <TableCell className="text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon">
+                                                            <MoreVertical className="w-4 h-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent>
+                                                        <DropdownMenuItem
+                                                            onClick={() => openFeedbackDialog(apt)}
+                                                            disabled={!['scheduled', 'rescheduled'].includes(apt.status)}
+                                                        >
+                                                            <Star className="mr-2 h-4 w-4" /> Marcar como Concluída
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => handleOpenReschedule(apt)}
+                                                            disabled={!['scheduled', 'missed', 'canceled', 'cancelled'].includes(apt.status)}
+                                                        >
+                                                            <RotateCcw className="mr-2 h-4 w-4" /> Reagendar
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => handleMarkAsMissed(apt)}
+                                                            disabled={!['scheduled'].includes(apt.status)}
+                                                            className="text-orange-600 focus:text-orange-700 focus:bg-orange-50"
+                                                        >
+                                                            <UserX className="mr-2 h-4 w-4" /> Marcar Falta
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        )}
                                     </TableRow>
                                 );
                             })
                         ) : (
                             <TableRow>
-                                <TableCell colSpan="7" className="text-center p-8 text-slate-500">
+                                <TableCell colSpan={can_manage_classes ? "7" : "6"} className="text-center p-8 text-slate-500">
                                     Nenhuma aula encontrada com o filtro atual.
                                 </TableCell>
                             </TableRow>

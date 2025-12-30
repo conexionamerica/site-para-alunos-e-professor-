@@ -366,6 +366,7 @@ const AlunosTab = ({ dashboardData }) => {
     const onUpdate = dashboardData?.onUpdate;
     const isSuperadmin = dashboardData?.isSuperadmin || false;
     const professors = data.professors || [];
+    const can_manage_students = data.can_manage_students !== false;
 
     // Filtro global de professor (passado do ProfessorDashboardPage)
     const globalProfessorFilter = dashboardData?.globalProfessorFilter;
@@ -559,11 +560,11 @@ const AlunosTab = ({ dashboardData }) => {
                                     <TableHead>Aulas Agendadas</TableHead>
                                     <TableHead>Estado</TableHead>
                                     <TableHead>Membro Desde</TableHead>
-                                    <TableHead className="text-right">Ações</TableHead>
+                                    {can_manage_students && <TableHead className="text-right">Ações</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {loading ? <TableRow><TableCell colSpan="9" className="text-center"><Loader2 className="mx-auto my-4 h-6 w-6 animate-spin" /></TableCell></TableRow> :
+                                {loading ? <TableRow><TableCell colSpan={can_manage_students ? "10" : "9"} className="text-center"><Loader2 className="mx-auto my-4 h-6 w-6 animate-spin" /></TableCell></TableRow> :
                                     filteredStudents.length > 0 ? filteredStudents.map(student => (
                                         <TableRow key={student.id}>
                                             <TableCell className="font-mono text-sm text-slate-600">
@@ -615,33 +616,35 @@ const AlunosTab = ({ dashboardData }) => {
                                                 )}
                                             </TableCell>
                                             <TableCell>{format(new Date(student.created_at), 'dd/MM/yyyy')}</TableCell>
-                                            <TableCell className="text-right">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon">
-                                                            <MoreVertical className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        {student.scheduledAppointments.length > 0 && (
-                                                            <>
-                                                                <DropdownMenuItem onClick={() => handleOpenScheduleDialog(student)}>
-                                                                    <Calendar className="mr-2 h-4 w-4 text-blue-600" />
-                                                                    Alterar Dias/Horários
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuSeparator />
-                                                            </>
-                                                        )}
+                                            {can_manage_students && (
+                                                <TableCell className="text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon">
+                                                                <MoreVertical className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            {student.scheduledAppointments.length > 0 && (
+                                                                <>
+                                                                    <DropdownMenuItem onClick={() => handleOpenScheduleDialog(student)}>
+                                                                        <Calendar className="mr-2 h-4 w-4 text-blue-600" />
+                                                                        Alterar Dias/Horários
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                </>
+                                                            )}
 
-                                                        <DropdownMenuItem onClick={() => handleOpenMessageDialog(student)}>
-                                                            <MessageSquare className="mr-2 h-4 w-4 text-sky-600" />
-                                                            Enviar Mensagem
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
+                                                            <DropdownMenuItem onClick={() => handleOpenMessageDialog(student)}>
+                                                                <MessageSquare className="mr-2 h-4 w-4 text-sky-600" />
+                                                                Enviar Mensagem
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
+                                            )}
                                         </TableRow>
-                                    )) : <TableRow><TableCell colSpan="10" className="text-center py-8 text-slate-500">Nenhum aluno encontrado.</TableCell></TableRow>}
+                                    )) : <TableRow><TableCell colSpan={can_manage_students ? "10" : "9"} className="text-center py-8 text-slate-500">Nenhum aluno encontrado.</TableCell></TableRow>}
                             </TableBody>
                         </Table>
                     </div>
