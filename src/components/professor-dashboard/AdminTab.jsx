@@ -121,15 +121,7 @@ const AdminTab = ({ dashboardData }) => {
         }
     };
 
-    // Efecto para verificar disponibilidad cuando cambia el profesor seleccionado
-    useEffect(() => {
-        if (formData.role === 'student' && formData.assigned_professor_id) {
-            checkProfessorAvailability(formData.assigned_professor_id);
-        } else {
-            setProfessorAvailability(null);
-            setAvailabilityWarning(null);
-        }
-    }, [formData.assigned_professor_id, formData.role]);
+
 
     // Filter users by search and role
     const filteredProfiles = allProfiles.filter(profile => {
@@ -395,7 +387,7 @@ const AdminTab = ({ dashboardData }) => {
                         p_role: formData.role,
                         p_username: (formData.username || '').trim(),
                         p_student_code: formData.role === 'student' ? (formData.student_code || null) : null,
-                        p_assigned_professor_id: formData.role === 'student' ? (formData.assigned_professor_id || null) : null
+                        p_assigned_professor_id: null
                     });
 
                     if (rpcError) {
@@ -948,62 +940,7 @@ const AdminTab = ({ dashboardData }) => {
                             </>
                         )}
 
-                        {/* Selector de Profesor - para nuevos alunos y edición de alunos */}
-                        {(formData.role === 'student' || (editingUser && editingUser.role === 'student')) && (
-                            <div className="grid gap-4 py-2">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="professor">Professor vinculado</Label>
-                                    <Select
-                                        value={formData.assigned_professor_id || "none"}
-                                        onValueChange={(value) => setFormData({ ...formData, assigned_professor_id: value === "none" ? "" : value })}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecione um professor" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">Nenhum (Desvincular)</SelectItem>
-                                            {(professors || []).map(prof => (
-                                                <SelectItem key={prof.id} value={prof.id}>
-                                                    {prof.full_name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
 
-                                {/* Alerta de disponibilidad del profesor */}
-                                {availabilityWarning && (
-                                    <Alert variant={availabilityWarning.type === 'error' ? 'destructive' : 'default'}
-                                        className={availabilityWarning.type === 'error'
-                                            ? 'border-red-500 bg-red-50'
-                                            : 'border-amber-500 bg-amber-50'}>
-                                        <AlertTriangle className={`h-4 w-4 ${availabilityWarning.type === 'error' ? 'text-red-600' : 'text-amber-600'}`} />
-                                        <AlertTitle className={availabilityWarning.type === 'error' ? 'text-red-800' : 'text-amber-800'}>
-                                            {availabilityWarning.title}
-                                        </AlertTitle>
-                                        <AlertDescription className={availabilityWarning.type === 'error' ? 'text-red-700' : 'text-amber-700'}>
-                                            {availabilityWarning.message}
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
-
-                                {/* Mostrar horarios disponibles si hay */}
-                                {professorAvailability && professorAvailability.totalActive > 0 && !availabilityWarning && (
-                                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                                        <div className="flex items-center gap-2 text-green-800 text-sm font-medium">
-                                            <Clock className="h-4 w-4" />
-                                            <span>Professor disponível nos dias:</span>
-                                        </div>
-                                        <p className="text-green-700 text-sm mt-1">
-                                            {professorAvailability.availableDays.join(', ')}
-                                            <span className="text-green-600 ml-1">
-                                                ({professorAvailability.totalActive} horário(s) disponível(is))
-                                            </span>
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        )}
 
                         {/* Estado da conta - solo para edición */}
                         {editingUser && (
