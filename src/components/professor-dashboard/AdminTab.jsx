@@ -147,12 +147,15 @@ const AdminTab = ({ dashboardData }) => {
     };
 
     const getNextStudentCode = () => {
-        const studentCodes = (students || [])
+        // Usar allProfiles para garantir que pegamos o maior código de TODO o sistema, 
+        // e não apenas dos alunos visíveis no filtro atual.
+        const studentCodes = allProfiles
+            .filter(p => p.student_code)
             .map(s => s.student_code)
             .filter(code => code && /^\d+$/.test(code))
             .map(code => parseInt(code, 10));
 
-        const lastCode = studentCodes.length > 0 ? Math.max(...studentCodes) : 101009;
+        const lastCode = studentCodes.length > 0 ? Math.max(...studentCodes) : 101014;
         const nextCode = lastCode + 1;
         return nextCode.toString().padStart(7, '0');
     };
@@ -413,7 +416,7 @@ const AdminTab = ({ dashboardData }) => {
 
                     toast({
                         title: 'Sucesso!',
-                        description: `Usuário criado com sucesso. Senha provisória: ${generatedPassword}`,
+                        description: `Usuário criado com sucesso. ${formData.role === 'student' ? `Código: ${formData.student_code}. ` : ''}Senha provisória: ${generatedPassword}`,
                         duration: 15000,
                     });
                 } catch (rpcException) {
@@ -914,7 +917,18 @@ const AdminTab = ({ dashboardData }) => {
                                 </div>
                                 {formData.role === 'student' && (
                                     <div className="grid gap-2">
-                                        <Label htmlFor="student_code">Código do Aluno</Label>
+                                        <div className="flex items-center justify-between">
+                                            <Label htmlFor="student_code">Código do Aluno</Label>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 text-xs text-purple-600 hover:text-purple-700"
+                                                onClick={() => setFormData({ ...formData, student_code: getNextStudentCode() })}
+                                                type="button"
+                                            >
+                                                Regerar Código
+                                            </Button>
+                                        </div>
                                         <Input
                                             id="student_code"
                                             value={formData.student_code || ''}
