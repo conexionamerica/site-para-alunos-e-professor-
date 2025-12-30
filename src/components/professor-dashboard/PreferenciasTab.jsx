@@ -384,7 +384,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
     };
 
     fetchFutureAppointments();
-  }, [professorId, loading]);
+  }, [effectiveProfessorId, loading]);
 
   const handleSlotToggle = (dayIndex, time) => {
     setSlots(currentSlots =>
