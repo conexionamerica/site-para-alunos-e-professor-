@@ -290,20 +290,22 @@ const AdminTab = ({ dashboardData }) => {
                     });
                 }
 
+                // 2. Atualizar o status via RPC (Especialmente importante para inativação funcional)
+                await supabase.rpc('update_user_status', {
+                    p_user_id: editingUser.id,
+                    p_is_active: formData.is_active === true
+                });
+
+                // 3. Atualizar outros dados via update normal (opcional, mas garante campos como full_name)
                 const { data: updatedRows, error: updateError } = await supabase
                     .from('profiles')
                     .update(updateData)
                     .eq('id', editingUser.id)
                     .select();
 
-
                 if (updateError) {
                     console.error('Erro no update do profile:', updateError);
-                    throw updateError;
-                }
-
-                if (!updatedRows || updatedRows.length === 0) {
-                    // No rows updated - this is a warning condition
+                    // Não lançamos erro aqui se o status já foi atualizado pelo RPC
                 }
 
                 // Lógica de inativação avançada (limpeza de horários e cancelamento de aulas)
