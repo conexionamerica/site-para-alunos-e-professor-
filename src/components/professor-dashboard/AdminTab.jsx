@@ -393,8 +393,16 @@ const AdminTab = ({ dashboardData }) => {
                     if (rpcError) {
                         console.error('Error calling admin_create_user RPC:', rpcError);
                         let errorMsg = rpcError.message;
-                        if (rpcError.message.includes('unique constraint') || rpcError.message.includes('already exists')) {
-                            errorMsg = 'Este e-mail ou nome de usuário já está registrado.';
+
+                        // Identificar qual campo está duplicado para ser mais específico
+                        if (rpcError.message.includes('profiles_student_code_key')) {
+                            errorMsg = 'Este "Código do Aluno" já está sendo usado por outro usuário.';
+                        } else if (rpcError.message.includes('profiles_username_key')) {
+                            errorMsg = 'Este "Username" já está em uso.';
+                        } else if (rpcError.message.includes('users_email_partial_key') || rpcError.message.includes('already exists')) {
+                            errorMsg = 'Este "E-mail" já está registrado no sistema.';
+                        } else if (rpcError.message.includes('unique constraint') || rpcError.message.includes('already exists')) {
+                            errorMsg = 'Algum dos dados informados (E-mail, Código ou Username) já existe no sistema.';
                         }
                         throw new Error(errorMsg);
                     }
