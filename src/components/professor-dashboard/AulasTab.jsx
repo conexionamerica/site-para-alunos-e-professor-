@@ -479,8 +479,16 @@ const AulasTab = ({ dashboardData }) => {
     const appointments = data.appointments || [];
     const packages = data.packages || [];
 
-    // Estado para filtro de professor (solo superadmin)
+    // Filtro global de professor (passado do ProfessorDashboardPage)
+    const globalProfessorFilter = dashboardData?.globalProfessorFilter;
+
+    // Estado para filtro de professor local (fallback para superadmin)
     const [professorFilter, setProfessorFilter] = useState('all');
+
+    // Determinar o filtro efetivo de professor
+    const effectiveProfessorFilter = globalProfessorFilter && globalProfessorFilter !== 'all'
+        ? globalProfessorFilter
+        : professorFilter;
 
     // Estado para mostrar agenda del profesor seleccionado
     const [selectedProfessorAgenda, setSelectedProfessorAgenda] = useState(null);
@@ -685,15 +693,19 @@ const AulasTab = ({ dashboardData }) => {
                     (statusFilter === 'canceled' && (apt.status === 'canceled' || apt.status === 'cancelled'));
             }
 
-            // Filtro de professor para superadmin
+            // Filtro de professor
             let professorMatch = true;
-            if (isSuperadmin && professorFilter !== 'all') {
-                professorMatch = apt.professor_id === professorFilter;
+            if (!isSuperadmin) {
+                // Professores normais veem apenas suas próprias aulas
+                professorMatch = apt.professor_id === professorId;
+            } else if (effectiveProfessorFilter !== 'all') {
+                // Superadmin com filtro ativo
+                professorMatch = apt.professor_id === effectiveProfessorFilter;
             }
 
             return nameMatch && dateMatch && statusMatch && professorMatch;
         }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
-    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter, isSuperadmin, professorFilter]);
+    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter, isSuperadmin, professorId, effectiveProfessorFilter]);
 
     // Paginação
     const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);

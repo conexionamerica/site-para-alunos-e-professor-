@@ -41,6 +41,9 @@ const AgendaTab = ({ dashboardData }) => {
     const isSuperadmin = dashboardData?.isSuperadmin || false;
     const professors = dashboardData?.data?.professors || [];
 
+    // Filtro global de professor (passado do ProfessorDashboardPage)
+    const globalProfessorFilter = dashboardData?.globalProfessorFilter;
+
     // SINCRONIZAÇÃO: Usar appointments do dashboardData como fonte única
     const allAppointments = dashboardData?.data?.appointments || [];
 
@@ -55,6 +58,11 @@ const AgendaTab = ({ dashboardData }) => {
     const [professorFilter, setProfessorFilter] = useState('all');
     // Usar hora de Brasília para a linha vermelha (consistência com a agenda)
     const [currentTime, setCurrentTime] = useState(() => getCurrentBrazilTime());
+
+    // Determinar o filtro efetivo de professor
+    const effectiveProfessorFilter = globalProfessorFilter && globalProfessorFilter !== 'all'
+        ? globalProfessorFilter
+        : professorFilter;
 
     // Ref para scroll automático à hora atual
     const currentTimeRef = useRef(null);
@@ -83,16 +91,20 @@ const AgendaTab = ({ dashboardData }) => {
             const aptDateStr = apt.class_datetime.substring(0, 10);
             const status = apt.status;
 
-            // Filtro de professor para superadmin
-            if (isSuperadmin && professorFilter !== 'all' && apt.professor_id !== professorFilter) {
-                return false;
+            // Filtro de professor
+            if (!isSuperadmin) {
+                // Professores normais veem apenas suas próprias aulas
+                if (apt.professor_id !== professorId) return false;
+            } else if (effectiveProfessorFilter !== 'all') {
+                // Superadmin com filtro ativo
+                if (apt.professor_id !== effectiveProfessorFilter) return false;
             }
 
             return aptDateStr >= startStr &&
                 aptDateStr <= endStr &&
                 ['scheduled', 'completed', 'rescheduled', 'missed'].includes(status);
         });
-    }, [allAppointments, weekStart, weekEnd, isSuperadmin, professorFilter]);
+    }, [allAppointments, weekStart, weekEnd, isSuperadmin, professorId, effectiveProfessorFilter]);
 
     // Atualizar hora atual a cada minuto (usando hora de Brasília)
     useEffect(() => {

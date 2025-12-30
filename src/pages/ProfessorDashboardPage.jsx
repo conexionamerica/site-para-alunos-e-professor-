@@ -415,10 +415,21 @@ const ProfessorDashboardPage = () => {
         if (!dashboardData) return null;
 
         // Se não for superadmin, retorna dados normais (já filtrados no backend)
-        if (!isSuperadmin) return dashboardData;
+        // mas ainda adiciona o globalProfessorFilter para referência
+        if (!isSuperadmin) {
+            return {
+                ...dashboardData,
+                globalProfessorFilter: 'all'
+            };
+        }
 
         // Se for superadmin e filtro = 'all', retorna dados completos
-        if (globalProfessorFilter === 'all') return dashboardData;
+        if (globalProfessorFilter === 'all') {
+            return {
+                ...dashboardData,
+                globalProfessorFilter: 'all'
+            };
+        }
 
         // Aplicar filtro de professor nos dados
         const filteredData = {
