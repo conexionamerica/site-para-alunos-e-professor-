@@ -554,7 +554,16 @@ const AdminTab = ({ dashboardData }) => {
                 </TabsList>
 
                 {/* Sub-tab: Preferências de todos los profesores */}
-                <TabsContent value="preferencias" className="mt-6">
+                <TabsContent value="preferencias" className="mt-6 space-y-6">
+                    {/* Sección fija para Incluir Aulas */}
+                    <PreferenciasTab
+                        hideTable={true}
+                        dashboardData={{
+                            ...dashboardData,
+                            professorId: professorFilter // Pode ser 'all'
+                        }}
+                    />
+
                     <Card>
                         <CardHeader>
                             <div className="flex justify-between items-center">
@@ -579,18 +588,21 @@ const AdminTab = ({ dashboardData }) => {
                         </CardHeader>
                         <CardContent>
                             {professorFilter !== 'all' ? (
-                                <PreferenciasTab dashboardData={{
-                                    ...dashboardData,
-                                    data: {
-                                        ...data,
-                                        classSlots: filteredClassSlots
-                                    },
-                                    professorId: professorFilter
-                                }} />
+                                <PreferenciasTab
+                                    hideForm={true}
+                                    dashboardData={{
+                                        ...dashboardData,
+                                        data: {
+                                            ...data,
+                                            classSlots: filteredClassSlots
+                                        },
+                                        professorId: professorFilter
+                                    }}
+                                />
                             ) : (
                                 <div className="text-center py-8 text-slate-500">
                                     <Settings className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-                                    <p>Selecione um professor para ver suas preferências</p>
+                                    <p>Selecione um professor no filtro acima para ver e editar seus horários semanais.</p>
                                 </div>
                             )}
                         </CardContent>
