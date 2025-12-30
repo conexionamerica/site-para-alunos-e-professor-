@@ -47,9 +47,7 @@ const AdminTab = ({ dashboardData }) => {
         email: '',
         role: 'student',
         assigned_professor_id: '',
-        is_active: true,
-        can_manage_classes: true,
-        can_manage_students: true
+        is_active: true
     });
     const [generatedPassword, setGeneratedPassword] = useState('');
 
@@ -175,9 +173,7 @@ const AdminTab = ({ dashboardData }) => {
             role: 'student',
             student_code: nextCode,
             assigned_professor_id: '',
-            is_active: true,
-            can_manage_classes: true,
-            can_manage_students: true
+            is_active: true
         });
         setGeneratedPassword(newPassword);
         setIsUserDialogOpen(true);
@@ -202,9 +198,7 @@ const AdminTab = ({ dashboardData }) => {
             role: user.role || 'student',
             student_code: user.student_code || '',
             assigned_professor_id: user.assigned_professor_id || '',
-            is_active: user.is_active !== false,
-            can_manage_classes: user.can_manage_classes !== false,
-            can_manage_students: user.can_manage_students !== false
+            is_active: user.is_active !== false
         });
         setGeneratedPassword('');
         setIsUserDialogOpen(true);
@@ -285,9 +279,7 @@ const AdminTab = ({ dashboardData }) => {
                     role: formData.role,
                     student_code: formData.role === 'student' ? (formData.student_code?.trim() || null) : null,
                     assigned_professor_id: formData.role === 'student' ? (formData.assigned_professor_id || null) : null,
-                    is_active: formData.is_active === true,
-                    can_manage_classes: formData.can_manage_classes === true,
-                    can_manage_students: formData.can_manage_students === true
+                    is_active: formData.is_active === true
                 };
 
 
@@ -425,11 +417,8 @@ const AdminTab = ({ dashboardData }) => {
                         throw new Error('Não foi possível obter o ID do novo usuário criado.');
                     }
 
-                    // Atualizar permissões granulares para o novo usuário
-                    await supabase.from('profiles').update({
-                        can_manage_classes: formData.can_manage_classes === true,
-                        can_manage_students: formData.can_manage_students === true
-                    }).eq('id', newUserId);
+                    // Permissões granulares agora são gerenciadas via role_settings (aba Perfis)
+                    // Não mais atualizadas individualmente por usuário
 
                     toast({
                         title: 'Sucesso!',
@@ -1001,29 +990,11 @@ const AdminTab = ({ dashboardData }) => {
                             </div>
                         )}
 
-                        {/* PERMISSÕES GRANULARES (Sempre visíveis) */}
-                        <div className="space-y-3 py-4 border-t border-slate-100">
-                            <Label className="text-xs font-bold uppercase text-slate-500">Permissões de Gerenciamento</Label>
-                            <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="perm_manage_classes"
-                                    checked={formData.can_manage_classes}
-                                    onCheckedChange={(checked) => setFormData({ ...formData, can_manage_classes: checked })}
-                                />
-                                <Label htmlFor="perm_manage_classes" className="text-sm font-medium leading-none cursor-pointer">
-                                    Acesso à coluna Ações (Aulas)
-                                </Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="perm_manage_students"
-                                    checked={formData.can_manage_students}
-                                    onCheckedChange={(checked) => setFormData({ ...formData, can_manage_students: checked })}
-                                />
-                                <Label htmlFor="perm_manage_students" className="text-sm font-medium leading-none cursor-pointer">
-                                    Acesso à coluna Ações (Alunos)
-                                </Label>
-                            </div>
+                        {/* PERMISSÕES: Agora gerenciadas exclusivamente na aba "Perfis" */}
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-xs text-blue-800">
+                                <strong>💡 Nota:</strong> As permissões de acesso (Ações em Aulas e Alunos) são configuradas por tipo de perfil na aba <strong>"Perfis"</strong>.
+                            </p>
                         </div>
 
                         {/* Estado da conta - solo para edición */}

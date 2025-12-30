@@ -1,0 +1,44 @@
+================================================================================
+ARQUIVO DE DADOS
+================================================================================
+Colunas (2):
+
+  1. Ano:
+  2. 2025
+
+
+Primeira linha de exemplo:
+Ano:      UO:
+2025    TODOS
+Name: 0, dtype: object
+
+================================================================================
+ARQUIVO DE REGRAS
+================================================================================
+Colunas (16):
+
+  1. Unnamed: 0
+  2. Unnamed: 1
+  3. Unnamed: 2
+  4. Unnamed: 3
+  5. Unnamed: 4
+  6. Unnamed: 5
+  7. Unnamed: 6
+  8. Unnamed: 7
+  9. Unnamed: 8
+ 10. Unnamed: 9
+ 11. Unnamed: 10
+ 12. Unnamed: 11
+ 13. Unnamed: 12
+ 14. Unnamed: 13
+ 15. Unnamed: 14
+ 16. Unnamed: 15
+
+
+Primeiras linhas de exemplo:
+   Unnamed: 0                         Unnamed: 1 Unnamed: 2 Unnamed: 3 Unnamed: 4 Unnamed: 5   Unnamed: 6                   Unnamed: 7         Unnamed: 8 Unnamed: 9 Unnamed: 10  Unnamed: 11  Unnamed: 12 Unnamed: 13 Unnamed: 14                    Unnamed: 15
+0         NaN         Subatividade Apresentações        NaN        NaN        NaN        NaN          NaN                          NaN                NaN        NaN         NaN          NaN          NaN    Legenda:           X  preenchimento não obrigatório
+1         NaN                           Serviços         Nº   Presença        NaN        NaN          NaN  Visualizações/\nReproduções  Pessoas atendidas        NaN         NaN          NaN          NaN         NaN           X      preenchimento obrigatório
+2         NaN                                NaN        NaN       Com.       Dep.      P. G.  Públ. N. I.                          NaN               Com.       Dep.       P. G.  Públ. N. I.          NaN         NaN         NaN                            NaN
+3         NaN                       Apresentação          x          x          x          x            x                            x                  x          x           x            x          NaN         NaN         NaN                            NaN
+4         NaN  Apresentação - Educação Ambiental          x          x          x          x            x                            x                  x          x           x            x          NaN         NaN         NaN                            NaN

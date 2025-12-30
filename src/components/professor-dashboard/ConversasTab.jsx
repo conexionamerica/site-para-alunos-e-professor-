@@ -45,9 +45,8 @@ const ChatInterface = ({ activeChat, professorId, professorName, onBack }) => {
 
       if (updateError) {
         console.error('Erro ao marcar mensagens como lidas:', updateError);
-      } else if (count > 0) {
-        console.log(`${count} mensagens marcadas como lidas`);
       }
+
     }
     setLoadingMessages(false);
   }, [activeChat, toast, professorId]);
