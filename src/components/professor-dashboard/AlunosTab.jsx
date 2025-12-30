@@ -357,8 +357,16 @@ const AlunosTab = ({ dashboardData }) => {
     const isSuperadmin = dashboardData?.isSuperadmin || false;
     const professors = data.professors || [];
 
-    // Estado para filtro de professor (solo superadmin)
+    // Filtro global de professor (passado do ProfessorDashboardPage)
+    const globalProfessorFilter = dashboardData?.globalProfessorFilter;
+
+    // Estado para filtro de professor local (fallback para superadmin)
     const [professorFilter, setProfessorFilter] = useState('all');
+
+    // Determinar o filtro efetivo de professor
+    const effectiveProfessorFilter = globalProfessorFilter && globalProfessorFilter !== 'all'
+        ? globalProfessorFilter
+        : professorFilter;
 
     // Asignaciones seguras
     const students = data.students || [];
@@ -419,14 +427,17 @@ const AlunosTab = ({ dashboardData }) => {
     const filteredStudents = studentsWithData.filter(s => {
         const matchesSearch = s.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-        // Filtro de professor para superadmin
-        if (isSuperadmin && professorFilter !== 'all') {
-            const hasAppointmentWithProfessor = allAppointments.some(
-                apt => apt.student_id === s.id && apt.professor_id === professorFilter
-            );
-            return matchesSearch && hasAppointmentWithProfessor;
+        // Para professores normais: mostrar apenas alunos vinculados a ele
+        if (!isSuperadmin) {
+            return matchesSearch && s.assigned_professor_id === professorId;
         }
 
+        // Para superadmin com filtro ativo: filtrar por assigned_professor_id
+        if (effectiveProfessorFilter !== 'all') {
+            return matchesSearch && s.assigned_professor_id === effectiveProfessorFilter;
+        }
+
+        // Superadmin sem filtro: mostrar todos
         return matchesSearch;
     });
 
