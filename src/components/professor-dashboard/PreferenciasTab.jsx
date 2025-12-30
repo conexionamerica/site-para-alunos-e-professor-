@@ -42,7 +42,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
     const { data: logs, error: logError } = await supabase
       .from('assigned_packages_log')
       .select(`
-        id, student_id, package_id, observation, assigned_classes, assigned_at, status, 
+        id, student_id, package_id, observation, assigned_classes, assigned_at, status, custom_package_name,
         student:profiles!student_id(full_name),
         package:packages(name)
       `)
@@ -173,7 +173,16 @@ const AssignedPackagesHistory = ({ professorId, onDelete }) => {
               history.map(log => (
                 <TableRow key={log.id} className={log.status === 'Cancelado' ? 'opacity-60 bg-slate-50' : ''}>
                   <TableCell>{log.student?.full_name || 'N/A'}</TableCell>
-                  <TableCell>{log.package?.name || 'Pacote não encontrado'}</TableCell>
+                  <TableCell>
+                    {log.custom_package_name ? (
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-sky-700">{log.custom_package_name}</span>
+                        <span className="text-xs text-slate-400">{log.package?.name}</span>
+                      </div>
+                    ) : (
+                      log.package?.name || 'Pacote não encontrado'
+                    )}
+                  </TableCell>
 
                   {/* DADOS DE AULAS/PREÇO */}
                   <TableCell>{log.total_classes_sent || 'N/A'}</TableCell>
@@ -256,9 +265,10 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
   // NOVOS ESTADOS PARA DETALHES DO AGENDAMENTO (usaremos para 'Personalizado')
   const [pckPersonalData, setPckPersonalData] = useState({
+    packageName: '', // (1) Nome do Pacote
     totalClasses: '',
     duration: '30', // Default duration
-    time: ALL_TIMES[0].substring(0, 5),
+    dayTimes: {}, // (2) { dayIndex: 'HH:mm' }
     days: [],
     price: '',
     startDate: getBrazilDate(), // NOVA: Data de Início do Customizado
@@ -266,17 +276,34 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   });
   // Usamos 'custom' para compatibilidade com o fluxo original que só precisava de customClassCount.
   // Agora, usaremos pckPersonalData para a maioria dos inputs.
-  const { totalClasses, duration, time, days, price, endDate: pckEndDate, startDate: pckStartDate } = pckPersonalData;
+  const { packageName, totalClasses, duration, dayTimes, days, price, endDate: pckEndDate, startDate: pckStartDate } = pckPersonalData;
 
   const handlePckPersonalChange = (field, value) => {
     setPckPersonalData(prev => ({ ...prev, [field]: value }));
   };
   const handleDayTogglePckPersonal = (dayIndex) => {
-    handlePckPersonalChange('days',
-      days.includes(dayIndex)
-        ? days.filter(d => d !== dayIndex)
-        : [...days, dayIndex]
-    );
+    setPckPersonalData(prev => {
+      const isRemoving = prev.days.includes(dayIndex);
+      const newDays = isRemoving
+        ? prev.days.filter(d => d !== dayIndex)
+        : [...prev.days, dayIndex].sort((a, b) => a - b);
+
+      const newDayTimes = { ...prev.dayTimes };
+      if (isRemoving) {
+        delete newDayTimes[dayIndex];
+      } else {
+        newDayTimes[dayIndex] = '08:00'; // Default time for new day
+      }
+
+      return { ...prev, days: newDays, dayTimes: newDayTimes };
+    });
+  };
+
+  const handleDayTimeChange = (dayIndex, time) => {
+    setPckPersonalData(prev => ({
+      ...prev,
+      dayTimes: { ...prev.dayTimes, [dayIndex]: time }
+    }));
   };
   // FIM DOS NOVOS ESTADOS
 
@@ -294,7 +321,18 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   const selectedPackageData = packages.find(p => p.id === parseInt(selectedPackage));
 
   // CORREÇÃO: Usar isCustomPackageSelected (o nome 'Personalizado') para mostrar o bloco de agendamento flexível
-  const isCustomPackageSelected = selectedPackageData?.name === 'Personalizado';
+  // Ou se as instruções dizem que o pacote personalizado será o ÚNICO, podemos forçar isso.
+  const isCustomPackageSelected = selectedPackageData?.name === 'Personalizado' || selectedPackage === 'custom-choice';
+
+  // Sincronizar selectedPackage com 'Personalizado' se não estiver definido e estiver carregado
+  useEffect(() => {
+    if (!selectedPackage && packages.length > 0) {
+      const personalPkg = packages.find(p => p.name === 'Personalizado');
+      if (personalPkg) {
+        setSelectedPackage(personalPkg.id.toString());
+      }
+    }
+  }, [packages, selectedPackage]);
 
   // A lógica do agendamento automático será ativada se for o pacote 'Personalizado'
   const isAutomaticScheduling = isCustomPackageSelected;
@@ -642,301 +680,207 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   const handleAssignPackage = async (e) => {
     e.preventDefault();
 
-    // --- VARIÁVEIS COMUNS ---
     if (!selectedStudentId || !selectedPackage) {
       toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione aluno e pacote.' });
       return;
     }
 
-    // --- VALIDAÇÃO PCKPERSONAL (AGORA USADO POR 'PERSONALIZADO') ---
-    if (isAutomaticScheduling) {
-      if (!totalClasses || !duration || !time || days.length === 0 || !price || !pckEndDate || !pckStartDate) {
-        toast({ variant: 'destructive', title: 'Campos do Pacote Personalizado obrigatórios', description: 'Por favor, preencha todos os detalhes do agendamento (aulas, duração, horário, dias, preço, data de início e validade).' });
-        setIsSubmittingPackage(false);
-        return;
-      }
-    }
-    // --- VALIDAÇÃO GERAL ---
-    else if (!endDate || !purchaseDate) {
-      toast({ variant: 'destructive', title: 'Campos obrigatórios', description: 'Selecione a data de início e de validade.' });
-      return;
-    }
-
-
     if (!selectedPackageData) {
       toast({ variant: 'destructive', title: 'Pacote não encontrado' });
-      setIsSubmittingPackage(false);
       return;
     }
+
     if (!effectiveProfessorId) {
       toast({ variant: 'destructive', title: 'Erro de Autenticação', description: 'ID do Professor não está disponível.' });
-      setIsSubmittingPackage(false);
       return;
+    }
+
+    // VALIDAÇÃO ESPECÍFICA PARA PERSONALIZADO
+    if (isAutomaticScheduling) {
+      if (!totalClasses || !duration || days.length === 0 || !price || !packageName) {
+        toast({
+          variant: 'destructive',
+          title: 'Campos obrigatórios',
+          description: 'Preencha Nome do Pacote, Aulas, Preço e selecione os dias/horários.'
+        });
+        return;
+      }
     }
 
     setIsSubmittingPackage(true);
 
-    // VARIÁVEIS DE ATRIBUIÇÃO E FATURA
-    let priceToRegister = 0;
-    let classesToRegister = 0;
-    let finalEndDate = endDate;
-    let finalPurchaseDate = purchaseDate; // Usado para data_início/purchase_date
+    try {
+      const classesToRegister = isAutomaticScheduling ? parseInt(totalClasses, 10) : selectedPackageData.number_of_classes;
+      const priceToRegister = isAutomaticScheduling ? parseFloat(price) : selectedPackageData.price;
+      const finalStartDate = isAutomaticScheduling ? pckStartDate : purchaseDate;
+      const finalEndDate = isAutomaticScheduling ? pckEndDate : endDate;
+      const classDurationMinutes = isAutomaticScheduling ? parseInt(duration, 10) : 30;
+      const slotsPerClass = Math.ceil(classDurationMinutes / 15);
 
-    if (isAutomaticScheduling) {
-      priceToRegister = parseFloat(price);
-      classesToRegister = parseInt(totalClasses, 10);
-      finalEndDate = pckEndDate;
-      finalPurchaseDate = pckStartDate; // Usa a data de início do bloco personalizado
-    } else {
-      classesToRegister = selectedPackageData.number_of_classes;
-      priceToRegister = selectedPackageData.price;
-    }
-
-    // --- 1. CRIAÇÃO DA FATURA (BILLING) ---
-    const { error: billingError } = await supabase.from('billing').insert({
-      user_id: selectedStudentId,
-      package_id: selectedPackageData.id,
-      amount_paid: priceToRegister,
-      purchase_date: format(finalPurchaseDate, 'yyyy-MM-dd'),
-      end_date: format(finalEndDate, 'yyyy-MM-dd'),
-    });
-
-    if (billingError) {
-      toast({ variant: 'destructive', title: 'Erro ao incluir fatura', description: billingError.message });
-      setIsSubmittingPackage(false);
-      return;
-    }
-
-    // --- 2. REGISTRO NO LOG (assigned_packages_log) ---
-    const { error: logError } = await supabase.from('assigned_packages_log').insert({
-      professor_id: effectiveProfessorId,
-      student_id: selectedStudentId,
-      package_id: selectedPackageData.id,
-      observation: observation,
-      assigned_classes: classesToRegister,
-      status: 'Ativo'
-    });
-
-    // --- 3. AGENDAMENTO AUTOMÁTICO (SE FOR PACOTE DE AGENDAMENTO AUTOMÁTICO) ---
-    if (isAutomaticScheduling && !billingError) {
-      try {
-        const totalClassesToSchedule = classesToRegister;
-        const classDurationMinutes = parseInt(duration, 10);
-        const slotsPerClass = Math.ceil(classDurationMinutes / 15);
-        const studentId = selectedStudentId;
-
-        // Fetch all active class slots for the professor (used for ID lookup)
+      // --- 1. VALIDAÇÃO DE DISPONIBILIDADE (AGENDAMENTO AUTOMÁTICO) ---
+      let appointmentInserts = [];
+      if (isAutomaticScheduling) {
+        // Fetch slots do professor
         const { data: allSlots, error: slotsError } = await supabase
           .from('class_slots')
-          .select('id, day_of_week, start_time, status')
+          .select('*')
           .eq('professor_id', effectiveProfessorId);
 
-        if (slotsError) throw slotsError;
+        if (slotsError) throw new Error("Erro ao buscar horários do professor.");
 
-        // *** NUEVA VALIDACIÓN: Verificar si los horarios seleccionados ya están ocupados ***
-        const conflictingSlots = [];
-        const selectedDaysNames = days.map(d => daysOfWeek[d]);
-
-        for (const dayIndex of days) {
-          const startTimeFull = `${time}:00`;
+        // TRAVA DE SEGURANÇA: Verificar se horários escolhidos estão ativos
+        for (const dayIdx of days) {
+          const startTime = dayTimes[dayIdx];
+          const startTimeFull = `${startTime}:00`;
 
           for (let i = 0; i < slotsPerClass; i++) {
             const slotTimeObj = parse(startTimeFull, 'HH:mm:ss', new Date());
             const slotTime = format(add(slotTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
 
-            const matchingSlot = allSlots.find(s =>
-              s.day_of_week === dayIndex && s.start_time === slotTime
-            );
+            const matchingSlot = allSlots.find(s => s.day_of_week === dayIdx && s.start_time === slotTime);
 
-            if (matchingSlot && matchingSlot.status === 'filled') {
-              conflictingSlots.push({
-                day: daysOfWeek[dayIndex],
-                time: slotTime.substring(0, 5)
-              });
+            if (!matchingSlot || matchingSlot.status !== 'active') {
+              throw new Error(`O horário ${slotTime.substring(0, 5)} na ${daysOfWeek[dayIdx]} não está disponível como 'Ativo' nas suas preferências.`);
             }
           }
         }
 
-        // Si hay conflictos, mostrar alerta y cancelar la operación
-        if (conflictingSlots.length > 0) {
-          const conflictMessage = conflictingSlots
-            .map(c => `${c.day} às ${c.time}`)
-            .join(', ');
-
-          toast({
-            variant: 'destructive',
-            title: '⚠️ Horário já ocupado!',
-            description: `Os seguintes horários já estão ocupados: ${conflictMessage}. Por favor, escolha outros horários.`,
-            duration: 8000,
-          });
-
-          setIsSubmittingPackage(false);
-          return;
-        }
-        // *** FIM DA VALIDAÇÃO ***
-
-        const appointmentInserts = [];
-        let currentDate = new Date(finalPurchaseDate);
-        let classesScheduled = 0;
-
-        // Fetch existing appointments to prevent dynamic conflicts
-        const { data: existingAppointments, error: aptError } = await supabase
+        // Fetch agendamentos existentes para evitar conflitos dinâmicos
+        const { data: existingAppts } = await supabase
           .from('appointments')
           .select('class_datetime, duration_minutes')
           .eq('professor_id', effectiveProfessorId)
-          .gte('class_datetime', format(getBrazilDate(), 'yyyy-MM-dd'))
+          .gte('class_datetime', finalStartDate.toISOString())
           .in('status', ['scheduled', 'rescheduled']);
 
-        if (aptError) console.error("Error checking for appointments:", aptError);
+        // GERAR AGENDAMENTOS
+        let currentDate = new Date(finalStartDate);
+        let classesScheduled = 0;
 
+        while (classesScheduled < classesToRegister && currentDate <= finalEndDate) {
+          const dayIdx = getDay(currentDate);
 
-        // INÍCIO DO LOOP DE AGENDAMENTO CORRIGIDO
-        while (classesScheduled < totalClassesToSchedule && currentDate <= finalEndDate) {
-          const dayOfWeek = getDay(currentDate);
-
-          if (days.includes(dayOfWeek)) {
-            const startTime = time;
+          if (days.includes(dayIdx)) {
+            const startTime = dayTimes[dayIdx];
             const startTimeFull = `${startTime}:00`;
             const startTimeObj = parse(startTimeFull, 'HH:mm:ss', currentDate);
 
-            let canBook = true;
+            // Verifica conflito com aulas já existentes
+            const newSlotStart = startTimeObj;
+            const newSlotEnd = add(newSlotStart, { minutes: classDurationMinutes });
 
-            for (let i = 0; i < slotsPerClass; i++) {
-              const slotTime = format(add(startTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
+            const hasConflict = (existingAppts || []).some(apt => {
+              const aptStart = parseISO(apt.class_datetime);
+              const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
+              return (newSlotStart < aptEnd && newSlotEnd > aptStart);
+            });
 
-              // Check 1: Slot must exist in the professor's configured general slots (just for ID reference)
-              const matchingSlotInProfPrefs = allSlots.find(s =>
-                s.day_of_week === dayOfWeek && s.start_time === slotTime
-              );
-
-              // If the slot is not defined in the professor's preferences AT ALL, we cannot book it.
-              // For custom packages, we allow booking even if status is inactive, but it MUST exist.
-              if (!matchingSlotInProfPrefs) {
-                canBook = false;
-                break;
-              }
-
-              // Check 2: Dynamic conflict against actual booked appointments
-              const newSlotStart = add(currentDate, { hours: startTimeObj.getHours(), minutes: startTimeObj.getMinutes() + i * 15 });
-
-              if ((existingAppointments || []).some(apt => {
-                const aptStart = parseISO(apt.class_datetime);
-                const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
-
-                // Check if new slot time overlaps with existing appointment
-                return newSlotStart >= aptStart && newSlotStart < aptEnd;
-              })) {
-                canBook = false;
-                break;
-              }
-            }
-
-            if (canBook) {
-              const [hour, minute] = startTime.split(':').map(Number);
-              const classDateTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), hour, minute, 0);
-
-              // Find the primary slot ID for the INSERT:
-              const primarySlot = allSlots.find(s =>
-                s.day_of_week === dayOfWeek && s.start_time === startTimeFull
-              );
-
+            if (!hasConflict) {
+              const primarySlot = allSlots.find(s => s.day_of_week === dayIdx && s.start_time === startTimeFull);
 
               appointmentInserts.push({
-                student_id: studentId,
+                student_id: selectedStudentId,
                 professor_id: effectiveProfessorId,
-                class_datetime: classDateTime.toISOString(),
-                class_slot_id: primarySlot.id, // Use the starting slot ID
+                class_datetime: newSlotStart.toISOString(),
+                class_slot_id: primarySlot?.id,
                 status: 'scheduled',
                 duration_minutes: classDurationMinutes,
               });
-
               classesScheduled++;
             }
           }
-
-          // AVANÇA PARA O PRÓXIMO DIA
           currentDate = add(currentDate, { days: 1 });
         }
-        // FIM DO LOOP DE AGENDAMENTO CORRIGIDO
 
-        if (appointmentInserts.length > 0) {
-          // Insere as aulas agendadas
-          const { error: insertError } = await supabase.from('appointments').insert(appointmentInserts);
-          if (insertError) throw new Error(`Falha ao criar aulas agendadas. Se houver conflitos de horário, parte do agendamento pode ter sido ignorada. Detalhes: ${insertError.message}`);
+        if (appointmentInserts.length === 0) {
+          throw new Error("Não foi possível agendar nenhuma aula no período selecionado. Verifique conflitos na agenda.");
+        }
+      }
 
-          // *** NOVA FUNCIONALIDAD: Bloquear los horarios en la pestaña de preferencias ***
-          const slotIdsToBlock = new Set();
+      // --- 2. REGISTROS NO BANCO (BILLING, LOGS, APPOINTMENTS) ---
 
-          for (const dayIndex of days) {
-            const startTimeFull = `${time}:00`;
+      // FATURA
+      const { error: billErr } = await supabase.from('billing').insert({
+        user_id: selectedStudentId,
+        package_id: selectedPackageData.id,
+        amount_paid: priceToRegister,
+        purchase_date: format(finalStartDate, 'yyyy-MM-dd'),
+        end_date: format(finalEndDate, 'yyyy-MM-dd'),
+        custom_package_name: isAutomaticScheduling ? packageName : null,
+        status: 'pago'
+      });
+      if (billErr) throw billErr;
 
-            for (let i = 0; i < slotsPerClass; i++) {
-              const slotTimeObj = parse(startTimeFull, 'HH:mm:ss', new Date());
-              const slotTime = format(add(slotTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
+      // LOG
+      const { error: logErr } = await supabase.from('assigned_packages_log').insert({
+        professor_id: effectiveProfessorId,
+        student_id: selectedStudentId,
+        package_id: selectedPackageData.id,
+        observation: observation,
+        assigned_classes: classesToRegister,
+        custom_package_name: isAutomaticScheduling ? packageName : null,
+        status: 'Ativo'
+      });
+      if (logErr) throw logErr;
 
-              const matchingSlot = allSlots.find(s =>
-                s.day_of_week === dayIndex && s.start_time === slotTime
-              );
+      // AULAS (Se houver)
+      if (appointmentInserts.length > 0) {
+        const { error: aptErr } = await supabase.from('appointments').insert(appointmentInserts);
+        if (aptErr) throw aptErr;
 
-              if (matchingSlot) {
-                slotIdsToBlock.add(matchingSlot.id);
-              }
-            }
+        // BLOQUEAR SLOTS
+        const slotIdsToBlock = new Set();
+        const { data: profSlots } = await supabase.from('class_slots').select('id, day_of_week, start_time').eq('professor_id', effectiveProfessorId);
+
+        for (const dayIdx of days) {
+          const startTime = dayTimes[dayIdx];
+          for (let i = 0; i < slotsPerClass; i++) {
+            const t = format(add(parse(startTime, 'HH:mm', new Date()), { minutes: i * 15 }), 'HH:mm:ss');
+            const match = profSlots.find(s => s.day_of_week === dayIdx && s.start_time === t);
+            if (match) slotIdsToBlock.add(match.id);
           }
-
-          // Actualizar los slots a 'filled' (bloqueados)
-          if (slotIdsToBlock.size > 0) {
-            const { error: blockError } = await supabase
-              .from('class_slots')
-              .update({ status: 'filled' })
-              .in('id', Array.from(slotIdsToBlock));
-
-            if (blockError) {
-              console.error('Error blocking slots:', blockError);
-            } else {
-              console.log(`${slotIdsToBlock.size} horários bloqueados com sucesso`);
-            }
-          }
-          // *** FIM DO BLOQUEIO DE HORÁRIOS ***
-
-          toast({ variant: 'info', title: 'Agendamento Automático!', description: `${appointmentInserts.length} aulas foram agendadas e os horários foram bloqueados.` });
-        } else {
-          toast({ variant: 'warning', title: 'Agendamento Falhou', description: 'Nenhum horário disponível encontrado dentro do período para este pacote.' });
         }
 
-      } catch (e) {
-        toast({ variant: 'destructive', title: 'Erro de Agendamento Automático', description: e.message });
+        if (slotIdsToBlock.size > 0) {
+          await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToBlock));
+        }
       }
-    }
 
-    // --- 4. NOTIFICAÇÃO E LIMPEZA ---
-    await supabase.from('notifications').insert({
-      user_id: selectedStudentId,
-      type: 'new_package',
-      content: {
-        message: `Você recebeu um novo pacote: ${selectedPackageData.name}`,
-        packageName: selectedPackageData.name,
-        classCount: classesToRegister
-      },
-    });
+      // ATUALIZAR ROTINA NO PERFIL
+      if (isAutomaticScheduling) {
+        await supabase.from('profiles').update({
+          preferred_schedule: dayTimes
+        }).eq('id', selectedStudentId);
+      }
 
-    if (logError) {
-      toast({ variant: 'destructive', title: 'Erro ao registrar', description: `Pacote atribuído, mas falha ao registrar no histórico: ${logError.message}` });
-    } else {
-      toast({ variant: 'default', title: 'Paquete incluído!', description: `Paquete "${selectedPackageData.name}" (${classesToRegister} aulas) fue incluido para ${selectedStudent.full_name}.` });
+      // --- 3. FINALIZAÇÃO ---
+      toast({
+        title: 'Sucesso!',
+        description: `Pacote "${isAutomaticScheduling ? packageName : selectedPackageData.name}" incluído com ${appointmentInserts.length} aulas agendadas.`
+      });
 
-      // Limpar estados
+      // Limpar campos
       setSelectedStudentId(null);
-      setSelectedPackage(null);
-      setCustomClassCount('');
       setObservation('');
-      setPurchaseDate(getBrazilDate());
-      setEndDate(addMonths(getBrazilDate(), 1));
-      setPckPersonalData({ totalClasses: '', duration: '30', time: ALL_TIMES[0].substring(0, 5), days: [], price: '', startDate: getBrazilDate(), endDate: addMonths(getBrazilDate(), 1) });
+      setPckPersonalData({
+        packageName: '',
+        totalClasses: '',
+        duration: '30',
+        dayTimes: {},
+        days: [],
+        price: '',
+        startDate: getBrazilDate(),
+        endDate: addMonths(getBrazilDate(), 1)
+      });
 
       if (onUpdate) onUpdate();
+
+    } catch (error) {
+      console.error("Erro na atribuição:", error);
+      toast({ variant: 'destructive', title: 'Erro', description: error.message });
+    } finally {
+      setIsSubmittingPackage(false);
     }
-    setIsSubmittingPackage(false);
   };
 
   // Atualiza a data de fim ao alterar a data de início (padrão de 1 mês)
@@ -1104,7 +1048,19 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
                   transition={{ duration: 0.3 }}
                   className="space-y-4 overflow-hidden p-4 border border-sky-300 rounded-lg bg-sky-50"
                 >
-                  <h4 className="text-lg font-semibold text-sky-800">Detalhes do Pacote Personalizado</h4>
+                  <div className="grid grid-cols-1 gap-4">
+                    {/* Nome do Pacote Personalizado (Requisito 1) */}
+                    <div className="space-y-2">
+                      <Label htmlFor="pck-name">Nome do Pacote (Exibido nas Faturas)</Label>
+                      <Input
+                        id="pck-name"
+                        placeholder="Ex: Espanhol Iniciante Intensivo"
+                        value={packageName || ''}
+                        onChange={(e) => handlePckPersonalChange('packageName', e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     {/* Preço Pago */}
@@ -1161,37 +1117,6 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
                         </PopoverContent>
                       </Popover>
                     </div>
-                    {/* Duração da Aula */}
-                    <div className="space-y-2">
-                      <Label htmlFor="pck-duration">Duração (Minutos)</Label>
-                      <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
-                        <SelectTrigger id="pck-duration">
-                          <SelectValue placeholder="Duração" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="30">30 Minutos</SelectItem>
-                          <SelectItem value="45">45 Minutos</SelectItem>
-                          <SelectItem value="60">60 Minutos</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Horário de Início */}
-                    <div className="space-y-2">
-                      <Label htmlFor="pck-time">Horário de Início Fixo</Label>
-                      <Select onValueChange={(v) => handlePckPersonalChange('time', v)} value={time} required>
-                        <SelectTrigger id="pck-time">
-                          <SelectValue placeholder="Horário (Ex: 10:00)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
-                            <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
                     {/* Validade do Pacote */}
                     <div className="space-y-2">
                       <Label>Validade (Término)</Label>
@@ -1218,23 +1143,69 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
                     </div>
                   </div>
 
-                  {/* Dias da Semana */}
-                  <div className="space-y-2">
-                    <Label>Dias da Semana Fixos</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {daysOfWeek.map((day, index) => (
-                        <Button
-                          key={index}
-                          type="button"
-                          variant={days.includes(index) ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => handleDayTogglePckPersonal(index)}
-                        >
-                          {day.substring(0, 3)}
-                        </Button>
-                      ))}
+                  <div className="grid grid-cols-1 gap-4">
+                    {/* Duração da Aula */}
+                    <div className="space-y-2">
+                      <Label htmlFor="pck-duration">Duração de cada Aula (Minutos)</Label>
+                      <Select onValueChange={(v) => handlePckPersonalChange('duration', v)} value={duration} required>
+                        <SelectTrigger id="pck-duration">
+                          <SelectValue placeholder="Duração" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="30">30 Minutos</SelectItem>
+                          <SelectItem value="45">45 Minutos</SelectItem>
+                          <SelectItem value="60">60 Minutos</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia.</p>}
+                  </div>
+
+                  {/* Dias e Horários Flexíveis (Requisito 2) */}
+                  <div className="space-y-4 pt-2">
+                    <Label className="text-sky-800 font-bold">Configuração da Agenda Semanal</Label>
+
+                    <div className="space-y-3">
+                      <p className="text-sm text-slate-600">Selecione os dias e o horário específico para cada um:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {daysOfWeek.map((day, index) => (
+                          <Button
+                            key={index}
+                            type="button"
+                            variant={days.includes(index) ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => handleDayTogglePckPersonal(index)}
+                            className={cn(days.includes(index) ? "bg-sky-600" : "")}
+                          >
+                            {day.substring(0, 3)}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {days.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 border-t pt-4">
+                        {days.map(dayIdx => (
+                          <div key={dayIdx} className="flex items-center gap-3 p-2 bg-white rounded border border-sky-200">
+                            <Badge className="w-12 justify-center bg-sky-100 text-sky-700 hover:bg-sky-100">{daysOfWeek[dayIdx].substring(0, 3)}</Badge>
+                            <Select
+                              value={dayTimes[dayIdx] || '08:00'}
+                              onValueChange={(t) => handleDayTimeChange(dayIdx, t)}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
+                                  <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia para agendar as aulas.</p>}
                   </div>
                 </motion.div>
               ) : null}

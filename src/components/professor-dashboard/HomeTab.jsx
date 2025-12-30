@@ -420,18 +420,45 @@ const HomeTab = ({ dashboardData }) => {
     setSelectedProfessorId('');
     setProfessorAvailability(null);
     setMatchingStep(1);
-    setStudentPreferences({ days: [], time: '08:00' });
+
+    // Tenta carregar preferências do perfil do aluno
+    const profilePrefs = student.preferred_schedule || {};
+    const daysFromProfile = Object.keys(profilePrefs).map(Number).sort((a, b) => a - b);
+    const firstDay = daysFromProfile[0];
+    const initialTime = firstDay !== undefined ? profilePrefs[firstDay] : '08:00';
+
+    setStudentPreferences({
+      days: daysFromProfile,
+      time: initialTime
+    });
     setMatchedProfessors([]);
     setShowVincularModal(true);
   };
 
-  // Buscar profesores compatibles con las preferencias del alumno
+
+  // Buscar professores compatíveis com as preferências do aluno
   const handleSearchCompatibleProfessors = async () => {
-    if (studentPreferences.days.length === 0) {
+    // Se o aluno já tiver um preferred_schedule (do perfil), usamos ele.
+    // Senão, usamos os dias selecionados no Step 1 com o horário único.
+
+    let preferredSchedule = {};
+
+    if (selectedStudentForVinculacao?.preferred_schedule && Object.keys(selectedStudentForVinculacao.preferred_schedule).length > 0) {
+      preferredSchedule = selectedStudentForVinculacao.preferred_schedule;
+    } else {
+      // Fallback para seleção manual do Step 1
+      studentPreferences.days.forEach(d => {
+        preferredSchedule[d] = studentPreferences.time;
+      });
+    }
+
+    const preferredDays = Object.keys(preferredSchedule).map(Number);
+
+    if (preferredDays.length === 0) {
       toast({
         variant: 'destructive',
-        title: 'Selecione pelo menos um dia',
-        description: 'Escolha os dias da semana que o aluno prefere.'
+        title: 'Sem preferências',
+        description: 'Defina os dias/horários preferidos do aluno no perfil ou selecione os dias abaixo.'
       });
       return;
     }
@@ -439,40 +466,41 @@ const HomeTab = ({ dashboardData }) => {
     setIsSearchingMatches(true);
 
     try {
-      // Buscar todos los slots de todos los profesores
+      // Buscar slots de todos os professores nos dias de interesse
       const { data: allSlots, error } = await supabase
         .from('class_slots')
         .select('*, professor:professor_id(id, full_name)')
         .eq('status', 'active')
-        .in('day_of_week', studentPreferences.days);
+        .in('day_of_week', preferredDays);
 
       if (error) throw error;
 
-      // Filtrar por horario (con tolerancia de 1 hora)
-      const preferredHour = parseInt(studentPreferences.time.split(':')[0]);
-      const relevantSlots = (allSlots || []).filter(slot => {
-        const slotHour = parseInt(slot.start_time?.split(':')[0] || '0');
-        return Math.abs(slotHour - preferredHour) <= 1;
-      });
-
-      // Agrupar por professor y calcular compatibilidad
+      // Agrupar por professor e calcular compatibilidade real por dia/hora
       const professorMatches = {};
 
-      relevantSlots.forEach(slot => {
+      (allSlots || []).forEach(slot => {
         const profId = slot.professor_id;
-        if (!professorMatches[profId]) {
-          professorMatches[profId] = {
-            professor: slot.professor,
-            matchedDays: new Set(),
-            matchedSlots: [],
-            totalDaysRequested: studentPreferences.days.length
-          };
+        const targetTime = preferredSchedule[slot.day_of_week]; // "HH:mm"
+
+        // Verifica se o slot do professor bate com o horário desejado (ou é próximo ±1h)
+        const targetHour = parseInt(targetTime.split(':')[0]);
+        const slotHour = parseInt(slot.start_time.split(':')[0]);
+
+        if (Math.abs(slotHour - targetHour) <= 1) {
+          if (!professorMatches[profId]) {
+            professorMatches[profId] = {
+              professor: slot.professor,
+              matchedDays: new Set(),
+              matchedSlots: [],
+              totalDaysRequested: preferredDays.length
+            };
+          }
+          professorMatches[profId].matchedDays.add(slot.day_of_week);
+          professorMatches[profId].matchedSlots.push(slot);
         }
-        professorMatches[profId].matchedDays.add(slot.day_of_week);
-        professorMatches[profId].matchedSlots.push(slot);
       });
 
-      // Calcular porcentaje de match y ordenar
+      // Calcular porcentagem e ordenar
       const matchResults = Object.values(professorMatches)
         .map(match => ({
           ...match,
@@ -488,21 +516,18 @@ const HomeTab = ({ dashboardData }) => {
         toast({
           variant: 'destructive',
           title: 'Nenhum professor disponível',
-          description: `Nenhum professor possui horários disponíveis nos dias e horário selecionados.`
+          description: `Nenhum professor possui horários próximos aos desejados.`
         });
       }
 
     } catch (error) {
       console.error('Erro ao buscar professores:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Erro ao buscar',
-        description: error.message
-      });
+      toast({ variant: 'destructive', title: 'Erro ao buscar', description: error.message });
     } finally {
       setIsSearchingMatches(false);
     }
   };
+
 
   // Toggle día de preferencia
   const togglePreferenceDay = (dayIndex) => {
@@ -964,7 +989,17 @@ const HomeTab = ({ dashboardData }) => {
                                 </Avatar>
                                 <div>
                                   <p className="text-sm font-medium">{student.full_name}</p>
-                                  <p className="text-xs text-slate-500">Código: {student.student_code || 'N/A'}</p>
+                                  {student.preferred_schedule && Object.keys(student.preferred_schedule).length > 0 ? (
+                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                      {Object.entries(student.preferred_schedule).map(([d, t]) => (
+                                        <Badge key={d} variant="outline" className="text-[9px] py-0 px-1 h-4 bg-slate-50 border-slate-200 text-slate-500">
+                                          {daysOfWeekMap[d]} {t}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[10px] text-slate-400 italic">Agenda não definida</p>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
@@ -1400,12 +1435,22 @@ const HomeTab = ({ dashboardData }) => {
                 {/* PASO 2: Ver Profesores Compatibles */}
                 {matchingStep === 2 && (
                   <div className="space-y-4">
-                    {/* Resumen de búsqueda */}
+                    {/* Resumo da Agenda Desejada */}
                     <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                      <p className="text-sm text-blue-800">
-                        <strong>Busca:</strong> {studentPreferences.days.map(d => daysOfWeekMap[d]).join(', ')} às {studentPreferences.time}
-                      </p>
+                      <p className="text-sm text-blue-800 font-semibold mb-2">Agenda Desejada pelo Aluno:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {studentPreferences.days.length > 0 ? (
+                          studentPreferences.days.map(d => (
+                            <Badge key={d} variant="outline" className="bg-white border-blue-300 text-blue-700">
+                              {daysOfWeekMap[d]} às {selectedStudentForVinculacao?.preferred_schedule?.[d] || studentPreferences.time}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-xs text-slate-500 italic">Nenhuma preferência definida</span>
+                        )}
+                      </div>
                     </div>
+
 
                     {/* Lista de profesores compatibles */}
                     <div className="space-y-2">

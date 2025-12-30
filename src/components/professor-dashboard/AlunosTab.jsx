@@ -214,6 +214,16 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                 if (error) throw error;
             }
 
+            // 4. Atualizar rotina no perfil (Requisito de Coerência)
+            const newPrefs = {};
+            enabledDays.forEach(([day, schedule]) => {
+                newPrefs[day] = schedule.time;
+            });
+            await supabase.from('profiles').update({
+                preferred_schedule: newPrefs
+            }).eq('id', student.id);
+
+
             const updatedCount = updates.filter(u => !u.status).length;
             const cancelledCount = updates.filter(u => u.status).length;
 
@@ -418,7 +428,7 @@ const AlunosTab = ({ dashboardData }) => {
                 ...student,
                 availableClasses: Math.max(0, availableClasses),
                 scheduledClasses, // Quantidade de aulas agendadas
-                daySchedules, // { dayIndex: time }
+                daySchedules: Object.keys(daySchedules).length > 0 ? daySchedules : (student.preferred_schedule || {}), // { dayIndex: time }
                 scheduledAppointments
             };
         });
