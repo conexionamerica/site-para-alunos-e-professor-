@@ -19,8 +19,6 @@ import { Progress } from '@/components/ui/progress';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { ptBR } from 'date-fns/locale';
 import TicketReportsSection from './TicketReportsSection';
-import TicketReportsSection from './TicketReportsSection';
-import TicketReportsSection from './TicketReportsSection';
 
 // Tipos de solicitação (baseado na imagem do usuário, removendo os taxados)
 const TICKET_TYPES = [
