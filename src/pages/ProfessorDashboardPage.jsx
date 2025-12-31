@@ -415,6 +415,7 @@ const ProfessorDashboardPage = () => {
         { id: 'servicos', icon: Headphones, label: 'Serviços', component: ServicosTab, permission: 'servicos' },
         { id: 'financeiro', icon: DollarSign, label: 'Financeiro', component: FinanceiroTab, permission: 'financeiro' },
         { id: 'administracao', icon: Shield, label: 'Administração', component: AdminTab, permission: 'admtab' },
+        { id: 'historico', icon: History, label: 'Histórico', component: HistoricoTab, permission: 'historico' },
     ] : [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab, permission: 'inicio' },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab, permission: 'agenda' },
