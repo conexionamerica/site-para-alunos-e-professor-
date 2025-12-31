@@ -128,6 +128,15 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         console.error("Erro ao buscar role_settings:", roleSettingsError);
     }
 
+    // 11. Herança de permissões de ações (can_manage_classes, can_manage_students)
+    // Se o usuário não tem permissões individuais definidas, herda do role_settings
+    const userRoleSettings = roleSettings?.find(rs => rs.role === userProfile?.role);
+    const defaultActions = userRoleSettings?.permissions?.actions || {};
+
+    // Usar permissão individual se definida, senão usar padrão do role
+    const can_manage_classes = userProfile?.can_manage_classes ?? defaultActions.can_manage_classes ?? true;
+    const can_manage_students = userProfile?.can_manage_students ?? defaultActions.can_manage_students ?? true;
+
     return {
         professorId,
         professorName: userProfile?.full_name || (isSuperadmin ? 'Administrador' : 'Professor(a)'),
@@ -145,8 +154,8 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         assignedLogs: assignedLogs || [],
         chatList: chatList || [],
         roleSettings: roleSettings || [],
-        can_manage_classes: userProfile?.can_manage_classes ?? true,
-        can_manage_students: userProfile?.can_manage_students ?? true,
+        can_manage_classes,
+        can_manage_students,
     };
 };
 

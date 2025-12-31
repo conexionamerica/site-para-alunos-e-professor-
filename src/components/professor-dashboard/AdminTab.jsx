@@ -509,7 +509,15 @@ const AdminTab = ({ dashboardData }) => {
     const handleEditRole = (role) => {
         const settings = roleSettings.find(s => s.role === role);
         setEditingRole(role);
-        setTempPermissions(settings?.permissions || { tabs: [] });
+        // Garantir que actions existe com valores padrão
+        const permissions = settings?.permissions || { tabs: [] };
+        if (!permissions.actions) {
+            permissions.actions = {
+                can_manage_classes: role === 'professor' || role === 'superadmin',
+                can_manage_students: role === 'professor' || role === 'superadmin'
+            };
+        }
+        setTempPermissions(permissions);
         setIsSettingsDialogOpen(true);
     };
 
@@ -543,6 +551,17 @@ const AdminTab = ({ dashboardData }) => {
             ? currentTabs.filter(id => id !== tabId)
             : [...currentTabs, tabId];
         setTempPermissions({ ...tempPermissions, tabs: newTabs });
+    };
+
+    const toggleActionPermission = (actionKey) => {
+        const currentActions = tempPermissions.actions || {};
+        setTempPermissions({
+            ...tempPermissions,
+            actions: {
+                ...currentActions,
+                [actionKey]: !currentActions[actionKey]
+            }
+        });
     };
 
     return (
@@ -1041,21 +1060,64 @@ const AdminTab = ({ dashboardData }) => {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="py-4 space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            {(editingRole === 'student'
-                                ? ['dashboard', 'clases', 'chat', 'desempenho', 'faturas']
-                                : ['inicio', 'agenda', 'alunos', 'aulas', 'conversas', 'preferencias', 'admtab', 'global']
-                            ).map(tabId => (
-                                <div key={tabId} className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-slate-50 cursor-pointer"
-                                    onClick={() => togglePermission(tabId)}>
-                                    <div className={`w-5 h-5 rounded border flex items-center justify-center ${tempPermissions.tabs?.includes(tabId) ? 'bg-purple-600 border-purple-600' : 'border-slate-300'}`}>
-                                        {tempPermissions.tabs?.includes(tabId) && <UserCheck className="h-3 w-3 text-white" />}
+                    <div className="py-4 space-y-6">
+                        {/* Seção de Abas */}
+                        <div className="space-y-3">
+                            <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <UserCheck className="h-4 w-4" />
+                                Abas Visíveis
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                {(editingRole === 'student'
+                                    ? ['dashboard', 'clases', 'chat', 'desempenho', 'faturas']
+                                    : ['inicio', 'agenda', 'alunos', 'aulas', 'conversas', 'preferencias', 'admtab', 'global']
+                                ).map(tabId => (
+                                    <div key={tabId} className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-slate-50 cursor-pointer"
+                                        onClick={() => togglePermission(tabId)}>
+                                        <div className={`w-5 h-5 rounded border flex items-center justify-center ${tempPermissions.tabs?.includes(tabId) ? 'bg-purple-600 border-purple-600' : 'border-slate-300'}`}>
+                                            {tempPermissions.tabs?.includes(tabId) && <UserCheck className="h-3 w-3 text-white" />}
+                                        </div>
+                                        <Label className="capitalize cursor-pointer flex-1">{tabId}</Label>
                                     </div>
-                                    <Label className="capitalize cursor-pointer flex-1">{tabId}</Label>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
+
+                        {/* Seção de Permissões de Ações */}
+                        {editingRole !== 'student' && (
+                            <div className="space-y-3 pt-4 border-t">
+                                <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                    <Shield className="h-4 w-4" />
+                                    Permissões de Ações
+                                </h4>
+                                <div className="space-y-2">
+                                    <div
+                                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 cursor-pointer"
+                                        onClick={() => toggleActionPermission('can_manage_classes')}
+                                    >
+                                        <div className="flex-1">
+                                            <Label className="cursor-pointer font-medium text-slate-800">Gerenciar Aulas</Label>
+                                            <p className="text-xs text-slate-500 mt-0.5">Permitir editar e excluir aulas</p>
+                                        </div>
+                                        <div className={`w-11 h-6 rounded-full transition-colors ${tempPermissions.actions?.can_manage_classes ? 'bg-purple-600' : 'bg-slate-300'}`}>
+                                            <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 mt-0.5 ${tempPermissions.actions?.can_manage_classes ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                        </div>
+                                    </div>
+                                    <div
+                                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 cursor-pointer"
+                                        onClick={() => toggleActionPermission('can_manage_students')}
+                                    >
+                                        <div className="flex-1">
+                                            <Label className="cursor-pointer font-medium text-slate-800">Gerenciar Alunos</Label>
+                                            <p className="text-xs text-slate-500 mt-0.5">Permitir editar e excluir alunos</p>
+                                        </div>
+                                        <div className={`w-11 h-6 rounded-full transition-colors ${tempPermissions.actions?.can_manage_students ? 'bg-purple-600' : 'bg-slate-300'}`}>
+                                            <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 mt-0.5 ${tempPermissions.actions?.can_manage_students ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <DialogFooter>
