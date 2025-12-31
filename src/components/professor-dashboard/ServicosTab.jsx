@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Loader2, Plus, Send, Headphones, Search, X, AlertCircle, FileText } from 'lucide-react';
+import { Loader2, Plus, Send, Headphones, Search, X, AlertCircle, FileText, Upload, Paperclip, Download, Trash2, Image as ImageIcon, File } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { ptBR } from 'date-fns/locale';
@@ -139,6 +139,228 @@ const TemplateSelector = ({ ticketType, onSelect, disabled }) => {
                 ))}
             </DropdownMenuContent>
         </DropdownMenu>
+    );
+};
+
+// File Upload Component
+const FileUploadButton = ({ ticketId, onUploadComplete, disabled }) => {
+    const { toast } = useToast();
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = React.useRef(null);
+
+    const handleFileSelect = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file size (5MB)
+        if (file.size > 5242880) {
+            toast({
+                variant: 'destructive',
+                title: 'Arquivo muito grande',
+                description: 'O arquivo deve ter no máximo 5MB'
+            });
+            return;
+        }
+
+        setUploading(true);
+
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${ticketId}/${Date.now()}.${fileExt}`;
+
+            // Upload to storage
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('ticket-attachments')
+                .upload(fileName, file);
+
+            if (uploadError) throw uploadError;
+
+            // Save to database
+            const { error: dbError } = await supabase
+                .from('ticket_attachments')
+                .insert({
+                    ticket_id: ticketId,
+                    file_name: file.name,
+                    file_path: uploadData.path,
+                    file_size: file.size,
+                    file_type: file.type,
+                    uploaded_by: (await supabase.auth.getUser()).data.user.id
+                });
+
+            if (dbError) throw dbError;
+
+            toast({
+                title: 'Arquivo anexado!',
+                description: 'O arquivo foi enviado com sucesso'
+            });
+
+            onUploadComplete?.();
+        } catch (error) {
+            console.error('Upload error:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao enviar arquivo',
+                description: error.message
+            });
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    return (
+        <>
+            <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileSelect}
+                accept="image/*,.pdf,.doc,.docx"
+                className="hidden"
+                disabled={disabled || uploading}
+            />
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled || uploading}
+            >
+                {uploading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
+                ) : (
+                    <><Paperclip className="mr-2 h-4 w-4" /> Anexar</>
+                )}
+            </Button>
+        </>
+    );
+};
+
+// Attachments List
+const AttachmentsList = ({ ticketId, canDelete }) => {
+    const { toast } = useToast();
+    const [attachments, setAttachments] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        loadAttachments();
+
+        // Listen for upload completion
+        const handleReload = () => loadAttachments();
+        window.addEventListener('reloadAttachments', handleReload);
+
+        return () => window.removeEventListener('reloadAttachments', handleReload);
+    }, [ticketId]);
+
+    const loadAttachments = async () => {
+        const { data, error } = await supabase
+            .from('ticket_attachments')
+            .select(`
+                *,
+                uploader:profiles!uploaded_by(full_name)
+            `)
+            .eq('ticket_id', ticketId)
+            .order('created_at', { ascending: true });
+
+        if (!error) {
+            setAttachments(data || []);
+        }
+        setLoading(false);
+    };
+
+    const handleDownload = async (attachment) => {
+        try {
+            const { data, error } = await supabase.storage
+                .from('ticket-attachments')
+                .download(attachment.file_path);
+
+            if (error) throw error;
+
+            const url = URL.createObjectURL(data);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = attachment.file_name;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao baixar arquivo',
+                description: error.message
+            });
+        }
+    };
+
+    const handleDelete = async (attachmentId, filePath) => {
+        if (!window.confirm('Deseja remover este anexo?')) return;
+
+        try {
+            // Delete from database
+            const { error: dbError } = await supabase
+                .from('ticket_attachments')
+                .delete()
+                .eq('id', attachmentId);
+
+            if (dbError) throw dbError;
+
+            // Delete from storage
+            await supabase.storage
+                .from('ticket-attachments')
+                .remove([filePath]);
+
+            toast({ title: 'Anexo removido' });
+            loadAttachments();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao remover anexo',
+                description: error.message
+            });
+        }
+    };
+
+    const getFileIcon = (fileType) => {
+        if (fileType?.startsWith('image/')) return <ImageIcon className="h-4 w-4 text-blue-600" />;
+        if (fileType === 'application/pdf') return <FileText className="h-4 w-4 text-red-600" />;
+        return <File className="h-4 w-4 text-slate-600" />;
+    };
+
+    if (loading) return <div className="text-sm text-slate-500">Carregando anexos...</div>;
+    if (attachments.length === 0) return null;
+
+    return (
+        <div className="space-y-2 mt-4">
+            <Label className="text-xs text-slate-500">Anexos ({attachments.length})</Label>
+            <div className="space-y-2">
+                {attachments.map(att => (
+                    <div key={att.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded border hover:bg-slate-100 transition-colors">
+                        {getFileIcon(att.file_type)}
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{att.file_name}</p>
+                            <p className="text-xs text-slate-500">
+                                {(att.file_size / 1024).toFixed(1)} KB • {att.uploader?.full_name}
+                            </p>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownload(att)}
+                            className="h-8 w-8 p-0"
+                        >
+                            <Download className="h-4 w-4" />
+                        </Button>
+                        {canDelete && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(att.id, att.file_path)}
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
     );
 };
 
@@ -457,6 +679,24 @@ const TicketDetailsDialog = ({ ticket, isOpen, onClose, onUpdated, isSuperadmin,
                         <SLAIndicator ticket={ticket} />
                     </div>
                 )}
+
+                {/* Anexos */}
+                <div className="px-4">
+                    <AttachmentsList ticketId={ticket.id} canDelete={isSuperadmin} />
+                    {!isClosed && (
+                        <div className="mt-2">
+                            <FileUploadButton
+                                ticketId={ticket.id}
+                                onUploadComplete={() => {
+                                    // Force reload attachments list
+                                    const event = new CustomEvent('reloadAttachments');
+                                    window.dispatchEvent(event);
+                                }}
+                                disabled={isSubmitting}
+                            />
+                        </div>
+                    )}
+                </div>
 
                 {/* Gerenciar Ticket (Admin Only) */}
                 {isSuperadmin && !isClosed && (
