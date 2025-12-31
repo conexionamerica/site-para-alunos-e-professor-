@@ -1,7 +1,7 @@
 // Archivo: src/components/professor-dashboard/AlunosTab.jsx
 // Versión con horarios individuales por día de la semana
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { format, getDay, parseISO } from 'date-fns';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
