@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Loader2, MoreVertical, UserCheck, UserX, MessageSquare, Send, Calendar, Clock, Filter } from 'lucide-react';
+import { Search, Package, Loader2, MoreVertical, UserCheck, UserX, MessageSquare, Send, Calendar, Clock, Filter, RefreshCw } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const daysOfWeekMap = {
@@ -348,12 +348,295 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
     );
 };
 
+// Dialog para alterar professor vinculado ao aluno
+const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors, classSlots, currentProfessorId }) => {
+    const { toast } = useToast();
+    const [selectedProfessor, setSelectedProfessor] = useState(null);
+    const [professorsWithMatch, setProfessorsWithMatch] = useState([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isCalculating, setIsCalculating] = useState(true);
+
+    // Calcular compatibilidade quando o dialog abrir
+    useEffect(() => {
+        if (!isOpen || !student || !professors.length) return;
+
+        setIsCalculating(true);
+
+        const calculateMatches = () => {
+            const studentSchedule = student.daySchedules || {};
+            const studentDays = Object.keys(studentSchedule);
+
+            if (studentDays.length === 0) {
+                setProfessorsWithMatch([]);
+                setIsCalculating(false);
+                return;
+            }
+
+            const matches = professors
+                .filter(prof => prof.id !== student.assigned_professor_id) // Excluir professor atual
+                .map(professor => {
+                    // Buscar slots ativos do professor
+                    const professorSlots = (classSlots || []).filter(
+                        slot => slot.professor_id === professor.id && slot.status === 'active'
+                    );
+
+                    let matchingSlots = 0;
+
+                    // Verificar compatibilidade para cada dia do aluno
+                    studentDays.forEach(dayIndex => {
+                        const studentTime = studentSchedule[dayIndex];
+                        const hasMatch = professorSlots.some(
+                            slot => slot.day_of_week === parseInt(dayIndex) && slot.start_time === studentTime
+                        );
+                        if (hasMatch) matchingSlots++;
+                    });
+
+                    const matchPercentage = Math.round((matchingSlots / studentDays.length) * 100);
+
+                    return {
+                        professor,
+                        matchPercentage,
+                        matchingSlots,
+                        totalSlots: studentDays.length
+                    };
+                })
+                .filter(match => match.matchPercentage > 0) // Só mostrar professores com alguma compatibilidade
+                .sort((a, b) => b.matchPercentage - a.matchPercentage); // Ordenar por compatibilidade
+
+            setProfessorsWithMatch(matches);
+            setIsCalculating(false);
+        };
+
+        calculateMatches();
+    }, [isOpen, student, professors, classSlots]);
+
+    const handleChangeProfessor = async () => {
+        if (!selectedProfessor || !student) return;
+
+        const confirmation = window.confirm(
+            `Tem certeza que deseja transferir ${student.full_name} para ${selectedProfessor.full_name}?\n\n` +
+            `Isso afetará todas as aulas agendadas, remarcadas e com falta do aluno.`
+        );
+
+        if (!confirmation) return;
+
+        setIsSubmitting(true);
+
+        try {
+            // 1. Buscar appointments do aluno que serão alterados
+            const { data: appointments, error: fetchError } = await supabase
+                .from('appointments')
+                .select('*')
+                .eq('student_id', student.id)
+                .in('status', ['scheduled', 'rescheduled', 'missed']);
+
+            if (fetchError) throw fetchError;
+
+            // 2. Atualizar appointments para o novo professor
+            if (appointments && appointments.length > 0) {
+                const { error: updateError } = await supabase
+                    .from('appointments')
+                    .update({ professor_id: selectedProfessor.id })
+                    .eq('student_id', student.id)
+                    .in('status', ['scheduled', 'rescheduled', 'missed']);
+
+                if (updateError) throw updateError;
+
+                // 3. Liberar slots antigos e ocupar novos
+                const oldSlots = appointments.map(apt => apt.class_slot_id).filter(Boolean);
+
+                if (oldSlots.length > 0) {
+                    // Liberar slots antigos
+                    await supabase
+                        .from('class_slots')
+                        .update({ status: 'active' })
+                        .in('id', oldSlots);
+                }
+
+                // Ocupar slots do novo professor
+                for (const apt of appointments) {
+                    const aptDate = parseISO(apt.class_datetime);
+                    const dayOfWeek = getDay(aptDate);
+                    const startTime = format(aptDate, 'HH:mm');
+
+                    const { data: newSlot } = await supabase
+                        .from('class_slots')
+                        .select('id')
+                        .eq('professor_id', selectedProfessor.id)
+                        .eq('day_of_week', dayOfWeek)
+                        .eq('start_time', startTime)
+                        .eq('status', 'active')
+                        .maybeSingle();
+
+                    if (newSlot) {
+                        // Atualizar appointment com novo slot
+                        await supabase
+                            .from('appointments')
+                            .update({ class_slot_id: newSlot.id })
+                            .eq('id', apt.id);
+
+                        // Marcar slot como ocupado
+                        await supabase
+                            .from('class_slots')
+                            .update({ status: 'booked' })
+                            .eq('id', newSlot.id);
+                    }
+                }
+            }
+
+            // 4. Atualizar assigned_professor_id no perfil do aluno
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({ assigned_professor_id: selectedProfessor.id })
+                .eq('id', student.id);
+
+            if (profileError) throw profileError;
+
+            toast({
+                title: 'Professor alterado com sucesso!',
+                description: `${student.full_name} agora está vinculado a ${selectedProfessor.full_name}. ${appointments?.length || 0} aulas foram transferidas.`
+            });
+
+            onUpdate();
+            onClose();
+            setSelectedProfessor(null);
+        } catch (error) {
+            console.error('Error changing professor:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao alterar professor',
+                description: error.message
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (!student) return null;
+
+    const selectedMatch = professorsWithMatch.find(m => m.professor.id === selectedProfessor?.id);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle>Alterar Professor Vinculado</DialogTitle>
+                    <DialogDescription>
+                        Transferir {student.full_name} para outro professor compatível
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-4">
+                    {/* Horários do aluno */}
+                    <div className="bg-slate-50 p-4 rounded-lg">
+                        <h4 className="font-semibold text-sm text-slate-700 mb-2">Horários do Aluno:</h4>
+                        <div className="flex flex-wrap gap-2">
+                            {Object.entries(student.daySchedules || {}).map(([day, time]) => (
+                                <Badge key={day} variant="outline" className="text-xs">
+                                    {daysOfWeekMap[day]} - {time}
+                                </Badge>
+                            ))}
+                            {Object.keys(student.daySchedules || {}).length === 0 && (
+                                <span className="text-xs text-slate-500">Nenhum horário definido</span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Lista de professores compatíveis */}
+                    {isCalculating ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                            <span className="ml-2 text-sm text-slate-600">Calculando compatibilidade...</span>
+                        </div>
+                    ) : professorsWithMatch.length === 0 ? (
+                        <div className="text-center py-8 text-slate-500">
+                            <UserX className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                            <p className="font-medium">Nenhum professor compatível encontrado</p>
+                            <p className="text-sm mt-1">Os horários do aluno não coincidem com nenhum professor disponível</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <h4 className="font-semibold text-sm text-slate-700">Professores Disponíveis:</h4>
+                            {professorsWithMatch.map(({ professor, matchPercentage, matchingSlots, totalSlots }) => {
+                                const isFullMatch = matchPercentage === 100;
+                                const isSelected = selectedProfessor?.id === professor.id;
+
+                                return (
+                                    <div
+                                        key={professor.id}
+                                        onClick={() => isFullMatch && setSelectedProfessor(professor)}
+                                        className={`border p-3 rounded-lg transition-all ${isFullMatch ? 'cursor-pointer hover:bg-purple-50 hover:border-purple-300' : 'opacity-50 cursor-not-allowed'
+                                            } ${isSelected ? 'border-purple-600 bg-purple-50' : ''
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    {isSelected && <UserCheck className="h-4 w-4 text-purple-600" />}
+                                                    <span className="font-medium text-slate-800">{professor.full_name}</span>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    {matchingSlots} de {totalSlots} horários compatíveis
+                                                </p>
+                                            </div>
+                                            <Badge
+                                                variant={isFullMatch ? 'default' : 'secondary'}
+                                                className={isFullMatch ? 'bg-green-600' : ''}
+                                            >
+                                                {matchPercentage}%
+                                            </Badge>
+                                        </div>
+                                        {!isFullMatch && (
+                                            <p className="text-xs text-orange-600 mt-2">
+                                                ⚠️ Compatibilidade parcial - não é possível transferir
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {selectedMatch && (
+                        <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                            <p className="text-sm text-green-800">
+                                ✓ Professor <strong>{selectedMatch.professor.full_name}</strong> selecionado
+                            </p>
+                            <p className="text-xs text-green-700 mt-1">
+                                Compatibilidade: {selectedMatch.matchPercentage}% ({selectedMatch.matchingSlots}/{selectedMatch.totalSlots} horários)
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
+                        Cancelar
+                    </Button>
+                    <Button
+                        onClick={handleChangeProfessor}
+                        disabled={!selectedProfessor || isSubmitting}
+                        className="bg-purple-600 hover:bg-purple-700"
+                    >
+                        {isSubmitting ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Alterando...</>
+                        ) : (
+                            <><RefreshCw className="mr-2 h-4 w-4" /> Confirmar Alteração</>
+                        )}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 const AlunosTab = ({ dashboardData }) => {
     const { toast } = useToast();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
     const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
+    const [isChangeProfessorDialogOpen, setIsChangeProfessorDialogOpen] = useState(false);
     const [messageTitle, setMessageTitle] = useState('');
     const [messageContent, setMessageContent] = useState('');
     const [messagePriority, setMessagePriority] = useState('normal');
@@ -462,6 +745,11 @@ const AlunosTab = ({ dashboardData }) => {
     const handleOpenScheduleDialog = (student) => {
         setSelectedStudent(student);
         setIsScheduleDialogOpen(true);
+    };
+
+    const handleOpenChangeProfessorDialog = (student) => {
+        setSelectedStudent(student);
+        setIsChangeProfessorDialogOpen(true);
     };
 
     const handleSendMessage = async () => {
@@ -635,6 +923,13 @@ const AlunosTab = ({ dashboardData }) => {
                                                                 </>
                                                             )}
 
+                                                            <DropdownMenuItem onClick={() => handleOpenChangeProfessorDialog(student)}>
+                                                                <RefreshCw className="mr-2 h-4 w-4 text-purple-600" />
+                                                                Alterar Professor Vinculado
+                                                            </DropdownMenuItem>
+
+                                                            <DropdownMenuSeparator />
+
                                                             <DropdownMenuItem onClick={() => handleOpenMessageDialog(student)}>
                                                                 <MessageSquare className="mr-2 h-4 w-4 text-sky-600" />
                                                                 Enviar Mensagem
@@ -716,6 +1011,17 @@ const AlunosTab = ({ dashboardData }) => {
                         onUpdate={onUpdate}
                         professorId={professorId}
                         scheduledAppointments={selectedStudent?.scheduledAppointments || []}
+                    />
+
+                    {/* Dialog de Alterar Professor */}
+                    <ChangeProfessorDialog
+                        student={selectedStudent}
+                        isOpen={isChangeProfessorDialogOpen}
+                        onClose={() => setIsChangeProfessorDialogOpen(false)}
+                        onUpdate={onUpdate}
+                        professors={professors}
+                        classSlots={data.classSlots || []}
+                        currentProfessorId={professorId}
                     />
                 </div>
             </div>
