@@ -208,7 +208,12 @@ const ProfessorDashboardPage = () => {
 
             const data = await fetchProfessorDashboardData(currentUserId, isSuperadmin);
             setDashboardData({
-                data: data,
+                data: {
+                    ...data,
+                    // Garantir que as permissões estejam acessíveis dentro do objeto data
+                    can_manage_classes: data.can_manage_classes,
+                    can_manage_students: data.can_manage_students
+                },
                 professorId: data.professorId,
                 professorName: data.professorName,
                 userRole: data.userRole,
