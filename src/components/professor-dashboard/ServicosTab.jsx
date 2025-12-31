@@ -1362,6 +1362,7 @@ const ServicosTab = ({ dashboardData }) => {
                             onCreated={fetchTickets}
                             professorId={professorId}
                             isSuperadmin={isSuperadmin}
+                            allProfiles={dashboardData?.allProfiles}
                         />
 
                         <TicketDetailsDialog
