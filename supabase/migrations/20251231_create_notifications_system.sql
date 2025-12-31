@@ -281,7 +281,7 @@ BEGIN
             'billing_period', b.billing_period
         )
     FROM profiles p
-    JOIN billing_info b ON p.id = b.user_id
+    JOIN billing b ON p.id = b.user_id
     WHERE p.role = 'student'
     AND b.end_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '5 days')
     AND NOT EXISTS (
