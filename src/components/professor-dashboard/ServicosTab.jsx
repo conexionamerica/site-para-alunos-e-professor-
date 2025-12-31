@@ -368,19 +368,62 @@ const AttachmentsList = ({ ticketId, canDelete }) => {
 };
 
 // Dialog para criar novo ticket
-const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId }) => {
+const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperadmin }) => {
     const { toast } = useToast();
-    const [ticketType, setTicketType] = useState('');
+    const [type, setType] = useState('');
     const [priority, setPriority] = useState('medium');
     const [initialMessage, setInitialMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [professors, setProfessors] = useState([]);
+    const [selectedProfessor, setSelectedProfessor] = useState(professorId);
+
+    // Load professors list for admin
+    useEffect(() => {
+        if (isSuperadmin && isOpen) {
+            loadProfessors();
+        }
+    }, [isSuperadmin, isOpen]);
+
+    useEffect(() => {
+        if (isOpen && !isSuperadmin) {
+            setSelectedProfessor(professorId);
+        }
+    }, [isOpen, isSuperadmin, professorId]);
+
+    const loadProfessors = async () => {
+        const { data } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .eq('role', 'professor')
+            .order('full_name');
+
+        setProfessors(data || []);
+    };
 
     const handleSubmit = async () => {
-        if (!ticketType || !initialMessage.trim()) {
+        if (!type) {
             toast({
                 variant: 'destructive',
                 title: 'Campos obrigatórios',
-                description: 'Selecione um tipo e escreva uma mensagem'
+                description: 'Selecione um tipo de solicitação'
+            });
+            return;
+        }
+
+        if (!initialMessage.trim()) {
+            toast({
+                variant: 'destructive',
+                title: 'Campos obrigatórios',
+                description: 'Escreva uma mensagem'
+            });
+            return;
+        }
+
+        if (isSuperadmin && !selectedProfessor) {
+            toast({
+                variant: 'destructive',
+                title: 'Professor obrigatório',
+                description: 'Selecione o professor para criar o ticket'
             });
             return;
         }
@@ -392,8 +435,8 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId }) => {
             const { data: ticket, error: ticketError } = await supabase
                 .from('service_tickets')
                 .insert({
-                    requester_id: professorId,
-                    type: ticketType,
+                    requester_id: selectedProfessor || professorId,
+                    type: type,
                     priority: priority,
                     status: 'pending'
                 })
@@ -407,7 +450,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId }) => {
                 .from('service_ticket_messages')
                 .insert({
                     ticket_id: ticket.id,
-                    user_id: professorId,
+                    user_id: selectedProfessor || professorId, // Message from the selected professor
                     message: initialMessage
                 });
 
@@ -418,7 +461,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId }) => {
                 description: `Seu ticket ${ticket.ticket_number} foi criado com sucesso`
             });
 
-            setTicketType('');
+            setType('');
             setPriority('medium');
             setInitialMessage('');
             onCreated();
@@ -441,15 +484,37 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId }) => {
                 <DialogHeader>
                     <DialogTitle>Novo Ticket de Serviço</DialogTitle>
                     <DialogDescription>
-                        Descreva sua solicitação e nossa equipe entrará em contato
+                        {isSuperadmin
+                            ? 'Criar uma solicitação de serviço para um professor'
+                            : 'Descreva sua solicitação e nossa equipe entrará em contato'
+                        }
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
+                    {/* Professor Selector (Admin Only) */}
+                    {isSuperadmin && (
+                        <div className="space-y-2">
+                            <Label>Professor *</Label>
+                            <Select value={selectedProfessor} onValueChange={setSelectedProfessor}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione o professor" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {professors.map(prof => (
+                                        <SelectItem key={prof.id} value={prof.id}>
+                                            {prof.full_name} ({prof.email})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <Label>Tipo de Solicitação *</Label>
-                            <Select value={ticketType} onValueChange={setTicketType}>
+                            <Select value={type} onValueChange={setType}>
                                 <SelectTrigger className="mt-1">
                                     <SelectValue placeholder="Selecionar tipo..." />
                                 </SelectTrigger>
@@ -1059,6 +1124,15 @@ const ServicosTab = ({ dashboardData }) => {
                         )}
                         {isSuperadmin && (
                             <Button
+                                onClick={() => setIsCreateDialogOpen(true)}
+                                className="bg-purple-600 hover:bg-purple-700"
+                            >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Criar Ticket para Professor
+                            </Button>
+                        )}
+                        {isSuperadmin && (
+                            <Button
                                 onClick={() => setShowReports(!showReports)}
                                 variant={showReports ? 'default' : 'outline'}
                             >
@@ -1244,6 +1318,7 @@ const ServicosTab = ({ dashboardData }) => {
                     onClose={() => setIsCreateDialogOpen(false)}
                     onCreated={fetchTickets}
                     professorId={professorId}
+                    isSuperadmin={isSuperadmin}
                 />
 
                 <TicketDetailsDialog
