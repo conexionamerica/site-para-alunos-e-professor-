@@ -20,6 +20,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { StudentRequestsList } from '@/components/professor/StudentRequestsList';
+import { ScheduleRequestsPending } from '@/components/admin/ScheduleRequestsPending';
 
 const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
 const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -921,8 +923,13 @@ const HomeTab = ({ dashboardData }) => {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Novo Componente: Solicitações de Agendamento Pendentes */}
+          <div className="mb-6">
+            <ScheduleRequestsPending adminId={professorId} />
+          </div>
+
           <Tabs value={pendenciasFilter} onValueChange={setPendenciasFilter} className="w-full">
-            <TabsList className="grid w-full grid-cols-6 mb-4">
+            <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 gap-1">
               <TabsTrigger value="all" className="text-xs sm:text-sm">
                 Todas
                 <Badge variant="secondary" className="ml-1 text-xs">{pendenciasCounts.total}</Badge>
@@ -1610,6 +1617,12 @@ const HomeTab = ({ dashboardData }) => {
   return (
     <div className="w-full">
       <div className="w-full px-4 lg:px-8">
+        {/* Componente de Solicitações de Novos Alunos para Professor */}
+        {!isSuperadmin && professorId && (
+          <div className="mb-6">
+            <StudentRequestsList professorId={professorId} />
+          </div>
+        )}
         {/* Modal de Vinculação de Professor (também disponível na visão Início para superadmin) */}
         <Dialog open={showVincularModal} onOpenChange={setShowVincularModal}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
