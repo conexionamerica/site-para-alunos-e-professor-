@@ -1070,16 +1070,35 @@ const AdminTab = ({ dashboardData }) => {
                             <div className="grid grid-cols-2 gap-3">
                                 {(editingRole === 'student'
                                     ? ['dashboard', 'clases', 'chat', 'desempenho', 'faturas']
-                                    : ['inicio', 'agenda', 'alunos', 'aulas', 'conversas', 'preferencias', 'admtab', 'global']
-                                ).map(tabId => (
-                                    <div key={tabId} className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-slate-50 cursor-pointer"
-                                        onClick={() => togglePermission(tabId)}>
-                                        <div className={`w-5 h-5 rounded border flex items-center justify-center ${tempPermissions.tabs?.includes(tabId) ? 'bg-purple-600 border-purple-600' : 'border-slate-300'}`}>
-                                            {tempPermissions.tabs?.includes(tabId) && <UserCheck className="h-3 w-3 text-white" />}
+                                    : ['inicio', 'agenda', 'alunos', 'aulas', 'conversas', 'servicos', 'financeiro', 'preferencias', 'admtab', 'global']
+                                ).map(tabId => {
+                                    const labels = {
+                                        inicio: 'Início',
+                                        agenda: 'Agenda',
+                                        alunos: 'Alunos',
+                                        aulas: 'Aulas',
+                                        conversas: 'Conversas',
+                                        servicos: 'Serviços',
+                                        financeiro: 'Financeiro',
+                                        preferencias: 'Preferências',
+                                        admtab: 'Admin',
+                                        global: 'Global',
+                                        dashboard: 'Dashboard',
+                                        clases: 'Aulas (Aluno)',
+                                        chat: 'Chat',
+                                        desempenho: 'Desempenho',
+                                        faturas: 'Faturas'
+                                    };
+                                    return (
+                                        <div key={tabId} className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-slate-50 cursor-pointer"
+                                            onClick={() => togglePermission(tabId)}>
+                                            <div className={`w-5 h-5 rounded border flex items-center justify-center ${tempPermissions.tabs?.includes(tabId) ? 'bg-purple-600 border-purple-600' : 'border-slate-300'}`}>
+                                                {tempPermissions.tabs?.includes(tabId) && <UserCheck className="h-3 w-3 text-white" />}
+                                            </div>
+                                            <Label className="capitalize cursor-pointer flex-1">{labels[tabId] || tabId}</Label>
                                         </div>
-                                        <Label className="capitalize cursor-pointer flex-1">{tabId}</Label>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
