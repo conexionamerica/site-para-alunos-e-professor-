@@ -1184,152 +1184,151 @@ const ServicosTab = ({ dashboardData }) => {
                                 Encerradas: {statusCounts.closed}
                             </Badge>
                         </div>
-                    </div>
 
-                {/* Barra de pesquisa */}
-                <div className="mb-4 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input
-                        placeholder="Buscar por número, tipo ou solicitante..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 pr-10"
-                    />
-                    {searchTerm && (
-                        <button
-                            onClick={() => setSearchTerm('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
-                    )}
-                </div>
+                        {/* Barra de pesquisa */}
+                        <div className="mb-4 relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                                placeholder="Buscar por número, tipo ou solicitante..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10 pr-10"
+                            />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
 
-                {/* Tabela de Tickets */}
-                <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                        <TableHeader className="bg-slate-50">
-                            <TableRow>
-                                <TableHead>Número</TableHead>
-                                {isSuperadmin && <TableHead>Solicitante</TableHead>}
-                                <TableHead>Tipo</TableHead>
-                                <TableHead>Data de Criação</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Ações</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {loading ? (
-                                <TableRow>
-                                    <TableCell colSpan={isSuperadmin ? 6 : 5} className="text-center py-8">
-                                        <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-                                    </TableCell>
-                                </TableRow>
-                            ) : filteredTickets.length > 0 ? (
-                                filteredTickets.map(ticket => {
-                                    const typeInfo = TICKET_TYPES.find(t => t.value === ticket.type);
-
-                                    return (
-                                        <TableRow key={ticket.id} className="hover:bg-slate-50">
-                                            <TableCell className="font-mono text-sm font-medium text-purple-600">
-                                                {ticket.ticket_number}
-                                            </TableCell>
-                                            {isSuperadmin && (
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <Avatar className="h-7 w-7">
-                                                            <AvatarImage src={ticket.requester?.avatar_url} />
-                                                            <AvatarFallback className="text-xs">
-                                                                {ticket.requester?.full_name?.[0]}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div>
-                                                            <p className="text-sm font-medium">{ticket.requester?.full_name}</p>
-                                                            <p className="text-xs text-slate-500">{ticket.requester?.student_code}</p>
-                                                        </div>
-                                                    </div>
-                                                </TableCell>
-                                            )}
-                                            <TableCell>
-                                                <span className="flex items-center gap-2">
-                                                    <span>{typeInfo?.icon}</span>
-                                                    <span className="text-sm">{typeInfo?.label || ticket.type}</span>
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="text-sm text-slate-600">
-                                                {format(parseISO(ticket.created_at), 'dd/MM/yyyy HH:mm')}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <StatusBadge status={ticket.status} />
-                                                        <PriorityBadge priority={ticket.priority || 'medium'} />
-                                                    </div>
-                                                    <SLAIndicator ticket={ticket} />
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleViewDetails(ticket)}
-                                                    className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                                >
-                                                    Ver detalhes
-                                                </Button>
+                        {/* Tabela de Tickets */}
+                        <div className="border rounded-lg overflow-hidden">
+                            <Table>
+                                <TableHeader className="bg-slate-50">
+                                    <TableRow>
+                                        <TableHead>Número</TableHead>
+                                        {isSuperadmin && <TableHead>Solicitante</TableHead>}
+                                        <TableHead>Tipo</TableHead>
+                                        <TableHead>Data de Criação</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {loading ? (
+                                        <TableRow>
+                                            <TableCell colSpan={isSuperadmin ? 6 : 5} className="text-center py-8">
+                                                <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                                             </TableCell>
                                         </TableRow>
-                                    );
-                                })
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={isSuperadmin ? 6 : 5} className="text-center py-12">
-                                        <div className="flex flex-col items-center gap-3">
-                                            <Headphones className="h-12 w-12 text-slate-300" />
-                                            <p className="text-slate-500 font-medium">
-                                                {searchTerm || statusFilter !== 'all'
-                                                    ? 'Nenhum ticket encontrado com os filtros aplicados'
-                                                    : 'Nenhum ticket criado ainda'
-                                                }
-                                            </p>
-                                            {!isSuperadmin && !searchTerm && statusFilter === 'all' && (
-                                                <Button
-                                                    onClick={() => setIsCreateDialogOpen(true)}
-                                                    variant="outline"
-                                                    className="mt-2"
-                                                >
-                                                    <Plus className="mr-2 h-4 w-4" />
-                                                    Criar primeiro ticket
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
+                                    ) : filteredTickets.length > 0 ? (
+                                        filteredTickets.map(ticket => {
+                                            const typeInfo = TICKET_TYPES.find(t => t.value === ticket.type);
 
-                {/* Dialogs */}
-                <CreateTicketDialog
-                    isOpen={isCreateDialogOpen}
-                    onClose={() => setIsCreateDialogOpen(false)}
-                    onCreated={fetchTickets}
-                    professorId={professorId}
-                    isSuperadmin={isSuperadmin}
-                />
+                                            return (
+                                                <TableRow key={ticket.id} className="hover:bg-slate-50">
+                                                    <TableCell className="font-mono text-sm font-medium text-purple-600">
+                                                        {ticket.ticket_number}
+                                                    </TableCell>
+                                                    {isSuperadmin && (
+                                                        <TableCell>
+                                                            <div className="flex items-center gap-2">
+                                                                <Avatar className="h-7 w-7">
+                                                                    <AvatarImage src={ticket.requester?.avatar_url} />
+                                                                    <AvatarFallback className="text-xs">
+                                                                        {ticket.requester?.full_name?.[0]}
+                                                                    </AvatarFallback>
+                                                                </Avatar>
+                                                                <div>
+                                                                    <p className="text-sm font-medium">{ticket.requester?.full_name}</p>
+                                                                    <p className="text-xs text-slate-500">{ticket.requester?.student_code}</p>
+                                                                </div>
+                                                            </div>
+                                                        </TableCell>
+                                                    )}
+                                                    <TableCell>
+                                                        <span className="flex items-center gap-2">
+                                                            <span>{typeInfo?.icon}</span>
+                                                            <span className="text-sm">{typeInfo?.label || ticket.type}</span>
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="text-sm text-slate-600">
+                                                        {format(parseISO(ticket.created_at), 'dd/MM/yyyy HH:mm')}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <StatusBadge status={ticket.status} />
+                                                                <PriorityBadge priority={ticket.priority || 'medium'} />
+                                                            </div>
+                                                            <SLAIndicator ticket={ticket} />
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleViewDetails(ticket)}
+                                                            className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                                        >
+                                                            Ver detalhes
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={isSuperadmin ? 6 : 5} className="text-center py-12">
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <Headphones className="h-12 w-12 text-slate-300" />
+                                                    <p className="text-slate-500 font-medium">
+                                                        {searchTerm || statusFilter !== 'all'
+                                                            ? 'Nenhum ticket encontrado com os filtros aplicados'
+                                                            : 'Nenhum ticket criado ainda'
+                                                        }
+                                                    </p>
+                                                    {!isSuperadmin && !searchTerm && statusFilter === 'all' && (
+                                                        <Button
+                                                            onClick={() => setIsCreateDialogOpen(true)}
+                                                            variant="outline"
+                                                            className="mt-2"
+                                                        >
+                                                            <Plus className="mr-2 h-4 w-4" />
+                                                            Criar primeiro ticket
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
 
-                <TicketDetailsDialog
-                    ticket={selectedTicket}
-                    isOpen={isDetailsDialogOpen}
-                    onClose={() => setIsDetailsDialogOpen(false)}
-                    onUpdated={handleTicketUpdated}
-                    isSuperadmin={isSuperadmin}
-                    currentUserId={professorId}
-                />
-            </>
+                        {/* Dialogs */}
+                        <CreateTicketDialog
+                            isOpen={isCreateDialogOpen}
+                            onClose={() => setIsCreateDialogOpen(false)}
+                            onCreated={fetchTickets}
+                            professorId={professorId}
+                            isSuperadmin={isSuperadmin}
+                        />
+
+                        <TicketDetailsDialog
+                            ticket={selectedTicket}
+                            isOpen={isDetailsDialogOpen}
+                            onClose={() => setIsDetailsDialogOpen(false)}
+                            onUpdated={handleTicketUpdated}
+                            isSuperadmin={isSuperadmin}
+                            currentUserId={professorId}
+                        />
+                    </>
                 )}
-        </div>
+            </div>
         </div >
     );
 };
