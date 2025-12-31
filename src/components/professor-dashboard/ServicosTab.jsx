@@ -389,13 +389,29 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
     }, [isOpen, isSuperadmin, professorId]);
 
     const loadProfessors = async () => {
-        const { data } = await supabase
+        // Fetch all profiles and filter client-side to avoid strict exact match issues initially
+        // Also helps debugging if RLS is the issue (it will error or return empty)
+        const { data, error } = await supabase
             .from('profiles')
-            .select('id, full_name, email')
-            .eq('role', 'professor')
+            .select('id, full_name, email, role')
             .order('full_name');
 
-        setProfessors(data || []);
+        if (error) {
+            console.error('Error loading professors:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao carregar lista',
+                description: 'Não foi possível carregar a lista de professores. Verifique suas permissões.'
+            });
+            return;
+        }
+
+        // Filter for professors (case insensitive check)
+        const profs = (data || []).filter(p =>
+            p.role && p.role.toLowerCase() === 'professor'
+        );
+
+        setProfessors(profs);
     };
 
     const handleSubmit = async () => {
