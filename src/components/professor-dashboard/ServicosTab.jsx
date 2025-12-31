@@ -570,7 +570,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
                     </Button>
                     <Button
                         onClick={handleSubmit}
-                        disabled={isSubmitting || !ticketType || !initialMessage.trim()}
+                        disabled={isSubmitting || !type || !initialMessage.trim()}
                         className="bg-purple-600 hover:bg-purple-700"
                     >
                         {isSubmitting ? (
