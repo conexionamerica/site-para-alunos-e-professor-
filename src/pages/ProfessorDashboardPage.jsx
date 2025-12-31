@@ -93,7 +93,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
     // 7. Fetch de Todos los Agendamentos (para AulasTab, AlunosTab)
     let appointmentsQuery = supabase
         .from('appointments')
-        .select(`*, student:profiles!student_id(full_name, spanish_level), professor:profiles!professor_id(full_name)`)
+        .select(`*, student:profiles!student_id(full_name, spanish_level, student_code, avatar_url), professor:profiles!professor_id(full_name)`)
         .order('class_datetime', { ascending: false });
 
     if (!isSuperadmin) {
