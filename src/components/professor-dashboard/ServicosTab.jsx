@@ -1,7 +1,7 @@
 // Arquivo: src/components/professor-dashboard/ServicosTab.jsx
 // Sistema de tickets de serviço para professores
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { format, parseISO, differenceInHours } from 'date-fns';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
@@ -632,7 +632,81 @@ const ServicosTab = ({ dashboardData }) => {
         filterTickets();
     }, [tickets, searchTerm, statusFilter]);
 
-    const fetchTickets = async () => {
+    // Realtime subscriptions for live updates
+    useEffect(() => {
+        if (!professorId) return;
+
+        // Subscribe to ticket changes
+        const ticketsChannel = supabase
+            .channel('service_tickets_changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'service_tickets',
+                    filter: isSuperadmin ? undefined : `requester_id=eq.${professorId}`
+                },
+                (payload) => {
+                    console.log('Ticket changed:', payload);
+
+                    // Reload tickets
+                    fetchTickets();
+
+                    // Show notification for new tickets (admin only)
+                    if (payload.eventType === 'INSERT' && isSuperadmin && payload.new.requester_id !== professorId) {
+                        toast({
+                            title: '🎫 Novo Ticket',
+                            description: `Ticket ${payload.new.ticket_number} foi criado`
+                        });
+                    }
+
+                    // Show notification for status changes
+                    if (payload.eventType === 'UPDATE' && payload.old.status !== payload.new.status && !isSuperadmin) {
+                        const statusLabel = TICKET_STATUS[payload.new.status]?.label;
+                        toast({
+                            title: '🔔 Ticket Atualizado',
+                            description: `Ticket ${payload.new.ticket_number} está agora: ${statusLabel}`
+                        });
+                    }
+                }
+            )
+            .subscribe();
+
+        // Subscribe to new messages
+        const messagesChannel = supabase
+            .channel('ticket_messages_changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'service_ticket_messages'
+                },
+                (payload) => {
+                    // Only show notification if message is from another user
+                    if (payload.new.user_id !== professorId) {
+                        // Check if this message is for one of user's tickets
+                        const userTicket = tickets.find(t => t.id === payload.new.ticket_id);
+                        if (userTicket) {
+                            toast({
+                                title: '💬 Nova Mensagem',
+                                description: `Você recebeu uma resposta no ticket ${userTicket.ticket_number}`
+                            });
+                        }
+                    }
+                }
+            )
+            .subscribe();
+
+        // Cleanup subscriptions on unmount
+        return () => {
+            ticketsChannel.unsubscribe();
+            messagesChannel.unsubscribe();
+        };
+    }, [professorId, isSuperadmin, tickets, toast]);
+
+    const fetchTickets = useCallback(async () => {
         if (!professorId) return;
 
         setLoading(true);
@@ -665,7 +739,7 @@ const ServicosTab = ({ dashboardData }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [professorId, isSuperadmin, toast]);
 
     const filterTickets = () => {
         let filtered = tickets;
