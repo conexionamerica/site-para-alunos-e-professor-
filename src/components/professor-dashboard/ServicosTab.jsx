@@ -2,7 +2,7 @@
 // Sistema de tickets de serviço para professores
 
 import React, { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, differenceInHours } from 'date-fns';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Loader2, Plus, Send, Headphones, Search, Filter, X } from 'lucide-react';
+import { Loader2, Plus, Send, Headphones, Search, X, AlertCircle } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { ptBR } from 'date-fns/locale';
 
 // Tipos de solicitação (baseado na imagem do usuário, removendo os taxados)
@@ -36,12 +37,45 @@ const TICKET_STATUS = {
     closed: { label: 'Encerrada', color: 'bg-green-500', textColor: 'text-green-900', bgLight: 'bg-green-50' }
 };
 
+// Prioridades
+const PRIORITIES = {
+    low: { label: 'Baixa', color: 'bg-green-500', icon: '⬇️', hours: 48 },
+    medium: { label: 'Média', color: 'bg-yellow-500', icon: '➡️', hours: 24 },
+    high: { label: 'Alta', color: 'bg-orange-500', icon: '⬆️', hours: 12 },
+    urgent: { label: 'Urgente', color: 'bg-red-500', icon: '🔥', hours: 4 }
+};
+
 const StatusBadge = ({ status }) => {
     const config = TICKET_STATUS[status] || TICKET_STATUS.pending;
+    return <Badge className={`${config.color} hover:${config.color} text-white`}>{config.label}</Badge>;
+};
+
+const PriorityBadge = ({ priority }) => {
+    const config = PRIORITIES[priority] || PRIORITIES.medium;
+    return <Badge className={`${config.color} text-white text-xs`}>{config.icon} {config.label}</Badge>;
+};
+
+// SLA Progress Indicator
+const SLAIndicator = ({ ticket }) => {
+    if (ticket.status === 'closed' || ticket.first_response_at) return null;
+
+    const hoursSinceCreated = differenceInHours(new Date(), parseISO(ticket.created_at));
+    const expectedHours = ticket.expected_response_hours || PRIORITIES[ticket.priority || 'medium']?.hours || 24;
+    const progress = (hoursSinceCreated / expectedHours) * 100;
+    const isViolated = progress > 100 || ticket.sla_violated;
+
     return (
-        <Badge className={`${config.color} hover:${config.color} text-white`}>
-            {config.label}
-        </Badge>
+        <div className="space-y-1 mt-1">
+            <div className="flex justify-between text-xs">
+                <span className={isViolated ? 'text-red-600 font-medium' : 'text-slate-600'}>
+                    {isViolated ? '⚠️ SLA Violado' : 'Aguardando resposta'}
+                </span>
+                <span className="text-slate-500">
+                    {hoursSinceCreated}h / {expectedHours}h
+                </span>
+            </div>
+            <Progress value={Math.min(progress, 100)} className={`h-1.5 ${isViolated ? '[&>div]:bg-red-500' : ''}`} />
+        </div>
     );
 };
 
@@ -49,6 +83,7 @@ const StatusBadge = ({ status }) => {
 const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId }) => {
     const { toast } = useToast();
     const [ticketType, setTicketType] = useState('');
+    const [priority, setPriority] = useState('medium');
     const [initialMessage, setInitialMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -71,6 +106,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId }) => {
                 .insert({
                     requester_id: professorId,
                     type: ticketType,
+                    priority: priority,
                     status: 'pending'
                 })
                 .select()
@@ -95,6 +131,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId }) => {
             });
 
             setTicketType('');
+            setPriority('medium');
             setInitialMessage('');
             onCreated();
             onClose();
@@ -121,23 +158,44 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId }) => {
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
-                    <div>
-                        <Label>Tipo de Solicitação *</Label>
-                        <Select value={ticketType} onValueChange={setTicketType}>
-                            <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Selecionar tipo da solicitação..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {TICKET_TYPES.map(type => (
-                                    <SelectItem key={type.value} value={type.value}>
-                                        <span className="flex items-center gap-2">
-                                            <span>{type.icon}</span>
-                                            <span>{type.label}</span>
-                                        </span>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label>Tipo de Solicitação *</Label>
+                            <Select value={ticketType} onValueChange={setTicketType}>
+                                <SelectTrigger className="mt-1">
+                                    <SelectValue placeholder="Selecionar tipo..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {TICKET_TYPES.map(type => (
+                                        <SelectItem key={type.value} value={type.value}>
+                                            <span className="flex items-center gap-2">
+                                                <span>{type.icon}</span>
+                                                <span>{type.label}</span>
+                                            </span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div>
+                            <Label>Prioridade *</Label>
+                            <Select value={priority} onValueChange={setPriority}>
+                                <SelectTrigger className="mt-1">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Object.entries(PRIORITIES).map(([key, config]) => (
+                                        <SelectItem key={key} value={key}>
+                                            {config.icon} {config.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Tempo esperado: {PRIORITIES[priority].hours}h
+                            </p>
+                        </div>
                     </div>
 
                     <div>
@@ -182,6 +240,7 @@ const TicketDetailsDialog = ({ ticket, isOpen, onClose, onUpdated, isSuperadmin,
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [newStatus, setNewStatus] = useState(ticket?.status || 'pending');
+    const [newPriority, setNewPriority] = useState(ticket?.priority || 'medium');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoadingMessages, setIsLoadingMessages] = useState(true);
 
@@ -189,6 +248,7 @@ const TicketDetailsDialog = ({ ticket, isOpen, onClose, onUpdated, isSuperadmin,
         if (ticket && isOpen) {
             loadMessages();
             setNewStatus(ticket.status);
+            setNewPriority(ticket.priority || 'medium');
         }
     }, [ticket, isOpen]);
 
@@ -245,29 +305,35 @@ const TicketDetailsDialog = ({ ticket, isOpen, onClose, onUpdated, isSuperadmin,
     };
 
     const handleUpdateStatus = async () => {
-        if (newStatus === ticket.status) return;
+        if (newStatus === ticket.status && newPriority === ticket.priority) return;
 
         try {
+            const updates = {
+                status: newStatus,
+                closed_at: newStatus === 'closed' ? new Date().toISOString() : null
+            };
+
+            if (newPriority !== ticket.priority) {
+                updates.priority = newPriority;
+            }
+
             const { error } = await supabase
                 .from('service_tickets')
-                .update({
-                    status: newStatus,
-                    closed_at: newStatus === 'closed' ? new Date().toISOString() : null
-                })
+                .update(updates)
                 .eq('id', ticket.id);
 
             if (error) throw error;
 
             toast({
-                title: 'Status atualizado!',
-                description: `Ticket alterado para: ${TICKET_STATUS[newStatus].label}`
+                title: 'Ticket atualizado!',
+                description: `Status: ${TICKET_STATUS[newStatus].label}`
             });
 
             onUpdated();
         } catch (error) {
             toast({
                 variant: 'destructive',
-                title: 'Erro ao atualizar status',
+                title: 'Erro ao atualizar ticket',
                 description: error.message
             });
         }
@@ -300,13 +366,19 @@ const TicketDetailsDialog = ({ ticket, isOpen, onClose, onUpdated, isSuperadmin,
                 </DialogHeader>
 
                 {/* Informações do Ticket */}
-                <div className="grid grid-cols-2 gap-4 py-4 border-t border-b bg-slate-50 px-4 rounded-lg">
+                <div className="grid grid-cols-3 gap-4 py-4 border-t border-b bg-slate-50 px-4 rounded-lg">
                     <div>
                         <Label className="text-xs text-slate-500">Tipo de Solicitação</Label>
                         <p className="font-medium flex items-center gap-2 mt-1">
                             <span>{typeInfo?.icon}</span>
                             <span>{typeInfo?.label || ticket.type}</span>
                         </p>
+                    </div>
+                    <div>
+                        <Label className="text-xs text-slate-500">Prioridade</Label>
+                        <div className="mt-1">
+                            <PriorityBadge priority={ticket.priority || 'medium'} />
+                        </div>
                     </div>
                     <div>
                         <Label className="text-xs text-slate-500">Data de Criação</Label>
@@ -316,30 +388,55 @@ const TicketDetailsDialog = ({ ticket, isOpen, onClose, onUpdated, isSuperadmin,
                     </div>
                 </div>
 
-                {/* Alterar Status (Admin Only) */}
+                {/* SLA Indicator */}
+                {!isClosed && (
+                    <div className="px-4">
+                        <SLAIndicator ticket={ticket} />
+                    </div>
+                )}
+
+                {/* Gerenciar Ticket (Admin Only) */}
                 {isSuperadmin && !isClosed && (
-                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                        <Label className="font-semibold text-blue-900">Gerenciar Status</Label>
-                        <div className="flex gap-2 mt-2">
-                            <Select value={newStatus} onValueChange={setNewStatus}>
-                                <SelectTrigger className="w-[280px] bg-white">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="pending">🟡 Pendente</SelectItem>
-                                    <SelectItem value="open">🔵 Aberta</SelectItem>
-                                    <SelectItem value="awaiting_user">🟠 Aguardando Solicitante</SelectItem>
-                                    <SelectItem value="closed">🟢 Encerrada</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Button
-                                onClick={handleUpdateStatus}
-                                disabled={newStatus === ticket.status}
-                                className="bg-blue-600 hover:bg-blue-700"
-                            >
-                                Atualizar Status
-                            </Button>
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-3">
+                        <Label className="font-semibold text-blue-900">Gerenciar Ticket</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <Label className="text-xs text-slate-600">Status</Label>
+                                <Select value={newStatus} onValueChange={setNewStatus}>
+                                    <SelectTrigger className="bg-white mt-1">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="pending">🟡 Pendente</SelectItem>
+                                        <SelectItem value="open">🔵 Aberta</SelectItem>
+                                        <SelectItem value="awaiting_user">🟠 Aguardando Solicitante</SelectItem>
+                                        <SelectItem value="closed">🟢 Encerrada</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label className="text-xs text-slate-600">Prioridade</Label>
+                                <Select value={newPriority} onValueChange={setNewPriority}>
+                                    <SelectTrigger className="bg-white mt-1">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {Object.entries(PRIORITIES).map(([key, config]) => (
+                                            <SelectItem key={key} value={key}>
+                                                {config.icon} {config.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
+                        <Button
+                            onClick={handleUpdateStatus}
+                            disabled={newStatus === ticket.status && newPriority === ticket.priority}
+                            className="bg-blue-600 hover:bg-blue-700 w-full"
+                        >
+                            Atualizar Ticket
+                        </Button>
                     </div>
                 )}
 
@@ -684,7 +781,13 @@ const ServicosTab = ({ dashboardData }) => {
                                                 {format(parseISO(ticket.created_at), 'dd/MM/yyyy HH:mm')}
                                             </TableCell>
                                             <TableCell>
-                                                <StatusBadge status={ticket.status} />
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <StatusBadge status={ticket.status} />
+                                                        <PriorityBadge priority={ticket.priority || 'medium'} />
+                                                    </div>
+                                                    <SLAIndicator ticket={ticket} />
+                                                </div>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button
