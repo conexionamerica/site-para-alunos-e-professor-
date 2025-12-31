@@ -407,9 +407,19 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
         }
 
         // Filter for professors (case insensitive check)
-        const profs = (data || []).filter(p =>
+        let profs = (data || []).filter(p =>
             p.role && p.role.toLowerCase() === 'professor'
         );
+
+        // FALLBACK: If no explicit professors found but data exists, show all users with their roles appended
+        // This helps identify if users are registered as 'admin' or something else instead of 'professor'
+        if (profs.length === 0 && data && data.length > 0) {
+            console.log('Nenhum "professor" encontrado. Exibindo todos os usuários para debug.');
+            profs = data.map(p => ({
+                ...p,
+                full_name: `${p.full_name} [${p.role || 'Sem role'}]`
+            }));
+        }
 
         setProfessors(profs);
     };
