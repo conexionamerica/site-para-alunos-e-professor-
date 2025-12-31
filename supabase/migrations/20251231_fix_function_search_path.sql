@@ -1,7 +1,7 @@
 -- Corrigir warnings de search_path em funções críticas
 -- Adiciona SET search_path = public, pg_temp para prevenir ataques de search path hijacking
 
--- Funções do sistema de tickets (prioritárias - criadas hoje)
+-- Funções do sistema de tickets (prioritárias - apenas as que existem)
 ALTER FUNCTION public.generate_ticket_number() SET search_path = public, pg_temp;
 ALTER FUNCTION public.set_ticket_number() SET search_path = public, pg_temp;
 ALTER FUNCTION public.update_ticket_timestamp() SET search_path = public, pg_temp;
@@ -10,7 +10,6 @@ ALTER FUNCTION public.check_sla_violation() SET search_path = public, pg_temp;
 ALTER FUNCTION public.set_first_response() SET search_path = public, pg_temp;
 ALTER FUNCTION public.set_resolved_at() SET search_path = public, pg_temp;
 ALTER FUNCTION public.validate_attachment_size() SET search_path = public, pg_temp;
-ALTER FUNCTION public.get_ticket_metrics() SET search_path = public, pg_temp;
 
 -- Funções de autenticação e permissões
 ALTER FUNCTION public.is_admin_or_superadmin() SET search_path = public, pg_temp;
