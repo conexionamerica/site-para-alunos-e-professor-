@@ -14,8 +14,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Loader2, Plus, Send, Headphones, Search, X, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, Send, Headphones, Search, X, AlertCircle, FileText } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { ptBR } from 'date-fns/locale';
 
 // Tipos de solicitação (baseado na imagem do usuário, removendo os taxados)
@@ -76,6 +77,68 @@ const SLAIndicator = ({ ticket }) => {
             </div>
             <Progress value={Math.min(progress, 100)} className={`h-1.5 ${isViolated ? '[&>div]:bg-red-500' : ''}`} />
         </div>
+    );
+};
+
+// Template Selector (Admin Only)
+const TemplateSelector = ({ ticketType, onSelect, disabled }) => {
+    const [templates, setTemplates] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        loadTemplates();
+    }, [ticketType]);
+
+    const loadTemplates = async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('ticket_response_templates')
+            .select('*')
+            .eq('is_active', true)
+            .or(`category.eq.${ticketType},category.is.null`)
+            .order('title');
+
+        if (!error) {
+            setTemplates(data || []);
+        }
+        setLoading(false);
+    };
+
+    if (loading) {
+        return (
+            <Button variant="outline" size="sm" disabled>
+                <Loader2 className="h-4 w-4 animate-spin" />
+            </Button>
+        );
+    }
+
+    if (templates.length === 0) return null;
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={disabled}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Templates ({templates.length})
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-80 max-h-96 overflow-y-auto">
+                <DropdownMenuLabel>Selecionar Template</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {templates.map(template => (
+                    <DropdownMenuItem
+                        key={template.id}
+                        onClick={() => onSelect(template.content)}
+                        className="cursor-pointer flex-col items-start"
+                    >
+                        <div className="font-medium text-sm">{template.title}</div>
+                        <div className="text-xs text-slate-500 line-clamp-2 mt-1">
+                            {template.content.substring(0, 100)}...
+                        </div>
+                    </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 };
 
@@ -494,31 +557,42 @@ const TicketDetailsDialog = ({ ticket, isOpen, onClose, onUpdated, isSuperadmin,
 
                 {/* Adicionar Nova Mensagem */}
                 {!isClosed ? (
-                    <div className="flex gap-2 pt-4 border-t">
-                        <Textarea
-                            placeholder="Digite sua mensagem..."
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            rows={3}
-                            className="flex-1"
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSendMessage();
-                                }
-                            }}
-                        />
-                        <Button
-                            onClick={handleSendMessage}
-                            disabled={!newMessage.trim() || isSubmitting}
-                            className="bg-purple-600 hover:bg-purple-700 self-end"
-                        >
-                            {isSubmitting ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Send className="h-4 w-4" />
-                            )}
-                        </Button>
+                    <div className="space-y-2 pt-4 border-t">
+                        {isSuperadmin && (
+                            <div className="flex justify-end">
+                                <TemplateSelector
+                                    ticketType={ticket.type}
+                                    onSelect={(content) => setNewMessage(content)}
+                                    disabled={isSubmitting}
+                                />
+                            </div>
+                        )}
+                        <div className="flex gap-2">
+                            <Textarea
+                                placeholder="Digite sua mensagem..."
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                rows={3}
+                                className="flex-1"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSendMessage();
+                                    }
+                                }}
+                            />
+                            <Button
+                                onClick={handleSendMessage}
+                                disabled={!newMessage.trim() || isSubmitting}
+                                className="bg-purple-600 hover:bg-purple-700 self-end"
+                            >
+                                {isSubmitting ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Send className="h-4 w-4" />
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 ) : (
                     <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-center">
