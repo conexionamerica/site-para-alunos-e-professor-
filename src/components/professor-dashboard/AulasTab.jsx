@@ -1063,7 +1063,7 @@ const AulasTab = ({ dashboardData }) => {
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 <div>
-                                                    <p className="text-xs text-slate-400">{apt.student?.username || 'N/A'}</p>
+                                                    <p className="text-xs text-slate-400">{apt.student?.student_code || 'N/A'}</p>
                                                     <p className="font-medium text-slate-800">{apt.student?.full_name || 'N/A'}</p>
                                                 </div>
                                             </div>
