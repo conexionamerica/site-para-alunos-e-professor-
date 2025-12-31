@@ -366,7 +366,7 @@ const AttachmentsList = ({ ticketId, canDelete }) => {
 };
 
 // Dialog para criar novo ticket
-const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperadmin }) => {
+const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperadmin, allProfiles }) => {
     const { toast } = useToast();
     const [type, setType] = useState('');
     const [priority, setPriority] = useState('medium');
@@ -389,6 +389,26 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
     }, [isOpen, isSuperadmin, professorId]);
 
     const loadProfessors = async () => {
+        // If we have preloaded profiles passed from parent, use them!
+        // This avoids RLS issues since parent (DashboardPage) already fetched them
+        if (allProfiles && allProfiles.length > 0) {
+            console.log('Using preloaded profiles:', allProfiles);
+            const profs = allProfiles.filter(p =>
+                p.role && p.role.toLowerCase() === 'professor'
+            );
+
+            // If empty, show all as fallback
+            if (profs.length === 0) {
+                setProfessors(allProfiles.map(p => ({
+                    ...p,
+                    full_name: `${p.full_name} [${p.role || 'Sem role'}]`
+                })));
+            } else {
+                setProfessors(profs);
+            }
+            return;
+        }
+
         // Fetch all profiles and filter client-side to avoid strict exact match issues initially
         // Also helps debugging if RLS is the issue (it will error or return empty)
         const { data, error } = await supabase
