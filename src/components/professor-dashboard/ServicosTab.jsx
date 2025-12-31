@@ -18,6 +18,9 @@ import { Loader2, Plus, Send, Headphones, Search, X, AlertCircle, FileText, Uplo
 import { Progress } from '@/components/ui/progress';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { ptBR } from 'date-fns/locale';
+import TicketReportsSection from './TicketReportsSection';
+import TicketReportsSection from './TicketReportsSection';
+import TicketReportsSection from './TicketReportsSection';
 
 // Tipos de solicitação (baseado na imagem do usuário, removendo os taxados)
 const TICKET_TYPES = [
@@ -860,6 +863,7 @@ const ServicosTab = ({ dashboardData }) => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [showReports, setShowReports] = useState(false);
 
     const isSuperadmin = dashboardData?.isSuperadmin || false;
     const professorId = dashboardData?.professorId;
@@ -1053,47 +1057,62 @@ const ServicosTab = ({ dashboardData }) => {
                                 Novo Ticket
                             </Button>
                         )}
-                    </div>
-
-                    {/* Badges de contagem */}
-                    <div className="flex flex-wrap gap-2 mt-4">
-                        <Badge
-                            variant={statusFilter === 'all' ? 'default' : 'outline'}
-                            className="cursor-pointer"
-                            onClick={() => setStatusFilter('all')}
-                        >
-                            Todos: {statusCounts.all}
-                        </Badge>
-                        <Badge
-                            variant={statusFilter === 'pending' ? 'default' : 'outline'}
-                            className="cursor-pointer bg-yellow-100 text-yellow-800 border-yellow-300"
-                            onClick={() => setStatusFilter('pending')}
-                        >
-                            Pendentes: {statusCounts.pending}
-                        </Badge>
-                        <Badge
-                            variant={statusFilter === 'open' ? 'default' : 'outline'}
-                            className="cursor-pointer bg-blue-100 text-blue-800 border-blue-300"
-                            onClick={() => setStatusFilter('open')}
-                        >
-                            Abertas: {statusCounts.open}
-                        </Badge>
-                        <Badge
-                            variant={statusFilter === 'awaiting_user' ? 'default' : 'outline'}
-                            className="cursor-pointer bg-orange-100 text-orange-800 border-orange-300"
-                            onClick={() => setStatusFilter('awaiting_user')}
-                        >
-                            Aguardando: {statusCounts.awaiting_user}
-                        </Badge>
-                        <Badge
-                            variant={statusFilter === 'closed' ? 'default' : 'outline'}
-                            className="cursor-pointer bg-green-100 text-green-800 border-green-300"
-                            onClick={() => setStatusFilter('closed')}
-                        >
-                            Encerradas: {statusCounts.closed}
-                        </Badge>
+                        {isSuperadmin && (
+                            <Button
+                                onClick={() => setShowReports(!showReports)}
+                                variant={showReports ? 'default' : 'outline'}
+                            >
+                                {showReports ? 'Ver Tickets' : '📊 Ver Relatórios'}
+                            </Button>
+                        )}
                     </div>
                 </div>
+
+                {/* Reports View (Admin Only) */}
+                {showReports && isSuperadmin ? (
+                    <TicketReportsSection />
+                ) : (
+                    <>
+
+                        {/* Badges de contagem */}
+                        <div className="flex flex-wrap gap-2 mt-4">
+                            <Badge
+                                variant={statusFilter === 'all' ? 'default' : 'outline'}
+                                className="cursor-pointer"
+                                onClick={() => setStatusFilter('all')}
+                            >
+                                Todos: {statusCounts.all}
+                            </Badge>
+                            <Badge
+                                variant={statusFilter === 'pending' ? 'default' : 'outline'}
+                                className="cursor-pointer bg-yellow-100 text-yellow-800 border-yellow-300"
+                                onClick={() => setStatusFilter('pending')}
+                            >
+                                Pendentes: {statusCounts.pending}
+                            </Badge>
+                            <Badge
+                                variant={statusFilter === 'open' ? 'default' : 'outline'}
+                                className="cursor-pointer bg-blue-100 text-blue-800 border-blue-300"
+                                onClick={() => setStatusFilter('open')}
+                            >
+                                Abertas: {statusCounts.open}
+                            </Badge>
+                            <Badge
+                                variant={statusFilter === 'awaiting_user' ? 'default' : 'outline'}
+                                className="cursor-pointer bg-orange-100 text-orange-800 border-orange-300"
+                                onClick={() => setStatusFilter('awaiting_user')}
+                            >
+                                Aguardando: {statusCounts.awaiting_user}
+                            </Badge>
+                            <Badge
+                                variant={statusFilter === 'closed' ? 'default' : 'outline'}
+                                className="cursor-pointer bg-green-100 text-green-800 border-green-300"
+                                onClick={() => setStatusFilter('closed')}
+                            >
+                                Encerradas: {statusCounts.closed}
+                            </Badge>
+                        </div>
+                    </div>
 
                 {/* Barra de pesquisa */}
                 <div className="mb-4 relative">
@@ -1235,8 +1254,21 @@ const ServicosTab = ({ dashboardData }) => {
                     isSuperadmin={isSuperadmin}
                     currentUserId={professorId}
                 />
-            </div>
+            </div> {/* Closing div for the conditional content */}
+                )}
+        </>
+    )
+}
+{/* Relatórios (Admin Only) */ }
+{
+    isSuperadmin && (
+        <div className="mt-8">
+            <TicketReportsSection />
         </div>
+    )
+}
+        </div >
+        </div >
     );
 };
 
