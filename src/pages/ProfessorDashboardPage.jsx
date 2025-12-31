@@ -128,14 +128,15 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         console.error("Erro ao buscar role_settings:", roleSettingsError);
     }
 
-    // 11. Herança de permissões de ações (can_manage_classes, can_manage_students)
-    // Se o usuário não tem permissões individuais definidas, herda do role_settings
+    // 11. Permissões de ações baseadas APENAS em role_settings
+    // IMPORTANTE: Ignora permissões individuais (can_manage_classes/can_manage_students na tabela profiles)
+    // Sempre usa as configurações do perfil (role) definidas em role_settings
     const userRoleSettings = roleSettings?.find(rs => rs.role === userProfile?.role);
-    const defaultActions = userRoleSettings?.permissions?.actions || {};
+    const roleActions = userRoleSettings?.permissions?.actions || {};
 
-    // Usar permissão individual se definida, senão usar padrão do role
-    const can_manage_classes = userProfile?.can_manage_classes ?? defaultActions.can_manage_classes ?? true;
-    const can_manage_students = userProfile?.can_manage_students ?? defaultActions.can_manage_students ?? true;
+    // Usar SEMPRE as permissões do role, com fallback para true se não definido
+    const can_manage_classes = roleActions.can_manage_classes ?? true;
+    const can_manage_students = roleActions.can_manage_students ?? true;
 
     return {
         professorId,
