@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign } from 'lucide-react';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -19,6 +19,7 @@ import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import AdminTab from '@/components/professor-dashboard/AdminTab';
 import ServicosTab from '@/components/professor-dashboard/ServicosTab';
 import FinanceiroTab from '@/components/professor-dashboard/FinanceiroTab';
+import HistoricoTab from '@/components/professor-dashboard/HistoricoTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 import { getBrazilDate } from '@/lib/dateUtils';

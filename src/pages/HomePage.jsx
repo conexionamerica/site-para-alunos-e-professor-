@@ -18,6 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot } from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
 import StudentMessagesWidget from '@/components/StudentMessagesWidget';
+import { PlanExpiringBanner } from '@/components/student/PlanExpiringBanner';
 
 // IMPORTACIONES NECESSÁRIAS, AHORA CON DialogDescription
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -544,6 +545,9 @@ const HomePage = () => {
             <NextClassWidget nextClass={nextClass} />
           </div>
         </div>
+
+        {/* Banner de Plano Expirando */}
+        <PlanExpiringBanner userId={user?.id} />
 
         {/* Widget de Mensagens do Professor */}
         <StudentMessagesWidget />
