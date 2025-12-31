@@ -1327,20 +1327,9 @@ const ServicosTab = ({ dashboardData }) => {
                     isSuperadmin={isSuperadmin}
                     currentUserId={professorId}
                 />
-            </div> {/* Closing div for the conditional content */}
+            </>
                 )}
-        </>
-    )
-}
-{/* Relatórios (Admin Only) */ }
-{
-    isSuperadmin && (
-        <div className="mt-8">
-            <TicketReportsSection />
         </div>
-    )
-}
-        </div >
         </div >
     );
 };
