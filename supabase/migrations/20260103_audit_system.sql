@@ -63,32 +63,56 @@ BEGIN
         v_history := v_history || ' por ' || v_full_name;
     END IF;
     
-    -- Adiciona detalhes contextuais baseados na tabela
+    -- Adiciona detalhes contextuais baseados na tabela (usando JSONB para evitar erros de campos inexistentes)
     IF TG_OP != 'DELETE' THEN
-        -- Para class_feedback, inclui o comentário
-        IF TG_TABLE_NAME = 'class_feedback' AND NEW.comment IS NOT NULL AND NEW.comment != '' THEN
-            v_history := v_history || ' | Comentário: ' || LEFT(NEW.comment, 200);
-        END IF;
-        
-        -- Para appointments com observação de reagendamento
-        IF TG_TABLE_NAME = 'appointments' AND NEW.reschedule_reason IS NOT NULL AND NEW.reschedule_reason != '' THEN
-            v_history := v_history || ' | Motivo: ' || LEFT(NEW.reschedule_reason, 200);
-        END IF;
-        
-        -- Para assigned_packages_log com observação
-        IF TG_TABLE_NAME = 'assigned_packages_log' AND NEW.observation IS NOT NULL AND NEW.observation != '' THEN
-            v_history := v_history || ' | Obs: ' || LEFT(NEW.observation, 200);
-        END IF;
-        
-        -- Para student_messages
-        IF TG_TABLE_NAME = 'student_messages' AND NEW.content IS NOT NULL THEN
-            v_history := v_history || ' | Mensagem: ' || LEFT(NEW.content, 100);
-        END IF;
-        
-        -- Para billing com notas
-        IF TG_TABLE_NAME = 'billing' AND NEW.notes IS NOT NULL AND NEW.notes != '' THEN
-            v_history := v_history || ' | Notas: ' || LEFT(NEW.notes, 200);
-        END IF;
+        DECLARE
+            v_new_json JSONB := to_jsonb(NEW);
+            v_comment TEXT;
+            v_reason TEXT;
+            v_obs TEXT;
+            v_content TEXT;
+            v_notes TEXT;
+        BEGIN
+            -- Para class_feedback, inclui o comentário
+            IF TG_TABLE_NAME = 'class_feedback' THEN
+                v_comment := v_new_json->>'comment';
+                IF v_comment IS NOT NULL AND v_comment != '' THEN
+                    v_history := v_history || ' | Comentário: ' || LEFT(v_comment, 200);
+                END IF;
+            END IF;
+            
+            -- Para appointments com observação de reagendamento
+            IF TG_TABLE_NAME = 'appointments' THEN
+                v_reason := v_new_json->>'reschedule_reason';
+                IF v_reason IS NOT NULL AND v_reason != '' THEN
+                    v_history := v_history || ' | Motivo: ' || LEFT(v_reason, 200);
+                END IF;
+            END IF;
+            
+            -- Para assigned_packages_log com observação
+            IF TG_TABLE_NAME = 'assigned_packages_log' THEN
+                v_obs := v_new_json->>'observation';
+                IF v_obs IS NOT NULL AND v_obs != '' THEN
+                    v_history := v_history || ' | Obs: ' || LEFT(v_obs, 200);
+                END IF;
+            END IF;
+            
+            -- Para student_messages
+            IF TG_TABLE_NAME = 'student_messages' THEN
+                v_content := v_new_json->>'content';
+                IF v_content IS NOT NULL THEN
+                    v_history := v_history || ' | Mensagem: ' || LEFT(v_content, 100);
+                END IF;
+            END IF;
+            
+            -- Para billing com notas
+            IF TG_TABLE_NAME = 'billing' THEN
+                v_notes := v_new_json->>'notes';
+                IF v_notes IS NOT NULL AND v_notes != '' THEN
+                    v_history := v_history || ' | Notas: ' || LEFT(v_notes, 200);
+                END IF;
+            END IF;
+        END;
     END IF;
 
     -- Insere na tabela de logs
