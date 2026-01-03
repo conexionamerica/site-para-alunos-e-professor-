@@ -59,15 +59,15 @@ const ProfessorLoginPage = () => {
 
     const { data: profileData, error: profileError } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single();
 
-    // Permitir acceso a profesores Y superadmins
-    const allowedRoles = ['professor', 'superadmin'];
+    // Permitir acesso a profesores Y superadmins Y admins
+    const allowedRoles = ['professor', 'superadmin', 'admin'];
 
     if (profileError || !allowedRoles.includes(profileData?.role)) {
       toast({ variant: "destructive", title: "Acesso Negado", description: "Você não tem permissão para acessar este painel." });
       await supabase.auth.signOut();
     } else {
       setProfessorSession(true);
-      const welcomeMessage = profileData.role === 'superadmin'
+      const welcomeMessage = (profileData.role === 'superadmin' || profileData.role === 'admin')
         ? "Bem-vindo ao painel administrativo."
         : "Bem-vindo ao painel do professor.";
       toast({ variant: "info", title: "Login bem-sucedido!", description: welcomeMessage });

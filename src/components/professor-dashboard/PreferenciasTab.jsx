@@ -855,8 +855,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
         amount_paid: priceToRegister,
         purchase_date: format(finalStartDate, 'yyyy-MM-dd'),
         end_date: format(finalEndDate, 'yyyy-MM-dd'),
-        custom_package_name: isAutomaticScheduling ? packageName : null,
-        status: 'pago'
+        custom_package_name: isAutomaticScheduling ? packageName : null
       });
       if (billErr) throw billErr;
 

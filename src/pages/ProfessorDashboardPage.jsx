@@ -208,7 +208,7 @@ const ProfessorDashboardPage = () => {
                 .eq('id', currentUserId)
                 .maybeSingle();
 
-            const isSuperadmin = userProfile?.role === 'superadmin';
+            const isSuperadmin = userProfile?.role === 'superadmin' || userProfile?.role === 'admin';
 
             const data = await fetchProfessorDashboardData(currentUserId, isSuperadmin);
 

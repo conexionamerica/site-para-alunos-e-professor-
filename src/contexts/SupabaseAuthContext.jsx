@@ -120,7 +120,7 @@ export const AuthProvider = ({ children }) => {
             return;
           }
 
-          if (userProfile?.role === 'professor' || userProfile?.role === 'superadmin') {
+          if (userProfile?.role === 'professor' || userProfile?.role === 'superadmin' || userProfile?.role === 'admin') {
             // Handled by ProfessorLoginPage or by staying on current route if already in dashboard
           } else {
             // Only redirect to / if we are on the login page
