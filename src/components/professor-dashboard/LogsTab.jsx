@@ -54,6 +54,8 @@ const LogsTab = ({ dashboardData }) => {
     const [filterTable, setFilterTable] = useState('all');
     const [filterAction, setFilterAction] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterStartDate, setFilterStartDate] = useState('');
+    const [filterEndDate, setFilterEndDate] = useState('');
 
     const onUpdate = dashboardData?.onUpdate;
 
