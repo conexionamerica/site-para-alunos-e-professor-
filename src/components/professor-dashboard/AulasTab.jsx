@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as UICalendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from '@/lib/utils';
+import { useFormPersistence } from '@/hooks/useFormPersistence';
 
 
 const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
@@ -46,19 +47,25 @@ const StarRating = ({ rating, setRating }) => {
 const FeedbackDialog = ({ appointment, isOpen, onClose, onFeedbackSent }) => {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [ratings, setRatings] = useState({
-        fala: 0, leitura: 0, escrita: 0, compreensao: 0, audicao: 0, gramatica: 0, pronuncia: 0, vocabulario: 0,
-    });
-    const [comment, setComment] = useState('');
 
-    const handleSetRating = (category, value) => setRatings(prev => ({ ...prev, [category]: value }));
+    // Usar persistência para o rascunho de feedback
+    const [feedbackDraft, setFeedbackDraft, clearFeedbackDraft, setFeedbackField] = useFormPersistence('feedback_draft', {
+        ratings: { fala: 0, leitura: 0, escrita: 0, compreensao: 0, audicao: 0, gramatica: 0, pronuncia: 0, vocabulario: 0 },
+        comment: ''
+    });
+
+    const handleSetRating = (category, value) => {
+        setFeedbackField('ratings', { ...feedbackDraft.ratings, [category]: value });
+    };
 
     const resetForm = () => {
-        setRatings({ fala: 0, leitura: 0, escrita: 0, compreensao: 0, audicao: 0, gramatica: 0, pronuncia: 0, vocabulario: 0 });
-        setComment('');
+        clearFeedbackDraft();
     }
 
     const handleSubmit = async () => {
+        const ratings = feedbackDraft.ratings;
+        const comment = feedbackDraft.comment;
+
         if (Object.values(ratings).some(r => r === 0)) {
             toast({ variant: 'destructive', title: 'Avaliação incompleta', description: 'Por favor, preencha todas as estrelas.' });
             return;
@@ -134,13 +141,13 @@ const FeedbackDialog = ({ appointment, isOpen, onClose, onFeedbackSent }) => {
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 py-4 max-h-[50vh] overflow-y-auto pr-2">
-                    {Object.keys(ratings).map(category => (
+                    {Object.keys(feedbackDraft.ratings).map(category => (
                         <div key={category} className="flex justify-between items-center">
                             <p className="capitalize text-sm font-medium">{category.replace('_', ' ')}</p>
-                            <StarRating rating={ratings[category]} setRating={(value) => handleSetRating(category, value)} />
+                            <StarRating rating={feedbackDraft.ratings[category]} setRating={(value) => handleSetRating(category, value)} />
                         </div>
                     ))}
-                    <Textarea placeholder="Adicione um comentário sobre o desempenho do Aluno..." value={comment} onChange={(e) => setComment(e.target.value)} className="mt-4" />
+                    <Textarea placeholder="Adicione um comentário sobre o desempenho do Aluno..." value={feedbackDraft.comment} onChange={(e) => setFeedbackField('comment', e.target.value)} className="mt-4" />
                 </div>
                 <DialogFooter>
                     {/* Botão Salvar com estilo azul */}
@@ -156,10 +163,18 @@ const FeedbackDialog = ({ appointment, isOpen, onClose, onFeedbackSent }) => {
 
 const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
     const { toast } = useToast();
-    const [newDate, setNewDate] = useState(null);
-    const [newTime, setNewTime] = useState('');
-    const [observation, setObservation] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Usar persistência para o rascunho de reagendamento
+    const [rescheduleDraft, setRescheduleDraft, clearRescheduleDraft, setRescheduleField] = useFormPersistence('reschedule_draft', {
+        newDate: null,
+        newTime: '',
+        observation: ''
+    });
+
+    const newDate = rescheduleDraft.newDate ? new Date(rescheduleDraft.newDate) : null;
+    const newTime = rescheduleDraft.newTime;
+    const observation = rescheduleDraft.observation;
     // Filtro inicial de 07:00 a 23:30 (todos os horários no intervalo de trabalho)
     const [availableTimes, setAvailableTimes] = useState(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30'));
     const [loadingSlots, setLoadingSlots] = useState(false);
@@ -355,6 +370,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
                 title: 'Aula Reagendada!',
                 description: `Aula de ${appointment.student.full_name} reagendada para ${format(newDate, 'dd/MM/yyyy')} às ${newTime}.`
             });
+            clearRescheduleDraft();
             onReschedule();
             onClose();
 
@@ -400,7 +416,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
                                 mode="single"
                                 selected={newDate}
                                 onSelect={(date) => {
-                                    setNewDate(date);
+                                    setRescheduleField('newDate', date ? date.toISOString() : null);
                                     setIsCalendarOpen(false);
                                 }}
                                 initialFocus
@@ -412,7 +428,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
 
                     {/* Título de seção com estilo azul */}
                     <h4 className="text-sm font-semibold text-sky-600 flex items-center">Novo Horário</h4>
-                    <Select onValueChange={setNewTime} value={newTime} disabled={loadingSlots || !newDate}>
+                    <Select onValueChange={(v) => setRescheduleField('newTime', v)} value={newTime} disabled={loadingSlots || !newDate}>
                         <SelectTrigger className='w-full'>
                             <SelectValue placeholder={loadingSlots ? "Carregando horários..." : "Selecione um horário disponível..."} />
                         </SelectTrigger>
@@ -434,7 +450,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
                     <Textarea
                         placeholder="Descreva o motivo do reagendamento..."
                         value={observation}
-                        onChange={(e) => setObservation(e.target.value)}
+                        onChange={(e) => setRescheduleField('observation', e.target.value)}
                     />
                 </div>
                 <DialogFooter>

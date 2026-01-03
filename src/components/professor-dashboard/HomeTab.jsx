@@ -22,6 +22,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StudentRequestsList } from '@/components/professor/StudentRequestsList';
 import { ScheduleRequestsPending } from '@/components/admin/ScheduleRequestsPending';
+import { useFormPersistence } from '@/hooks/useFormPersistence';
+import { useNotifications } from '@/hooks/useNotifications';
+import { Archive } from 'lucide-react';
 
 const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
 const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -59,7 +62,7 @@ const HomeTab = ({ dashboardData }) => {
 
   // Estados para matching inteligente
   const [matchingStep, setMatchingStep] = useState(1); // 1: selecionar preferencias, 2: ver resultados
-  const [studentPreferences, setStudentPreferences] = useState({
+  const [studentPreferences, setStudentPreferences, clearStudentPreferences] = useFormPersistence('vincular_student_prefs', {
     days: [], // [0-6] días seleccionados
     time: '08:00' // horario preferido
   });
@@ -84,6 +87,11 @@ const HomeTab = ({ dashboardData }) => {
   const professors = data?.professors || [];
   const allBillings = data?.allBillings || [];
   const classSlots = data?.classSlots || [];
+
+  // Buscar histórico de notificações (resolvidas/arquivadas) para o painel de pendências
+  const { notifications: historyNotifications, loading: loadingHistoryNotifs } = useNotifications(professorId, {
+    status: ['read', 'accepted', 'rejected', 'archived']
+  });
 
   // CORREÇÃO: Calcular nextClass a partir dos appointments centralizados
   const nextClass = useMemo(() => {
@@ -316,12 +324,12 @@ const HomeTab = ({ dashboardData }) => {
     withClasses: pendenciasData.studentsWithAvailableClasses.length,
     expiring: pendenciasData.packagesExpiringSoon.length,
     notifications: pendenciasData.recentNotifications.length,
-    historico: historico.length,
+    historico: (historico?.length || 0) + (historyNotifications?.length || 0),
     total: pendenciasData.studentsWithoutProfessor.length +
       pendenciasData.studentsWithAvailableClasses.length +
       pendenciasData.packagesExpiringSoon.length +
       pendenciasData.recentNotifications.length
-  }), [pendenciasData, historico]);
+  }), [pendenciasData, historico, historyNotifications]);
 
   // Carregar histórico do localStorage
   useEffect(() => {
@@ -689,13 +697,15 @@ const HomeTab = ({ dashboardData }) => {
       setSelectedProfessorId('');
       setProfessorAvailability(null);
       setMatchingStep(1);
-      setStudentPreferences({ days: [], time: '08:00' });
+      clearStudentPreferences();
       setMatchedProfessors([]);
 
       toast({
         title: 'Professor vinculado!',
         description: `${selectedStudentForVinculacao.full_name} foi vinculado(a) a ${selectedProf?.full_name || 'Professor'}.`,
       });
+
+      onUpdate?.();
 
     } catch (error) {
       console.error('Erro ao enviar solicitação:', error);
@@ -1314,49 +1324,94 @@ const HomeTab = ({ dashboardData }) => {
                 {/* Tab: Histórico */}
                 <TabsContent value="historico" className="mt-0">
                   <div className="flex justify-between items-center mb-4">
-                    <p className="text-sm text-slate-500">Pendências ignoradas anteriormente</p>
+                    <p className="text-sm text-slate-500">Histórico de notificações e pendências ignoradas</p>
                     {historico.length > 0 && (
                       <Button variant="ghost" size="sm" onClick={handleLimparHistorico} className="text-red-500 hover:text-red-700">
-                        Limpar tudo
+                        Limpar ignorados
                       </Button>
                     )}
                   </div>
-                  <ScrollArea className="h-[300px]">
-                    {historico.length > 0 ? (
-                      <div className="space-y-2">
-                        {historico.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between p-3 bg-slate-100 rounded-lg border border-slate-200">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-full bg-slate-200">
-                                <EyeOff className="h-4 w-4 text-slate-500" />
+                  <ScrollArea className="h-[400px] pr-2">
+                    <div className="space-y-4">
+                      {/* Notificações Resolvidas do Banco */}
+                      {historyNotifications.length > 0 && (
+                        <div className="space-y-2">
+                          <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Notificações Processadas</h5>
+                          {historyNotifications.map(notif => (
+                            <div key={notif.id} className="p-3 border rounded-lg bg-white shadow-sm">
+                              <div className="flex items-start justify-between mb-1">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-[10px] py-0 h-4">
+                                    {notif.type === 'new_student_assignment' ? 'Novo Aluno' :
+                                      notif.type === 'student_reallocation' ? 'Realocação' : 'Geral'}
+                                  </Badge>
+                                  <p className="font-semibold text-sm">{notif.title}</p>
+                                </div>
+                                <span className="text-[10px] text-slate-400">
+                                  {format(new Date(notif.created_at), "dd/MM/yy HH:mm")}
+                                </span>
                               </div>
-                              <div className="flex-1">
-                                <p className="font-medium text-slate-700">{item.titulo}</p>
-                                <p className="text-sm text-slate-500">{item.descricao}</p>
-                                <p className="text-xs text-slate-400 mt-1">
-                                  Ignorado {formatDistanceToNowStrict(new Date(item.criadoEm), { locale: ptBR, addSuffix: true })}
-                                </p>
+                              <p className="text-xs text-slate-600 line-clamp-2">{notif.description || notif.content?.message}</p>
+                              <div className="flex items-center justify-between mt-2">
+                                <Badge variant={notif.status === 'accepted' ? 'default' : notif.status === 'rejected' ? 'destructive' : 'secondary'} className="text-[9px] py-0 px-1.5 h-4">
+                                  {notif.status === 'accepted' ? 'Aceito' : notif.status === 'rejected' ? 'Rejeitado' : 'Lido'}
+                                </Badge>
+                                {notif.resolved_at && (
+                                  <span className="text-[9px] text-slate-400 italic">
+                                    Resolvido {formatDistanceToNowStrict(new Date(notif.resolved_at), { locale: ptBR, addSuffix: true })}
+                                  </span>
+                                )}
                               </div>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRestaurarPendencia(item)}
-                              className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              Restaurar
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-500">
-                        <History className="h-12 w-12 mx-auto mb-2 text-slate-400" />
-                        <p>Nenhuma pendência ignorada.</p>
-                        <p className="text-sm text-slate-400">Quando você ignorar um aviso, ele aparecerá aqui.</p>
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Pendências Ignoradas Localmente */}
+                      {historico.length > 0 && (
+                        <div className="space-y-2">
+                          <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Avisos Ignorados</h5>
+                          {historico.map((item) => (
+                            <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-full bg-slate-200">
+                                  <EyeOff className="h-4 w-4 text-slate-500" />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm text-slate-700">{item.titulo}</p>
+                                  <p className="text-xs text-slate-500">{item.descricao}</p>
+                                  <p className="text-[10px] text-slate-400 mt-1">
+                                    Ignorado {formatDistanceToNowStrict(new Date(item.criadoEm), { locale: ptBR, addSuffix: true })}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRestaurarPendencia(item)}
+                                className="text-blue-600 border-blue-200 hover:bg-white text-xs h-7 px-2"
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                Restaurar
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {historyNotifications.length === 0 && historico.length === 0 && !loadingHistoryNotifs && (
+                        <div className="text-center py-12 text-slate-500">
+                          <History className="h-12 w-12 mx-auto mb-2 text-slate-300" />
+                          <p>Nenhuma notificação ou pendência no histórico.</p>
+                        </div>
+                      )}
+
+                      {loadingHistoryNotifs && (
+                        <div className="flex justify-center py-4">
+                          <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+                        </div>
+                      )}
+                    </div>
                   </ScrollArea>
                 </TabsContent>
               </>

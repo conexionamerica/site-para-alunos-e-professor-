@@ -549,7 +549,7 @@ const AdminTab = ({ dashboardData }) => {
 
             setIsUserDialogOpen(false);
             clearFormData();
-            // onUpdate?.(); // DESABILITADO: Não atualizar automaticamente, apenas com botões
+            onUpdate?.();
         } catch (error) {
             console.error('Error saving user:', error);
             let errorDescription = error.message || 'Erro desconhecido ao salvar usuário.';

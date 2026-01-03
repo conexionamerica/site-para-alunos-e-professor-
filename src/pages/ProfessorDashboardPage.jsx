@@ -19,7 +19,6 @@ import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import AdminTab from '@/components/professor-dashboard/AdminTab';
 import ServicosTab from '@/components/professor-dashboard/ServicosTab';
 import FinanceiroTab from '@/components/professor-dashboard/FinanceiroTab';
-import HistoricoTab from '@/components/professor-dashboard/HistoricoTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 import { getBrazilDate } from '@/lib/dateUtils';
@@ -212,15 +211,6 @@ const ProfessorDashboardPage = () => {
 
             const data = await fetchProfessorDashboardData(currentUserId, isSuperadmin);
 
-            // Função de update condicional - só recarrega se estiver na aba Serviços
-            const conditionalUpdate = () => {
-                // Apenas recarregar dados automaticamente se estiver na aba "servicos"
-                const currentTab = window.location.hash || '#home';
-                if (currentTab.includes('servicos')) {
-                    fetchData();
-                }
-            };
-
             setDashboardData({
                 data: {
                     ...data,
@@ -233,7 +223,7 @@ const ProfessorDashboardPage = () => {
                 userRole: data.userRole,
                 isSuperadmin: data.isSuperadmin,
                 loading: false,
-                onUpdate: conditionalUpdate // Update condicional em vez de fetchData direto
+                onUpdate: fetchData
             });
         } catch (error) {
             console.error("Erro ao carregar dados do dashboard:", error);
@@ -425,7 +415,6 @@ const ProfessorDashboardPage = () => {
         { id: 'servicos', icon: Headphones, label: 'Serviços', component: ServicosTab, permission: 'servicos' },
         { id: 'financeiro', icon: DollarSign, label: 'Financeiro', component: FinanceiroTab, permission: 'financeiro' },
         { id: 'administracao', icon: Shield, label: 'Administração', component: AdminTab, permission: 'admtab' },
-        { id: 'historico', icon: History, label: 'Histórico', component: HistoricoTab, permission: 'historico' },
     ] : [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab, permission: 'inicio' },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab, permission: 'agenda' },
