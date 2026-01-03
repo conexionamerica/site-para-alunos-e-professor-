@@ -19,6 +19,7 @@ import PreferenciasTab from '@/components/professor-dashboard/PreferenciasTab';
 import AdminTab from '@/components/professor-dashboard/AdminTab';
 import ServicosTab from '@/components/professor-dashboard/ServicosTab';
 import FinanceiroTab from '@/components/professor-dashboard/FinanceiroTab';
+import LogsTab from '@/components/professor-dashboard/LogsTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 import { getBrazilDate } from '@/lib/dateUtils';
@@ -437,6 +438,7 @@ const ProfessorDashboardPage = () => {
         { id: 'servicos', icon: Headphones, label: 'Serviços', component: ServicosTab, permission: 'servicos' },
         { id: 'financeiro', icon: DollarSign, label: 'Financeiro', component: FinanceiroTab, permission: 'financeiro' },
         { id: 'administracao', icon: Shield, label: 'Administração', component: AdminTab, permission: 'admtab' },
+        { id: 'logs', icon: History, label: "Log's", component: LogsTab, permission: 'logs' },
     ] : [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab, permission: 'inicio' },
         { id: 'agenda', icon: Calendar, label: 'Agenda', component: AgendaTab, permission: 'agenda' },
