@@ -445,8 +445,8 @@ const ProfessorDashboardPage = () => {
         return allowedTabs.includes(item.permission);
     });
 
-    // Preparar dashboardData com filtro de professor aplicado
-    const getFilteredDashboardData = () => {
+    // Preparar dashboardData com filtro de professor aplicado - MEMOIZADO
+    const filteredDashboardData = useMemo(() => {
         if (!dashboardData) return null;
 
         // Se não for superadmin, retorna dados normais (já filtrados no backend)
@@ -494,9 +494,7 @@ const ProfessorDashboardPage = () => {
         };
 
         return filteredData;
-    };
-
-    const filteredDashboardData = getFilteredDashboardData();
+    }, [dashboardData, isSuperadmin, globalProfessorFilter]); // Só recria quando essas dependências mudarem
 
     // Componente Sidebar (Layout Mobile/Toggle)
     const Sidebar = () => (
