@@ -885,21 +885,28 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
         const { error: aptErr } = await supabase.from('appointments').insert(appointmentInserts);
         if (aptErr) throw aptErr;
 
-        // BLOQUEAR SLOTS
-        const slotIdsToBlock = new Set();
-        const { data: profSlots } = await supabase.from('class_slots').select('id, day_of_week, start_time').eq('professor_id', effectiveProfessorId);
+        // BLOQUEAR SLOTS (Apenas se houver professor)
+        if (effectiveProfessorId) {
+          const slotIdsToBlock = new Set();
+          const { data: profSlots } = await supabase
+            .from('class_slots')
+            .select('id, day_of_week, start_time')
+            .eq('professor_id', effectiveProfessorId);
 
-        for (const dayIdx of days) {
-          const startTime = dayTimes[dayIdx];
-          for (let i = 0; i < slotsPerClass; i++) {
-            const t = format(add(parse(startTime, 'HH:mm', new Date()), { minutes: i * 15 }), 'HH:mm:ss');
-            const match = profSlots.find(s => s.day_of_week === dayIdx && s.start_time === t);
-            if (match) slotIdsToBlock.add(match.id);
+          if (profSlots && profSlots.length > 0) {
+            for (const dayIdx of days) {
+              const startTime = dayTimes[dayIdx];
+              for (let i = 0; i < slotsPerClass; i++) {
+                const t = format(add(parse(startTime, 'HH:mm', new Date()), { minutes: i * 15 }), 'HH:mm:ss');
+                const match = profSlots.find(s => s.day_of_week === dayIdx && s.start_time === t);
+                if (match) slotIdsToBlock.add(match.id);
+              }
+            }
+
+            if (slotIdsToBlock.size > 0) {
+              await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToBlock));
+            }
           }
-        }
-
-        if (slotIdsToBlock.size > 0) {
-          await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToBlock));
         }
       }
 
