@@ -19,6 +19,7 @@ import { Progress } from '@/components/ui/progress';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { ptBR } from 'date-fns/locale';
 import TicketReportsSection from './TicketReportsSection';
+import { useFormPersistence } from '@/hooks/useFormPersistence';
 
 // Tipos de solicitação (baseado na imagem do usuário, removendo os taxados)
 const TICKET_TYPES = [
@@ -368,12 +369,19 @@ const AttachmentsList = ({ ticketId, canDelete }) => {
 // Dialog para criar novo ticket
 const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperadmin, allProfiles }) => {
     const { toast } = useToast();
-    const [type, setType] = useState('');
-    const [priority, setPriority] = useState('medium');
-    const [initialMessage, setInitialMessage] = useState('');
+    const [ticketDraft, setTicketDraft, clearTicketDraft] = useFormPersistence('create_ticket_form', {
+        type: '',
+        priority: 'medium',
+        initialMessage: '',
+        selectedProfessor: professorId || ''
+    });
+
+    const { type, priority, initialMessage, selectedProfessor } = ticketDraft;
+
+    const setField = (field, value) => setTicketDraft(prev => ({ ...prev, [field]: value }));
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [professors, setProfessors] = useState([]);
-    const [selectedProfessor, setSelectedProfessor] = useState(professorId);
 
     // Load professors list for admin
     useEffect(() => {
@@ -384,7 +392,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
 
     useEffect(() => {
         if (isOpen && !isSuperadmin) {
-            setSelectedProfessor(professorId);
+            setField('selectedProfessor', professorId);
         }
     }, [isOpen, isSuperadmin, professorId]);
 
@@ -503,9 +511,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
                 description: `Seu ticket ${ticket.ticket_number} foi criado com sucesso`
             });
 
-            setType('');
-            setPriority('medium');
-            setInitialMessage('');
+            clearTicketDraft();
             onCreated();
             onClose();
         } catch (error) {
@@ -538,7 +544,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
                     {isSuperadmin && (
                         <div className="space-y-2">
                             <Label>Professor *</Label>
-                            <Select value={selectedProfessor} onValueChange={setSelectedProfessor}>
+                            <Select value={selectedProfessor} onValueChange={(v) => setField('selectedProfessor', v)}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecione o professor" />
                                 </SelectTrigger>
@@ -556,7 +562,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <Label>Tipo de Solicitação *</Label>
-                            <Select value={type} onValueChange={setType}>
+                            <Select value={type} onValueChange={(v) => setField('type', v)}>
                                 <SelectTrigger className="mt-1">
                                     <SelectValue placeholder="Selecionar tipo..." />
                                 </SelectTrigger>
@@ -575,7 +581,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
 
                         <div>
                             <Label>Prioridade *</Label>
-                            <Select value={priority} onValueChange={setPriority}>
+                            <Select value={priority} onValueChange={(v) => setField('priority', v)}>
                                 <SelectTrigger className="mt-1">
                                     <SelectValue />
                                 </SelectTrigger>
@@ -598,7 +604,7 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
                         <Textarea
                             placeholder="Descreva detalhadamente sua solicitação..."
                             value={initialMessage}
-                            onChange={(e) => setInitialMessage(e.target.value)}
+                            onChange={(e) => setField('initialMessage', e.target.value)}
                             rows={6}
                             className="mt-1"
                         />

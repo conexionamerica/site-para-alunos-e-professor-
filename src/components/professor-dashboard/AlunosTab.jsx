@@ -5,6 +5,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { format, getDay, parseISO } from 'date-fns';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
+import { useFormPersistence } from '@/hooks/useFormPersistence';
 import { getBrazilDate } from '@/lib/dateUtils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -384,9 +385,12 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
 
                     // Verificar compatibilidade para cada dia do aluno
                     studentDays.forEach(dayIndex => {
-                        const studentTime = studentSchedule[dayIndex];
+                        const studentTime = studentSchedule[dayIndex]; // "HH:mm"
                         const hasMatch = professorSlots.some(
-                            slot => slot.day_of_week === parseInt(dayIndex) && slot.start_time === studentTime
+                            slot => {
+                                const slotTimeClean = slot.start_time.substring(0, 5); // Pega apenas "HH:mm" de "HH:mm:ss"
+                                return slot.day_of_week === parseInt(dayIndex) && slotTimeClean === studentTime;
+                            }
                         );
                         if (hasMatch) matchingSlots++;
                     });
@@ -637,9 +641,13 @@ const AlunosTab = ({ dashboardData }) => {
     const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
     const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
     const [isChangeProfessorDialogOpen, setIsChangeProfessorDialogOpen] = useState(false);
-    const [messageTitle, setMessageTitle] = useState('');
-    const [messageContent, setMessageContent] = useState('');
-    const [messagePriority, setMessagePriority] = useState('normal');
+    const [messageDraft, setMessageDraft, clearMessageDraft] = useFormPersistence('student_message_form', {
+        title: '',
+        content: '',
+        priority: 'normal'
+    });
+    const { title: messageTitle, content: messageContent, priority: messagePriority } = messageDraft;
+    const setMessageField = (field, value) => setMessageDraft(prev => ({ ...prev, [field]: value }));
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Extrai de forma segura as propriedades
@@ -792,9 +800,7 @@ const AlunosTab = ({ dashboardData }) => {
             });
 
             setIsMessageDialogOpen(false);
-            setMessageTitle('');
-            setMessageContent('');
-            setMessagePriority('normal');
+            clearMessageDraft();
         } catch (error) {
             toast({
                 variant: 'destructive',
@@ -960,7 +966,7 @@ const AlunosTab = ({ dashboardData }) => {
                                         id="title"
                                         placeholder="Ex: Tarefa da próxima aula"
                                         value={messageTitle}
-                                        onChange={(e) => setMessageTitle(e.target.value)}
+                                        onChange={(e) => setMessageField('title', e.target.value)}
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -969,13 +975,13 @@ const AlunosTab = ({ dashboardData }) => {
                                         id="message"
                                         placeholder="Digite sua mensagem..."
                                         value={messageContent}
-                                        onChange={(e) => setMessageContent(e.target.value)}
+                                        onChange={(e) => setMessageField('content', e.target.value)}
                                         rows={5}
                                     />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="priority">Prioridade</Label>
-                                    <Select value={messagePriority} onValueChange={setMessagePriority}>
+                                    <Select value={messagePriority} onValueChange={(v) => setMessageField('priority', v)}>
                                         <SelectTrigger id="priority">
                                             <SelectValue />
                                         </SelectTrigger>
@@ -1020,7 +1026,7 @@ const AlunosTab = ({ dashboardData }) => {
                         onClose={() => setIsChangeProfessorDialogOpen(false)}
                         onUpdate={onUpdate}
                         professors={professors}
-                        classSlots={data.classSlots || []}
+                        classSlots={data.allClassSlots || data.classSlots || []}
                         currentProfessorId={professorId}
                     />
                 </div>

@@ -487,6 +487,8 @@ const ProfessorDashboardPage = () => {
                 classSlots: (dashboardData.data?.classSlots || []).filter(
                     slot => slot.professor_id === globalProfessorFilter
                 ),
+                // Manter todos os slots para lógicas de matching (ex: trocar professor)
+                allClassSlots: dashboardData.data?.classSlots || [],
             },
             // Passar o ID do professor filtrado para os componentes
             filteredProfessorId: globalProfessorFilter,

@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO, addMonths, parse, getDay, add } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getBrazilDate } from '@/lib/dateUtils';
+import { useFormPersistence } from '@/hooks/useFormPersistence';
 import { Input } from '@/components/ui/input';
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from '@/components/ui/badge';
@@ -273,7 +274,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   const [observation, setObservation] = useState('');
 
   // NOVOS ESTADOS PARA DETALHES DO AGENDAMENTO (usaremos para 'Personalizado')
-  const [pckPersonalData, setPckPersonalData] = useState({
+  const [pckPersonalData, setPckPersonalData, clearPckPersonalData] = useFormPersistence('package_assignment_form', {
     packageName: '', // (1) Nome do Pacote
     totalClasses: '',
     duration: '30', // Default duration
@@ -926,16 +927,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       // Limpar campos
       setSelectedStudentId(null);
       setObservation('');
-      setPckPersonalData({
-        packageName: '',
-        totalClasses: '',
-        duration: '30',
-        dayTimes: {},
-        days: [],
-        price: '',
-        startDate: getBrazilDate(),
-        endDate: addMonths(getBrazilDate(), 1)
-      });
+      clearPckPersonalData();
 
       if (onUpdate) onUpdate();
 

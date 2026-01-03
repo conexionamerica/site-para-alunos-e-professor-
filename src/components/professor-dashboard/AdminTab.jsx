@@ -22,6 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatCPF, validateCPF, cleanCPF, maskCPF } from '@/lib/cpfUtils';
 import { formatPhone, validatePhone, cleanPhone, formatCEP, cleanCEP } from '@/lib/phoneUtils';
+import { useFormPersistence } from '@/hooks/useFormPersistence';
 
 const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
@@ -42,8 +43,8 @@ const AdminTab = ({ dashboardData }) => {
     const [professorAvailability, setProfessorAvailability] = useState(null);
     const [availabilityWarning, setAvailabilityWarning] = useState(null);
 
-    // Form state
-    const [formData, setFormData] = useState({
+    // Form state with persistence
+    const [formData, setFormData, clearFormData] = useFormPersistence('admin_user_form', {
         full_name: '',
         username: '',
         email: '',
@@ -547,6 +548,7 @@ const AdminTab = ({ dashboardData }) => {
             }
 
             setIsUserDialogOpen(false);
+            clearFormData();
             // onUpdate?.(); // DESABILITADO: Não atualizar automaticamente, apenas com botões
         } catch (error) {
             console.error('Error saving user:', error);
