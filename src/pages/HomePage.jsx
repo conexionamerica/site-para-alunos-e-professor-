@@ -600,152 +600,19 @@ const HomePage = () => {
           </TabsContent>
 
           <TabsContent value="agenda" className="mt-4 space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard title="Aulas Disponíveis" value={classStats.available} icon={CalendarPlus} loading={loading} />
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {/* Card Aulas Disponíveis OCULTO conforme solicitação */}
+              {/* <StatCard title="Aulas Disponíveis" value={classStats.available} icon={CalendarPlus} loading={loading} /> */}
               <StatCard title="Aulas Pendentes" value={classStats.pending} icon={Clock3} loading={loading} />
               <StatCard title="Aulas Agendadas" value={classStats.scheduled} icon={CalendarClock} loading={loading} />
               <StatCard title="Aulas Realizadas" value={classStats.completed} icon={CalendarCheck} loading={loading} />
             </div>
 
-            {/* BLOQUEO PARA AGENDAMIENTO PONTUAL */}
-            {classStats.rescheduledCount > 0 && classStats.available > 0 && (
-              <div className="p-6 bg-yellow-50 border border-yellow-200 rounded-lg shadow-sm">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <RotateCcw className="h-6 w-6 text-yellow-600" />
-                  Agendar Aula Pontual ({classStats.rescheduledCount} Crédito{classStats.rescheduledCount > 1 ? 's' : ''})
-                </h2>
-                <p className="text-slate-700 mb-4">
-                  Você tem **{classStats.rescheduledCount} crédito(s)** disponível(is) de aulas reagendadas. Escolha uma data e horário específicos.
-                </p>
-                <Dialog open={isSingleScheduleOpen} onOpenChange={setIsSingleScheduleOpen}>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="default"
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                      disabled={classStats.pending > 0}
-                    >
-                      Agendar Aula Pontual
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Agendar Aula Pontual</DialogTitle>
-                      <DialogDescription>Selecione a data e o horário.</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <Calendar
-                        mode="single"
-                        selected={singleSelectedDate}
-                        onSelect={(date) => {
-                          setSingleSelectedDate(date);
-                          setSingleSelectedTime(null);
-                        }}
-                        locale={ptBR}
-                        className="rounded-md border shadow"
-                      />
-                      <Select onValueChange={setSingleSelectedTime} value={singleSelectedTime || ''}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione um horário" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {/* Horários a cada 30 minutos (início de cada hora) */}
-                          {ALL_TIMES.filter((_, i) => i % 2 === 0).map(time => (
-                            <SelectItem key={time} value={time.substring(0, 5) + ':00'}>
-                              {time.substring(0, 5)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <DialogFooter>
-                      <Button onClick={handleSingleScheduleSubmit} disabled={isSubmitting || !singleSelectedDate || !singleSelectedTime}>
-                        {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</> : 'Enviar Pedido de Aula'}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            )}
-            {/* FIN DEL BLOQUEO PARA AGENDAMIENTO PONTUAL */}
+            {/* BLOCO DE AGENDAMENTO PONTUAL OCULTO conforme solicitação */}
+            {/* A funcionalidade de agendamento pontual foi removida da interface do aluno */}
 
-            <div className="p-6 bg-white rounded-lg shadow-sm">
-              <AnimatePresence mode="wait">
-                {schedulingStep === 1 && (
-                  <motion.div key="step1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    <h2 className="text-xl font-bold mb-4">Agendar Minhas Aulas Semanais</h2>
-                    <Alert><Info className="h-4 w-4" /><AlertTitle>Como funciona?</AlertTitle><AlertDescription>Escolha um horário fixo e os dias da semana para suas aulas. Esta seleção será enviada ao professor para aprovação e se repetirá durante a validade do seu pacote.</AlertDescription></Alert>
-                    <div className="mt-6 flex justify-center">
-                      <Button
-                        onClick={handleStartScheduling}
-                        disabled={loadingSlots || classStats.available <= 0 || classStats.pending > 0 || !latestActiveBilling}
-                      >
-                        {classStats.pending > 0 ? 'Aguardando Aprovação...' : (loadingSlots ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando...</> : 'Começar Agendamento')}
-                      </Button>
-                    </div>
-                    {classStats.pending > 0 && (
-                      <Alert className="mt-4 border-sky-400 bg-sky-50 text-sky-800 [&>svg]:text-sky-600">
-                        <Clock3 className="h-4 w-4" />
-                        <AlertTitle>Solicitação em Análise</AlertTitle>
-                        <AlertDescription>Seu pedido de agendamento de **{classesPerWeek} aulas** está sendo analisado pelo professor. Você não poderá fazer um novo agendamento até que este seja aprovado ou rejeitado.</AlertDescription>
-                      </Alert>
-                    )}
-                  </motion.div>
-                )}
-                {schedulingStep === 2 && (
-                  <motion.div key="step2" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}>
-                    <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold">Passo 2: Escolha os dias e o horário</h2><Button variant="outline" onClick={() => { setSchedulingStep(1); setSelectedTime(null); setSelectedDays([]); }}>Voltar</Button></div>
-                    {loadingSlots ? <div className="flex justify-center items-center h-48"><Loader2 className="w-8 h-8 animate-spin" /></div> : (
-                      <div className="space-y-6">
-                        <div>
-                          <h3 className="font-semibold text-lg mb-2">1. Selecione {classesPerWeek} dias da semana</h3>
-                          <div className="flex flex-wrap justify-center gap-2">
-                            {Object.keys(daysOfWeekMap).map(dayIndex => {
-                              const day = parseInt(dayIndex);
-                              const isDayAvailableAtAnyTime = allAvailableSlots.some(slot => slot.day_of_week === day && slot.status === 'active');
-                              return (
-                                <Button key={day} variant={selectedDays.includes(day) ? 'default' : 'outline'} onClick={() => handleDaySelection(day)} disabled={!isDayAvailableAtAnyTime} className={cn("transition-all", selectedDays.includes(day) && "bg-sky-600 hover:bg-sky-700 ring-2 ring-sky-500 ring-offset-2", !isDayAvailableAtAnyTime && "bg-slate-100 text-slate-400 cursor-not-allowed")}>
-                                  {daysOfWeekMap[day]}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        {selectedDays.length > 0 && (
-                          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                            <h3 className="font-semibold text-lg mb-2">2. Selecione um horário</h3>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-72 overflow-y-auto rounded-lg border p-3 bg-slate-50/50">
-                              {availableTimesForSelectedDays.length > 0 ? (
-                                availableTimesForSelectedDays.map(time => (
-                                  <button
-                                    key={time}
-                                    onClick={() => setSelectedTime(time)}
-                                    className={cn(
-                                      "flex items-center justify-between p-2 rounded-md border text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                                      selectedTime === time ? "bg-sky-600 text-white border-sky-700 shadow-md" : "bg-white hover:bg-slate-100"
-                                    )}
-                                  >
-                                    <span className={cn(selectedTime === time ? "text-white" : "text-slate-700")}>{time.substring(0, 5)}</span>
-                                    {selectedTime === time && <CheckCircle2 className="h-5 w-5 text-white" />}
-                                  </button>
-                                ))
-                              ) : (
-                                <p className="col-span-full text-center text-slate-500 py-8">Nenhum horário comum disponível para os dias selecionados.</p>
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </div>
-                    )}
-                    <div className="mt-6 flex justify-end">
-                      <Button onClick={handleSubmitRequest} disabled={isSubmitting || (selectedDays.length > 0 && selectedDays.length !== classesPerWeek) || !selectedTime}>
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                        Enviar Solicitação
-                      </Button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            {/* BLOCO DE AGENDAMENTO SEMANAL OCULTO conforme solicitação */}
+            {/* A funcionalidade de agendamento semanal foi removida da interface do aluno */}
           </TabsContent>
           <TabsContent value="aulas" className="mt-4 space-y-6 bg-white p-6 rounded-lg shadow-sm">
             <h2 className="text-xl font-bold mb-4">Minhas Aulas</h2>
