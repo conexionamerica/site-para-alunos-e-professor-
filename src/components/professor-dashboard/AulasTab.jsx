@@ -299,7 +299,8 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
             setAvailableTimes(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30'));
             setRescheduleField('newTime', '');
         }
-    }, [newDate, fetchAvailableSlots, setRescheduleField]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [newDate, fetchAvailableSlots]);
 
 
     const handleSubmit = async () => {
