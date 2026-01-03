@@ -20,6 +20,8 @@ import { Loader2 } from 'lucide-react';
 import { getBrazilDate } from '@/lib/dateUtils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
+import { formatCPF, validateCPF, cleanCPF, maskCPF } from '@/lib/cpfUtils';
+import { formatPhone, validatePhone, cleanPhone, formatCEP, cleanCEP } from '@/lib/phoneUtils';
 
 const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
@@ -45,8 +47,20 @@ const AdminTab = ({ dashboardData }) => {
         full_name: '',
         username: '',
         email: '',
+        phone: '', // NOVO
         role: 'student',
+        student_code: '',
         assigned_professor_id: '',
+        cpf: '', // NOVO
+        birth_date: '', // NOVO
+        address_street: '', // NOVO
+        address_number: '', // NOVO
+        address_complement: '', // NOVO
+        address_neighborhood: '', // NOVO
+        address_city: '', // NOVO
+        address_state: '', // NOVO
+        address_zip_code: '', // NOVO
+        registration_status: 'pre_registered', // NOVO
         is_active: true
     });
     const [generatedPassword, setGeneratedPassword] = useState('');
@@ -128,7 +142,8 @@ const AdminTab = ({ dashboardData }) => {
     const filteredProfiles = allProfiles.filter(profile => {
         const matchesSearch = profile.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             profile.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            profile.student_code?.toLowerCase().includes(searchTerm.toLowerCase());
+            profile.student_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            profile.cpf?.includes(cleanCPF(searchTerm)); // NOVO: busca por CPF
         const matchesRole = roleFilter === 'all' || profile.role === roleFilter;
         return matchesSearch && matchesRole;
     });
@@ -148,7 +163,7 @@ const AdminTab = ({ dashboardData }) => {
     };
 
     const getNextStudentCode = () => {
-        // Usar allProfiles para garantir que pegamos o maior código de TODO o sistema, 
+        // Usar allProfiles para garantir que pegamos o maior código de ALL os perfis do sistema, 
         // e não apenas dos alunos visíveis no filtro atual.
         const studentCodes = allProfiles
             .filter(p => p.student_code)
@@ -170,9 +185,20 @@ const AdminTab = ({ dashboardData }) => {
             full_name: '',
             username: '',
             email: '',
+            phone: '', // NOVO
             role: 'student',
             student_code: nextCode,
             assigned_professor_id: '',
+            cpf: '', // NOVO
+            birth_date: '', // NOVO
+            address_street: '', // NOVO
+            address_number: '', // NOVO
+            address_complement: '', // NOVO
+            address_neighborhood: '', // NOVO
+            address_city: '', // NOVO
+            address_state: '', // NOVO
+            address_zip_code: '', // NOVO
+            registration_status: 'pre_registered', // NOVO
             is_active: true
         });
         setGeneratedPassword(newPassword);
@@ -195,9 +221,20 @@ const AdminTab = ({ dashboardData }) => {
             full_name: user.full_name || '',
             username: user.username || '',
             email: user.real_email || user.email || '',
+            phone: user.phone || '', // NOVO
             role: user.role || 'student',
             student_code: user.student_code || '',
             assigned_professor_id: user.assigned_professor_id || '',
+            cpf: user.cpf || '', // NOVO
+            birth_date: user.birth_date || '', // NOVO
+            address_street: user.address_street || '', // NOVO
+            address_number: user.address_number || '', // NOVO
+            address_complement: user.address_complement || '', // NOVO
+            address_neighborhood: user.address_neighborhood || '', // NOVO
+            address_city: user.address_city || '', // NOVO
+            address_state: user.address_state || '', // NOVO
+            address_zip_code: user.address_zip_code || '', // NOVO
+            registration_status: user.registration_status || 'pre_registered', // NOVO
             is_active: user.is_active !== false
         });
         setGeneratedPassword('');
@@ -239,13 +276,36 @@ const AdminTab = ({ dashboardData }) => {
 
     // Save user (create or update)
     const handleSaveUser = async () => {
-        if (!formData.full_name.trim() || !formData.email.trim()) {
+        // Validações básicas
+        if (!formData.full_name.trim() || !formData.email.trim() || !formData.phone.trim()) {
             toast({
                 title: 'Erro',
-                description: 'Nome e E-mail são obrigatórios.',
+                description: 'Nome, E-mail e Telefone são obrigatórios.',
                 variant: 'destructive'
             });
             return;
+        }
+
+        // Validar telefone
+        if (!validatePhone(formData.phone)) {
+            toast({
+                title: 'Erro',
+                description: 'Telefone inválido. Use o formato (00) 00000-0000',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        // Validar CPF se fornecido
+        if (formData.cpf && formData.cpf.trim() !== '') {
+            if (!validateCPF(formData.cpf)) {
+                toast({
+                    title: 'Erro',
+                    description: 'CPF inválido. Verifique os dígitos.',
+                    variant: 'destructive'
+                });
+                return;
+            }
         }
 
         setIsSubmitting(true);
@@ -276,9 +336,19 @@ const AdminTab = ({ dashboardData }) => {
                     full_name: (formData.full_name || '').trim(),
                     username: (formData.username || '').trim(),
                     real_email: (formData.email || '').trim(), // Manter real_email atualizado como fonte única
+                    phone: cleanPhone(formData.phone || ''), // NOVO
                     role: formData.role,
                     student_code: formData.role === 'student' ? (formData.student_code?.trim() || null) : null,
                     assigned_professor_id: formData.role === 'student' ? (formData.assigned_professor_id || null) : null,
+                    cpf: formData.cpf ? cleanCPF(formData.cpf) : null, // NOVO
+                    birth_date: formData.birth_date || null, // NOVO
+                    address_street: formData.address_street?.trim() || null, // NOVO
+                    address_number: formData.address_number?.trim() || null, // NOVO
+                    address_complement: formData.address_complement?.trim() || null, // NOVO
+                    address_neighborhood: formData.address_neighborhood?.trim() || null, // NOVO
+                    address_city: formData.address_city?.trim() || null, // NOVO
+                    address_state: formData.address_state || null, // NOVO
+                    address_zip_code: formData.address_zip_code ? cleanCEP(formData.address_zip_code) : null, // NOVO
                     is_active: formData.is_active === true
                 };
 
@@ -393,7 +463,17 @@ const AdminTab = ({ dashboardData }) => {
                         p_role: formData.role,
                         p_username: (formData.username || '').trim(),
                         p_student_code: formData.role === 'student' ? (formData.student_code || null) : null,
-                        p_assigned_professor_id: null
+                        p_assigned_professor_id: null,
+                        p_phone: cleanPhone(formData.phone || ''), // NOVO
+                        p_cpf: formData.cpf ? cleanCPF(formData.cpf) : null, // NOVO
+                        p_birth_date: formData.birth_date || null, // NOVO
+                        p_address_street: formData.address_street?.trim() || null, // NOVO
+                        p_address_number: formData.address_number?.trim() || null, // NOVO
+                        p_address_complement: formData.address_complement?.trim() || null, // NOVO
+                        p_address_neighborhood: formData.address_neighborhood?.trim() || null, // NOVO
+                        p_address_city: formData.address_city?.trim() || null, // NOVO
+                        p_address_state: formData.address_state || null, // NOVO
+                        p_address_zip_code: formData.address_zip_code ? cleanCEP(formData.address_zip_code) : null // NOVO
                     });
 
                     if (rpcError) {
@@ -671,7 +751,7 @@ const AdminTab = ({ dashboardData }) => {
                                     <div className="relative">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                         <Input
-                                            placeholder="Nome ou código do aluno..."
+                                            placeholder="Nome, código ou CPF..."
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                             className="pl-10 w-[250px]"
@@ -690,13 +770,13 @@ const AdminTab = ({ dashboardData }) => {
                                     <TableHeader className="bg-slate-50">
                                         <TableRow>
                                             <TableHead>Nome</TableHead>
-                                            <TableHead>Username</TableHead>
-                                            <TableHead>E-mail</TableHead>
+                                            <TableHead>Telefone</TableHead>
+                                            <TableHead>CPF</TableHead>
                                             <TableHead>Código</TableHead>
                                             <TableHead>Tipo</TableHead>
+                                            <TableHead>Status Cadastro</TableHead>
                                             <TableHead>Professor Vinculado</TableHead>
                                             <TableHead>Estado</TableHead>
-                                            <TableHead>Criado em</TableHead>
                                             <TableHead className="text-right">Ações</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -704,10 +784,8 @@ const AdminTab = ({ dashboardData }) => {
                                         {filteredProfiles.length > 0 ? filteredProfiles.map(profile => (
                                             <TableRow key={profile.id}>
                                                 <TableCell className="font-medium">{profile.full_name}</TableCell>
-                                                <TableCell className="text-slate-500">{profile.username}</TableCell>
-                                                <TableCell className="text-slate-500 max-w-[200px] truncate" title={profile.real_email || profile.email}>
-                                                    {profile.real_email || profile.email || '—'}
-                                                </TableCell>
+                                                <TableCell className="text-slate-500">{formatPhone(profile.phone) || '—'}</TableCell>
+                                                <TableCell className="text-slate-500">{profile.cpf ? maskCPF(profile.cpf) : '—'}</TableCell>
                                                 <TableCell>{profile.student_code || '—'}</TableCell>
                                                 <TableCell>
                                                     <Badge variant={
@@ -717,6 +795,17 @@ const AdminTab = ({ dashboardData }) => {
                                                         {profile.role === 'superadmin' ? 'Admin' :
                                                             profile.role === 'professor' ? 'Professor' : 'Aluno'}
                                                     </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {profile.role === 'student' ? (
+                                                        profile.registration_status === 'complete' ? (
+                                                            <Badge className="bg-green-100 text-green-700 border-green-300">Completo</Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-amber-700 border-amber-300">Pré-cadastro</Badge>
+                                                        )
+                                                    ) : (
+                                                        <Badge className="bg-blue-100 text-blue-700 border-blue-300">—</Badge>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>
                                                     {profile.role === 'student' && profile.assigned_professor_id ? (
@@ -893,7 +982,7 @@ const AdminTab = ({ dashboardData }) => {
 
             {/* Dialog para editar usuário */}
             <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{editingUser ? 'Gerenciar Usuário' : 'Novo Usuário'}</DialogTitle>
                         <DialogDescription>
@@ -922,15 +1011,27 @@ const AdminTab = ({ dashboardData }) => {
                                         placeholder="username"
                                     />
                                 </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="email">Email</Label>
-                                    <Input
-                                        id="email"
-                                        type="email"
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        placeholder="seu@email.com"
-                                    />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="email">Email *</Label>
+                                        <Input
+                                            id="email"
+                                            type="email"
+                                            value={formData.email}
+                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                            placeholder="seu@email.com"
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="phone">Telefone *</Label>
+                                        <Input
+                                            id="phone"
+                                            value={formatPhone(formData.phone)}
+                                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                            placeholder="(00) 00000-0000"
+                                            maxLength={15}
+                                        />
+                                    </div>
                                 </div>
                                 <div className="p-3 bg-slate-100 rounded-lg space-y-2">
                                     <Label className="text-xs text-slate-500 uppercase">Senha Gerada Aleatoriamente</Label>

@@ -66,10 +66,10 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
     const { data: upcomingClasses, error: upcomingClassesError } = await upcomingClassesQuery;
     if (upcomingClassesError && upcomingClassesError.code !== 'PGRST116') throw upcomingClassesError;
 
-    // 4. Fetch de TODOS los Perfiles (para AdmTab y AlunosTab)
+    // 4. Fetch de ALL os Perfis (para AdmTab y AlunosTab)
     const { data: allProfiles, error: allProfilesError } = await supabase
         .from('profiles')
-        .select('*, created_at')
+        .select('*, created_at, phone, cpf, birth_date, registration_status, address_street, address_city, address_state, address_zip_code')
         .order('role', { ascending: true })
         .order('full_name', { ascending: true });
     if (allProfilesError) throw allProfilesError;

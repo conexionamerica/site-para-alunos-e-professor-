@@ -392,7 +392,6 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
         // If we have preloaded profiles passed from parent, use them!
         // This avoids RLS issues since parent (DashboardPage) already fetched them
         if (allProfiles && allProfiles.length > 0) {
-            console.log('Using preloaded profiles:', allProfiles);
             const profs = allProfiles.filter(p =>
                 p.role && p.role.toLowerCase() === 'professor'
             );
@@ -434,7 +433,6 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
         // FALLBACK: If no explicit professors found but data exists, show all users with their roles appended
         // This helps identify if users are registered as 'admin' or something else instead of 'professor'
         if (profs.length === 0 && data && data.length > 0) {
-            console.log('Nenhum "professor" encontrado. Exibindo todos os usuários para debug.');
             profs = data.map(p => ({
                 ...p,
                 full_name: `${p.full_name} [${p.role || 'Sem role'}]`
@@ -1001,8 +999,6 @@ const ServicosTab = ({ dashboardData }) => {
                     filter: isSuperadmin ? undefined : `requester_id=eq.${professorId}`
                 },
                 (payload) => {
-                    console.log('Ticket changed:', payload);
-
                     // Reload tickets
                     fetchTickets();
 

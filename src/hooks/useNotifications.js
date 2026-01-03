@@ -203,7 +203,6 @@ export function useNotifications(userId, filters = {}) {
                     filter: `user_id=eq.${userId}`
                 },
                 (payload) => {
-                    console.log('Notification change:', payload);
                     fetchNotifications();
                 }
             )
