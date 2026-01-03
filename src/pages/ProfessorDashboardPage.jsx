@@ -1,6 +1,6 @@
 // Arquivo: src/pages/ProfessorDashboardPage.jsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History } from 'lucide-react';
