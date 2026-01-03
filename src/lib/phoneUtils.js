@@ -12,46 +12,28 @@ export const cleanPhone = (phone) => {
 };
 
 /**
- * Formata telefone com máscara (00) 00000-0000 ou (00) 0000-0000
- * @param {string} value - Telefone sem formatação
- * @returns {string} Telefone formatado
+ * Formata telefone (formato livre - internacional)
+ * @param {string} value - Telefone
+ * @returns {string} Telefone sem formatação específica
  */
 export const formatPhone = (value) => {
     if (!value) return '';
-
-    const cleaned = cleanPhone(value);
-
-    // Limita a 11 dígitos (celular com 9 dígitos) ou 10 (fixo com 8 dígitos)
-    const limited = cleaned.substring(0, 11);
-
-    // Aplica a máscara progressivamente
-    if (limited.length <= 2) {
-        return limited;
-    } else if (limited.length <= 3) {
-        return `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
-    } else if (limited.length <= 7) {
-        return `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
-    } else if (limited.length <= 10) {
-        // Telefone fixo (00) 0000-0000
-        return `(${limited.slice(0, 2)}) ${limited.slice(2, 6)}-${limited.slice(6)}`;
-    } else {
-        // Celular (00) 00000-0000
-        return `(${limited.slice(0, 2)}) ${limited.slice(2, 7)}-${limited.slice(7)}`;
-    }
+    // Retorna como está - formato livre para telefones internacionais
+    return value;
 };
 
 /**
- * Valida formato de telefone brasileiro
+ * Valida formato de telefone (aceita qualquer formato com números)
  * @param {string} phone - Telefone a ser validado
- * @returns {boolean} true se válido (10 ou 11 dígitos), false caso contrário
+ * @returns {boolean} true se tiver pelo menos 8 dígitos
  */
 export const validatePhone = (phone) => {
     if (!phone) return false;
 
     const cleaned = cleanPhone(phone);
 
-    // Telefone brasileiro tem 10 dígitos (fixo) ou 11 dígitos (celular)
-    return cleaned.length === 10 || cleaned.length === 11;
+    // Telefone válido: pelo menos 8 dígitos (internacional)
+    return cleaned.length >= 8;
 };
 
 /**

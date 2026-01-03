@@ -53,6 +53,7 @@ const AdminTab = ({ dashboardData }) => {
         assigned_professor_id: '',
         cpf: '', // NOVO
         birth_date: '', // NOVO
+        gender: '', // NOVO
         address_street: '', // NOVO
         address_number: '', // NOVO
         address_complement: '', // NOVO
@@ -153,13 +154,25 @@ const AdminTab = ({ dashboardData }) => {
         ? data.classSlots || []
         : (data.classSlots || []).filter(slot => slot.professor_id === professorFilter);
 
-    const generateRandomPassword = () => {
-        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
-        let password = '';
-        for (let i = 0; i < 10; i++) {
-            password += chars.charAt(Math.floor(Math.random() * chars.length));
+    const generatePasswordFromNameAndBirthdate = (fullName, birthDate) => {
+        if (!fullName || !birthDate) {
+            // Fallback para senha aleatória se não tiver os dados
+            const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+            let password = '';
+            for (let i = 0; i < 10; i++) {
+                password += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return password;
         }
-        return password;
+
+        // Pegar primeiro nome (tudo antes do primeiro espaço)
+        const firstName = fullName.trim().split(' ')[0];
+
+        // Pegar ano da data de nascimento
+        const year = new Date(birthDate).getFullYear();
+
+        // Senha = PrimeiroNome + Ano (ex: Maria2005)
+        return `${firstName}${year}`;
     };
 
     const getNextStudentCode = () => {
@@ -178,7 +191,6 @@ const AdminTab = ({ dashboardData }) => {
 
     // Open dialog for new user
     const handleNewUser = () => {
-        const newPassword = generateRandomPassword();
         const nextCode = getNextStudentCode();
         setEditingUser(null);
         setFormData({
@@ -191,6 +203,7 @@ const AdminTab = ({ dashboardData }) => {
             assigned_professor_id: '',
             cpf: '', // NOVO
             birth_date: '', // NOVO
+            gender: '', // NOVO
             address_street: '', // NOVO
             address_number: '', // NOVO
             address_complement: '', // NOVO
@@ -201,7 +214,7 @@ const AdminTab = ({ dashboardData }) => {
             registration_status: 'pre_registered', // NOVO
             is_active: true
         });
-        setGeneratedPassword(newPassword);
+        setGeneratedPassword(''); // Será gerado quando tiver nome e data nascimento
         setIsUserDialogOpen(true);
     };
 
@@ -227,6 +240,7 @@ const AdminTab = ({ dashboardData }) => {
             assigned_professor_id: user.assigned_professor_id || '',
             cpf: user.cpf || '', // NOVO
             birth_date: user.birth_date || '', // NOVO
+            gender: user.gender || '', // NOVO
             address_street: user.address_street || '', // NOVO
             address_number: user.address_number || '', // NOVO
             address_complement: user.address_complement || '', // NOVO
@@ -290,7 +304,7 @@ const AdminTab = ({ dashboardData }) => {
         if (!validatePhone(formData.phone)) {
             toast({
                 title: 'Erro',
-                description: 'Telefone inválido. Use o formato (00) 00000-0000',
+                description: 'Telefone inválido. Deve ter pelo menos 8 dígitos.',
                 variant: 'destructive'
             });
             return;
@@ -342,6 +356,7 @@ const AdminTab = ({ dashboardData }) => {
                     assigned_professor_id: formData.role === 'student' ? (formData.assigned_professor_id || null) : null,
                     cpf: formData.cpf ? cleanCPF(formData.cpf) : null, // NOVO
                     birth_date: formData.birth_date || null, // NOVO
+                    gender: formData.gender || null, // NOVO
                     address_street: formData.address_street?.trim() || null, // NOVO
                     address_number: formData.address_number?.trim() || null, // NOVO
                     address_complement: formData.address_complement?.trim() || null, // NOVO
@@ -456,9 +471,12 @@ const AdminTab = ({ dashboardData }) => {
                 // For new users, create via the new admin_create_user RPC
                 // This prevents session switching issues and centralizes creation
                 try {
+                    // Gerar senha baseada no nome e data de nascimento
+                    const finalPassword = generatePasswordFromNameAndBirthdate(formData.full_name, formData.birth_date);
+
                     const { data: newUserId, error: rpcError } = await supabase.rpc('admin_create_user', {
                         p_email: formData.email.trim(),
-                        p_password: generatedPassword,
+                        p_password: finalPassword,
                         p_full_name: (formData.full_name || '').trim(),
                         p_role: formData.role,
                         p_username: (formData.username || '').trim(),
@@ -467,6 +485,7 @@ const AdminTab = ({ dashboardData }) => {
                         p_phone: cleanPhone(formData.phone || ''), // NOVO
                         p_cpf: formData.cpf ? cleanCPF(formData.cpf) : null, // NOVO
                         p_birth_date: formData.birth_date || null, // NOVO
+                        p_gender: formData.gender || null, // NOVO
                         p_address_street: formData.address_street?.trim() || null, // NOVO
                         p_address_number: formData.address_number?.trim() || null, // NOVO
                         p_address_complement: formData.address_complement?.trim() || null, // NOVO
@@ -1066,6 +1085,44 @@ const AdminTab = ({ dashboardData }) => {
                                         </SelectContent>
                                     </Select>
                                 </div>
+
+                                {/* Campos obrigatórios para geração de senha */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="birth_date_main">Data de Nascimento *</Label>
+                                        <Input
+                                            id="birth_date_main"
+                                            type="date"
+                                            value={formData.birth_date}
+                                            onChange={(e) => {
+                                                setFormData({ ...formData, birth_date: e.target.value });
+                                                // Gerar senha automaticamente
+                                                if (formData.full_name && e.target.value) {
+                                                    const pwd = generatePasswordFromNameAndBirthdate(formData.full_name, e.target.value);
+                                                    setGeneratedPassword(pwd);
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="gender_main">Gênero</Label>
+                                        <Select
+                                            value={formData.gender}
+                                            onValueChange={(value) => setFormData({ ...formData, gender: value })}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="masculino">Masculino</SelectItem>
+                                                <SelectItem value="feminino">Feminino</SelectItem>
+                                                <SelectItem value="outro">Outro</SelectItem>
+                                                <SelectItem value="prefiro_nao_informar">Prefiro não informar</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
                                 {formData.role === 'student' && (
                                     <div className="grid gap-2">
                                         <div className="flex items-center justify-between">
