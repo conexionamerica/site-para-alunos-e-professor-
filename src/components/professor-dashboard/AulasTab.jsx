@@ -293,13 +293,13 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
     useEffect(() => {
         if (newDate && isValid(newDate)) {
             fetchAvailableSlots(newDate);
-            setNewTime('');
+            setRescheduleField('newTime', '');
         } else {
             // Se nenhuma data válida for selecionada, mostra a lista filtrada de 07:00 a 23:30
             setAvailableTimes(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30'));
-            setNewTime('');
+            setRescheduleField('newTime', '');
         }
-    }, [newDate, fetchAvailableSlots]);
+    }, [newDate, fetchAvailableSlots, setRescheduleField]);
 
 
     const handleSubmit = async () => {
