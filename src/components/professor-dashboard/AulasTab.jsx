@@ -172,7 +172,12 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
         observation: ''
     });
 
-    const newDate = rescheduleDraft.newDate ? new Date(rescheduleDraft.newDate) : null;
+    // Usa useMemo para evitar recriação do objeto Date a cada render
+    const newDateString = rescheduleDraft.newDate; // String ou null
+    const newDate = useMemo(() => {
+        return newDateString ? new Date(newDateString) : null;
+    }, [newDateString]);
+
     const newTime = rescheduleDraft.newTime;
     const observation = rescheduleDraft.observation;
     // Filtro inicial de 07:00 a 23:30 (todos os horários no intervalo de trabalho)
@@ -290,6 +295,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
     // FIM DA CORREÇÃO DE LÓGICA
 
     // Efeito para recarregar slots quando a data muda
+    // Usa newDateString (primitivo) como dependência para evitar loop
     useEffect(() => {
         if (newDate && isValid(newDate)) {
             fetchAvailableSlots(newDate);
@@ -297,10 +303,9 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
         } else {
             // Se nenhuma data válida for selecionada, mostra a lista filtrada de 07:00 a 23:30
             setAvailableTimes(ALL_TIMES.filter(time => time >= '07:00' && time <= '23:30'));
-            setRescheduleField('newTime', '');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [newDate, fetchAvailableSlots]);
+    }, [newDateString, fetchAvailableSlots]);
 
 
     const handleSubmit = async () => {
