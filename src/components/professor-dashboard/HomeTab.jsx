@@ -418,13 +418,36 @@ const HomeTab = ({ dashboardData }) => {
 
   // Abrir modal para vincular professor a um aluno
   const handleOpenVincularModal = (student) => {
-    setSelectedStudentForVinculacao(student);
+    // Tenta carregar preferências do perfil do aluno
+    let profilePrefs = student.preferred_schedule || {};
+
+    // Se o perfil não tem agenda definida, deduzimos dos agendamentos (igual AlunosTab)
+    // Isso garante que pendências geradas sem professor apareçam como base para o match
+    const studentApts = allAppointments.filter(apt =>
+      apt.student_id === student.id &&
+      ['scheduled', 'rescheduled', 'pending'].includes(apt.status) &&
+      new Date(apt.class_datetime) >= getBrazilDate()
+    );
+
+    if (studentApts.length > 0) {
+      const deducedPrefs = { ...profilePrefs };
+      studentApts.forEach(apt => {
+        const aptDate = parseISO(apt.class_datetime);
+        const dayOfWeek = getDay(aptDate);
+        const time = format(aptDate, 'HH:mm');
+        if (!deducedPrefs[dayOfWeek]) {
+          deducedPrefs[dayOfWeek] = time;
+        }
+      });
+      profilePrefs = deducedPrefs;
+    }
+
+    const updatedStudent = { ...student, preferred_schedule: profilePrefs };
+    setSelectedStudentForVinculacao(updatedStudent);
     setSelectedProfessorId('');
     setProfessorAvailability(null);
     setMatchingStep(1);
 
-    // Tenta carregar preferências do perfil do aluno
-    const profilePrefs = student.preferred_schedule || {};
     const daysFromProfile = Object.keys(profilePrefs).map(Number).sort((a, b) => a - b);
     const firstDay = daysFromProfile[0];
     const initialTime = firstDay !== undefined ? profilePrefs[firstDay] : '08:00';
@@ -440,19 +463,18 @@ const HomeTab = ({ dashboardData }) => {
 
   // Buscar professores compatíveis com as preferências do aluno
   const handleSearchCompatibleProfessors = async () => {
-    // Se o aluno já tiver um preferred_schedule (do perfil), usamos ele.
-    // Senão, usamos os dias selecionados no Step 1 com o horário único.
-
     let preferredSchedule = {};
 
-    if (selectedStudentForVinculacao?.preferred_schedule && Object.keys(selectedStudentForVinculacao.preferred_schedule).length > 0) {
-      preferredSchedule = selectedStudentForVinculacao.preferred_schedule;
-    } else {
-      // Fallback para seleção manual do Step 1
-      studentPreferences.days.forEach(d => {
+    // Usamos prioritariamente os dias selecionados no Step 1 do modal
+    studentPreferences.days.forEach(d => {
+      // Se o aluno já tiver um horário específico para este dia no perfil/agendamentos, usamos ele.
+      // Caso contrário, usamos o horário selecionado no dropdown do modal.
+      if (selectedStudentForVinculacao?.preferred_schedule && selectedStudentForVinculacao.preferred_schedule[d]) {
+        preferredSchedule[d] = selectedStudentForVinculacao.preferred_schedule[d];
+      } else {
         preferredSchedule[d] = studentPreferences.time;
-      });
-    }
+      }
+    });
 
     const preferredDays = Object.keys(preferredSchedule).map(Number);
 
