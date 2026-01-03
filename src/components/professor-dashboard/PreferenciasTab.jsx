@@ -348,12 +348,17 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
 
 
-  // CORREÇÃO: Usa 'classSlots' extraído do dashboardData
+  // CORREÇÃO: Usa 'classSlots' extraído do dashboardData e FILTRA pelo professor efetivo
   useEffect(() => {
     if (!Array.isArray(classSlots)) return;
 
+    // Se o filtro global for 'all', filtramos localmente pelo professor selecionado no dropdown
+    const filteredClassSlots = (professorIdFromProps === 'all' && effectiveProfessorId)
+      ? classSlots.filter(s => s.professor_id === effectiveProfessorId)
+      : classSlots;
+
     const existingSlotsMap = new Map();
-    classSlots.forEach(slot => {
+    filteredClassSlots.forEach(slot => {
       // Garante que o formato seja HH:mm:ss
       const startTime = slot.start_time.length === 5 ? `${slot.start_time}:00` : slot.start_time;
       existingSlotsMap.set(`${slot.day_of_week}-${startTime}`, slot);
@@ -366,7 +371,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
         const existing = existingSlotsMap.get(key);
 
         if (existing) {
-          mergedSlots.push(existing);
+          mergedSlots.push({ ...existing }); // Clone para evitar mutação indesejada
         } else {
           mergedSlots.push({
             professor_id: effectiveProfessorId,
@@ -379,12 +384,16 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
     }
 
     setSlots(mergedSlots);
-  }, [classSlots, effectiveProfessorId, loading]); // Depende de classSlots e loading
+  }, [classSlots, effectiveProfessorId, loading, professorIdFromProps]); // Depende do ID global e local
 
   // Buscar appointments futuros para marcar slots ocupados
   useEffect(() => {
     const fetchFutureAppointments = async () => {
-      if (!effectiveProfessorId) return;
+      if (!effectiveProfessorId) {
+        setFutureAppointments([]);
+        setSlotOccupancy({});
+        return;
+      }
 
       const { data, error } = await supabase
         .from('appointments')
@@ -430,6 +439,8 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       setSlotOccupancy(occupancy);
     };
 
+    // Limpar ocupação anterior enquanto carrega a nova
+    setSlotOccupancy({});
     fetchFutureAppointments();
   }, [effectiveProfessorId, loading]);
 
@@ -1243,7 +1254,13 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
               </Button>
             </div>
             <div className="space-y-6 mt-6">
-              {daysOfWeek.map((day, index) => {
+              {!effectiveProfessorId ? (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500 border-2 border-dashed rounded-lg">
+                  <CalendarIcon className="h-12 w-12 mb-4 opacity-20" />
+                  <p className="text-lg font-medium">Selecione um professor acima</p>
+                  <p className="text-sm">Para configurar a agenda de preferências, escolha um professor no menu suspenso.</p>
+                </div>
+              ) : daysOfWeek.map((day, index) => {
                 const daySlots = slots?.filter(s => s.day_of_week === index);
                 const areAllActive = daySlots?.filter(s => s.status !== 'filled').every(s => s.status === 'active');
                 return (

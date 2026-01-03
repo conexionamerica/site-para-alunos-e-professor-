@@ -32,52 +32,67 @@ AS $$
 DECLARE
     new_user_id UUID;
     new_profile_id UUID;
+    existing_user_id UUID;
 BEGIN
-    -- 1. Criar usuário Auth
-    INSERT INTO auth.users (
-        instance_id,
-        id,
-        aud,
-        role,
-        email,
-        encrypted_password,
-        email_confirmed_at,
-        recovery_sent_at,
-        last_sign_in_at,
-        raw_app_meta_data,
-        raw_user_meta_data,
-        created_at,
-        updated_at,
-        confirmation_token,
-        email_change,
-        email_change_token_new,
-        recovery_token
-    ) VALUES (
-       '00000000-0000-0000-0000-000000000000',
-        gen_random_uuid(),
-        'authenticated',
-        'authenticated',
-        p_email,
-        crypt(p_password, gen_salt('bf')),
-        NOW(),
-        NOW(),
-        NOW(),
-        jsonb_build_object('provider', 'email', 'providers', ARRAY['email']),
-        jsonb_build_object('full_name', p_full_name, 'role', p_role),
-        NOW(),
-        NOW(),
-        '',
-        '',
-        '',
-        ''
-    ) RETURNING id INTO new_user_id;
+    -- Verificar se já existe perfil com este e-mail
+    SELECT id INTO existing_user_id FROM public.profiles WHERE real_email = p_email LIMIT 1;
+    
+    IF existing_user_id IS NOT NULL THEN
+        RAISE EXCEPTION 'User with this email already exists in profiles';
+    END IF;
+
+    -- Tentar buscar usuário existente em auth.users
+    SELECT id INTO existing_user_id FROM auth.users WHERE email = p_email LIMIT 1;
+    
+    IF existing_user_id IS NOT NULL THEN
+        -- Usuário existe em auth mas não em profiles (órfão) - criar apenas o perfil
+        new_user_id := existing_user_id;
+    ELSE
+        -- Criar novo usuário em auth.users
+        INSERT INTO auth.users (
+            instance_id,
+            id,
+            aud,
+            role,
+            email,
+            encrypted_password,
+            email_confirmed_at,
+            recovery_sent_at,
+            last_sign_in_at,
+            raw_app_meta_data,
+            raw_user_meta_data,
+            created_at,
+            updated_at,
+            confirmation_token,
+            email_change,
+            email_change_token_new,
+            recovery_token
+        ) VALUES (
+           '00000000-0000-0000-0000-000000000000',
+            gen_random_uuid(),
+            'authenticated',
+            'authenticated',
+            p_email,
+            crypt(p_password, gen_salt('bf')),
+            NOW(),
+            NOW(),
+            NOW(),
+            jsonb_build_object('provider', 'email', 'providers', ARRAY['email']),
+            jsonb_build_object('full_name', p_full_name, 'role', p_role),
+            NOW(),
+            NOW(),
+            '',
+            '',
+            '',
+            ''
+        ) RETURNING id INTO new_user_id;
+    END IF;
 
     -- 2. Criar perfil
     INSERT INTO public.profiles (
         id,
         full_name,
         username,
-        email,
         real_email,
         phone,
         role,
@@ -93,14 +108,11 @@ BEGIN
         address_city,
         address_state,
         address_zip_code,
-        is_active,
-        created_at,
-        updated_at
+        is_active
     ) VALUES (
         new_user_id,
         p_full_name,
         COALESCE(NULLIF(p_username, ''), p_email),
-        p_email,
         p_email,
         p_phone,
         p_role,
@@ -116,9 +128,7 @@ BEGIN
         p_address_city,
         p_address_state,
         p_address_zip_code,
-        TRUE,
-        NOW(),
-        NOW()
+        TRUE
     ) RETURNING id INTO new_profile_id;
 
     RETURN new_profile_id;
