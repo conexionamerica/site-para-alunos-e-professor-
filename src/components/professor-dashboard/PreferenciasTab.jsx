@@ -576,7 +576,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   const handleDeleteLog = useCallback(async (log) => {
     const { id: logId, student_id: studentId, package_id: packageId, professor_id: logProfessorId } = log;
 
-    const targetProfessorId = logProfessorId || effectiveProfessorId;
+    const targetProfessorId = logProfessorId;
 
     if (!window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. CANCELAR a fatura ativa mais recente.\n3. EXCLUIR TODAS AS AULAS FUTURAS agendadas.\n4. LIBERAR OS HORÁRIOS RECORRENTES (slots).\n\nConfirma a operação?")) {
       return;
@@ -617,12 +617,21 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       }
 
       // Step 3: Delete future appointments
-      const { count: deletedAptsCount, error: aptDeleteError } = await supabase
+      let aptQuery = supabase
         .from('appointments')
         .delete({ count: 'exact' })
         .eq('student_id', studentId)
         .gte('class_datetime', getBrazilDate().toISOString())
         .in('status', ['scheduled', 'pending', 'rescheduled']);
+
+      // Filtrar pelo professor do log (pode ser nulo se for pendência)
+      if (logProfessorId) {
+        aptQuery = aptQuery.eq('professor_id', logProfessorId);
+      } else {
+        aptQuery = aptQuery.is('professor_id', null);
+      }
+
+      const { count: deletedAptsCount, error: aptDeleteError } = await aptQuery;
 
       if (aptDeleteError) throw aptDeleteError;
 
@@ -639,7 +648,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
       if (reqFetchError && reqFetchError.code !== 'PGRST116') throw reqFetchError;
 
-      if (recurringReq) {
+      if (recurringReq && targetProfessorId) {
         try {
           const horarios = JSON.parse(recurringReq.horarios_propuestos);
           if (horarios && horarios.days && horarios.time) {
