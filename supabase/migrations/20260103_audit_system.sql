@@ -134,6 +134,34 @@ BEGIN
     END LOOP;
 END $$;
 
+-- 4. Captura de Carga Inicial (Snapshots dos dados atuais)
+-- Isso cria um log para cada registro que já existe no sistema
+DO $$
+DECLARE
+    t TEXT;
+    tables_to_audit TEXT[] := ARRAY['profiles', 'appointments', 'billing', 'class_slots', 'solicitudes_clase', 'assigned_packages_log', 'student_messages', 'financial_titles'];
+    v_key_col TEXT;
+BEGIN
+    FOREACH t IN ARRAY tables_to_audit LOOP
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
+            v_key_col := CASE 
+                WHEN (t = 'solicitudes_clase') THEN 'solicitud_id'
+                WHEN (t = 'mensajes') THEN 'mensaje_id'
+                WHEN (t = 'chats') THEN 'chat_id'
+                ELSE 'id' 
+            END;
+            
+            -- Insere um log 'INITIAL' para registros que ainda não possuem log code
+            EXECUTE format('
+                INSERT INTO audit_logs (table_name, record_id, action, new_data, history)
+                SELECT %L, %I, %L, to_jsonb(r), %L || %I::text 
+                FROM %I r
+                WHERE last_log_code IS NULL', 
+                t, v_key_col, 'INITIAL', 'Carga inicial do registro ', v_key_col, t);
+        END IF;
+    END LOOP;
+END $$;
+
 -- 4. Função de reversão (UNDO)
 CREATE OR REPLACE FUNCTION reverse_audit_log(p_log_id UUID) 
 RETURNS JSONB AS $$
@@ -166,7 +194,6 @@ BEGIN
             
         WHEN 'UPDATE' THEN
             -- Reverter UPDATE é restaurar old_data
-            -- Usamos jsonb_populate_record para converter json em record e atualizar
             v_sql := format('UPDATE %I SET (%s) = (SELECT * FROM jsonb_populate_record(NULL::%I, %L)) WHERE %I = %L', 
                             v_log.table_name, 
                             (SELECT string_agg(quote_ident(key), ',') FROM jsonb_each(v_log.old_data)),
@@ -181,6 +208,12 @@ BEGIN
             v_sql := format('INSERT INTO %I SELECT * FROM jsonb_populate_record(NULL::%I, %L)', 
                             v_log.table_name, v_log.table_name, v_log.old_data);
             EXECUTE v_sql;
+            
+        WHEN 'INITIAL' THEN
+            RETURN jsonb_build_object('success', false, 'message', 'Registros de carga inicial não podem ser revertidos automaticamente por segurança.');
+            
+        ELSE
+            RETURN jsonb_build_object('success', false, 'message', 'Tipo de ação não suportada para reversão automática: ' || v_log.action);
     END CASE;
 
     -- Registra no próprio log que ele foi revertido (ou deleta o log? melhor manter e marcar)

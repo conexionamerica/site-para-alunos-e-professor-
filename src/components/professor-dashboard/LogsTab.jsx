@@ -235,6 +235,7 @@ const LogsTab = ({ dashboardData }) => {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">Todas as ações</SelectItem>
+                                <SelectItem value="INITIAL">Carga Inicial</SelectItem>
                                 <SelectItem value="INSERT">Inclusões</SelectItem>
                                 <SelectItem value="UPDATE">Alterações</SelectItem>
                                 <SelectItem value="DELETE">Exclusões</SelectItem>
@@ -280,11 +281,13 @@ const LogsTab = ({ dashboardData }) => {
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
                                                 <Badge variant={
-                                                    log.action === 'INSERT' ? 'success' :
-                                                        log.action === 'UPDATE' ? 'warning' : 'destructive'
+                                                    log.action === 'INITIAL' ? 'outline' :
+                                                        log.action === 'INSERT' ? 'success' :
+                                                            log.action === 'UPDATE' ? 'warning' : 'destructive'
                                                 } className="text-[10px] uppercase font-bold py-0 h-4">
-                                                    {log.action === 'INSERT' ? 'INCLUSÃO' :
-                                                        log.action === 'UPDATE' ? 'ALTERAÇÃO' : 'EXCLUSÃO'}
+                                                    {log.action === 'INITIAL' ? 'CARGA INICIAL' :
+                                                        log.action === 'INSERT' ? 'INCLUSÃO' :
+                                                            log.action === 'UPDATE' ? 'ALTERAÇÃO' : 'EXCLUSÃO'}
                                                 </Badge>
                                                 <span className="font-medium text-slate-800">{log.history}</span>
                                             </div>
@@ -307,9 +310,10 @@ const LogsTab = ({ dashboardData }) => {
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                            className="h-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50 disabled:opacity-30"
                                             onClick={() => handleRevert(log)}
-                                            disabled={reverting === log.id || log.history?.includes('[REVERTIDO')}
+                                            disabled={reverting === log.id || log.history?.includes('[REVERTIDO') || log.action === 'INITIAL'}
+                                            title={log.action === 'INITIAL' ? 'Registros de carga inicial não podem ser revertidos' : 'Reverter esta ação'}
                                         >
                                             {reverting === log.id ? (
                                                 <Loader2 className="h-4 w-4 animate-spin" />
