@@ -641,23 +641,39 @@ const HomeTab = ({ dashboardData }) => {
         preferredScheduleObj[d] = studentPreferences.time;
       });
 
-      // 1. Actualizar el assigned_professor_id y preferred_schedule del estudiante
+      // 1. Apenas salvar as preferências no perfil do aluno. 
+      // O assigned_professor_id permanece NULL aguardando aprovação do professor.
       const { data: updateData, error: updateError } = await supabase
         .from('profiles')
         .update({
-          assigned_professor_id: selectedProfessorId,
+          assigned_professor_id: null,
           preferred_schedule: preferredScheduleObj
         })
         .eq('id', selectedStudentForVinculacao.id)
         .select();
 
       if (updateError || !updateData || updateData.length === 0) {
-        throw updateError || new Error('Falha ao vincular professor e salvar preferências.');
+        throw updateError || new Error('Falha ao salvar preferências do aluno.');
       }
 
 
-      // 2. Notificação é gerada automaticamente pelo gatilho no banco de dados (profiles_trigger)
-      // notify_student_reallocation será disparado pois assigned_professor_id mudou.
+      // 2. Criar notificação manual para o professor solicitando aceite do novo aluno
+      const { error: notifError } = await supabase.from('notifications').insert({
+        user_id: selectedProfessorId,
+        type: 'new_student_assignment',
+        title: 'Novo Aluno Vinculado a Você',
+        description: `O aluno ${selectedStudentForVinculacao.full_name} foi vinculado a você. Aceite para confirmar.`,
+        related_user_id: selectedStudentForVinculacao.id,
+        metadata: {
+          student_id: selectedStudentForVinculacao.id,
+          student_name: selectedStudentForVinculacao.full_name,
+          old_professor_id: selectedStudentForVinculacao.assigned_professor_id,
+          old_professor_name: professors.find(p => p.id === selectedStudentForVinculacao.assigned_professor_id)?.full_name,
+          preferred_schedule: preferredScheduleObj
+        }
+      });
+
+      if (notifError) console.warn('Notification error (non-critical):', notifError);
 
       // 3. Remover o aluno da lista de pendências localmente
       setPendenciasData(prev => ({
@@ -1623,7 +1639,7 @@ const HomeTab = ({ dashboardData }) => {
         {/* Componente de Solicitações de Novos Alunos para Professor */}
         {!isSuperadmin && professorId && (
           <div className="mb-6">
-            <StudentRequestsList professorId={professorId} />
+            <StudentRequestsList professorId={professorId} onUpdate={onUpdate} />
           </div>
         )}
         {/* Modal de Vinculação de Professor (também disponível na visão Início para superadmin) */}

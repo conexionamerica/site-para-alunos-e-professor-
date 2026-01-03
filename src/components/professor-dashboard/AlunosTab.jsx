@@ -436,17 +436,8 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
 
             if (fetchError) throw fetchError;
 
-            // 2. Atualizar appointments para o novo professor
+            // 2. Liberar slots antigos e desvincular appointments
             if (appointments && appointments.length > 0) {
-                const { error: updateError } = await supabase
-                    .from('appointments')
-                    .update({ professor_id: selectedProfessor.id })
-                    .eq('student_id', student.id)
-                    .in('status', ['scheduled', 'rescheduled', 'missed']);
-
-                if (updateError) throw updateError;
-
-                // 3. Liberar slots antigos e ocupar novos
                 const oldSlots = appointments.map(apt => apt.class_slot_id).filter(Boolean);
 
                 if (oldSlots.length > 0) {
@@ -457,48 +448,49 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
                         .in('id', oldSlots);
                 }
 
-                // Ocupar slots do novo professor
-                for (const apt of appointments) {
-                    const aptDate = parseISO(apt.class_datetime);
-                    const dayOfWeek = getDay(aptDate);
-                    const startTime = format(aptDate, 'HH:mm');
+                // Desvincular professor das aulas (ficam pendentes de aprovação pelo novo professor)
+                const { error: updateError } = await supabase
+                    .from('appointments')
+                    .update({
+                        professor_id: null,
+                        class_slot_id: null
+                    })
+                    .eq('student_id', student.id)
+                    .in('status', ['scheduled', 'rescheduled', 'missed']);
 
-                    const { data: newSlot } = await supabase
-                        .from('class_slots')
-                        .select('id')
-                        .eq('professor_id', selectedProfessor.id)
-                        .eq('day_of_week', dayOfWeek)
-                        .eq('start_time', startTime)
-                        .eq('status', 'active')
-                        .maybeSingle();
-
-                    if (newSlot) {
-                        // Atualizar appointment com novo slot
-                        await supabase
-                            .from('appointments')
-                            .update({ class_slot_id: newSlot.id })
-                            .eq('id', apt.id);
-
-                        // Marcar slot como ocupado
-                        await supabase
-                            .from('class_slots')
-                            .update({ status: 'booked' })
-                            .eq('id', newSlot.id);
-                    }
-                }
+                if (updateError) throw updateError;
             }
 
-            // 4. Atualizar assigned_professor_id no perfil do aluno
+            // 3. Desvincular professor no perfil do aluno (gera pendência no painel)
             const { error: profileError } = await supabase
                 .from('profiles')
-                .update({ assigned_professor_id: selectedProfessor.id })
+                .update({ assigned_professor_id: null })
                 .eq('id', student.id);
 
             if (profileError) throw profileError;
 
+            // 4. Criar notificação manual para o novo professor solicitando aprovação da transferência
+            const { error: notifError } = await supabase.from('notifications').insert({
+                user_id: selectedProfessor.id,
+                type: 'student_reallocation',
+                title: 'Solicitação de Transferência de Aluno',
+                description: `O aluno ${student.full_name} foi transferido para você. Aceite para confirmar o vínculo.`,
+                related_user_id: student.id,
+                metadata: {
+                    student_id: student.id,
+                    student_name: student.full_name,
+                    old_professor_id: student.assigned_professor_id,
+                    old_professor_name: professors.find(p => p.id === student.assigned_professor_id)?.full_name || 'Desconhecido',
+                    new_professor_id: selectedProfessor.id,
+                    preferred_schedule: student.preferred_schedule
+                }
+            });
+
+            if (notifError) console.error('Error creating notification:', notifError);
+
             toast({
-                title: 'Professor alterado com sucesso!',
-                description: `${student.full_name} agora está vinculado a ${selectedProfessor.full_name}. ${appointments?.length || 0} aulas foram transferidas.`
+                title: 'Solicitação de transferência enviada!',
+                description: `${student.full_name} agora está aguardando a aprovação de ${selectedProfessor.full_name}.`
             });
 
             onUpdate();

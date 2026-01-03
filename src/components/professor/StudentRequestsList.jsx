@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/customSupabaseClient';
+import { format, parseISO, getDay } from 'date-fns';
 import { Check, X, UserPlus, Users, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
 const daysOfWeekFull = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
-export function StudentRequestsList({ professorId }) {
+export function StudentRequestsList({ professorId, onUpdate }) {
     const { toast } = useToast();
     const { notifications, respondToRequest, loading } = useNotifications(professorId, {
         type: ['new_student_assignment', 'student_reallocation'],
@@ -18,14 +20,81 @@ export function StudentRequestsList({ professorId }) {
     });
 
     const handleAccept = async (notif) => {
+        const studentId = notif.related_user_id || notif.metadata?.student_id;
+
         const { error } = await respondToRequest(notif.id, 'accepted');
 
-        if (!error) {
-            toast({
-                title: 'Aluno Aceito!',
-                description: `Você aceitou ${notif.metadata?.student_name}. Agende as primeiras aulas.`,
-            });
-        } else {
+        if (!error && studentId) {
+            try {
+                // 1. Vincular o aluno ao professor no perfil
+                await supabase
+                    .from('profiles')
+                    .update({ assigned_professor_id: professorId })
+                    .eq('id', studentId);
+
+                // 2. Buscar agendamentos órfãos deste aluno (professor_id is null)
+                const { data: appts } = await supabase
+                    .from('appointments')
+                    .select('*')
+                    .eq('student_id', studentId)
+                    .is('professor_id', null)
+                    .in('status', ['scheduled', 'rescheduled']);
+
+                if (appts && appts.length > 0) {
+                    // 3. Buscar slots do professor
+                    const { data: slots } = await supabase
+                        .from('class_slots')
+                        .select('*')
+                        .eq('professor_id', professorId)
+                        .eq('status', 'active');
+
+                    if (slots && slots.length > 0) {
+                        let linkedCount = 0;
+                        for (const apt of appts) {
+                            const aptDate = parseISO(apt.class_datetime);
+                            const dayOfWeek = getDay(aptDate);
+                            const startTime = format(aptDate, 'HH:mm');
+
+                            const matchingSlot = slots.find(s =>
+                                s.day_of_week === dayOfWeek &&
+                                s.start_time.substring(0, 5) === startTime
+                            );
+
+                            if (matchingSlot) {
+                                // Vincular aula ao professor e ocupar slot
+                                await supabase
+                                    .from('appointments')
+                                    .update({
+                                        professor_id: professorId,
+                                        class_slot_id: matchingSlot.id
+                                    })
+                                    .eq('id', apt.id);
+
+                                await supabase
+                                    .from('class_slots')
+                                    .update({ status: 'booked' })
+                                    .eq('id', matchingSlot.id);
+
+                                linkedCount++;
+                            }
+                        }
+                    }
+                }
+
+                toast({
+                    title: 'Aluno Aceito!',
+                    description: `Você aceitou ${notif.metadata?.student_name} e ele foi vinculado ao seu perfil.`,
+                });
+                onUpdate?.();
+            } catch (err) {
+                console.error('Error linking student on acceptance:', err);
+                toast({
+                    variant: 'destructive',
+                    title: 'Erro no vínculo',
+                    description: 'O aluno foi aceito, mas houve um erro ao atualizar os agendamentos.'
+                });
+            }
+        } else if (error) {
             toast({
                 variant: 'destructive',
                 title: 'Erro',
@@ -43,6 +112,7 @@ export function StudentRequestsList({ professorId }) {
                 description: `Você rejeitou a solicitação de ${notif.metadata?.student_name}.`,
                 variant: 'destructive'
             });
+            onUpdate?.();
         } else {
             toast({
                 variant: 'destructive',
