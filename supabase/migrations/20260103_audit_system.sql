@@ -36,6 +36,7 @@ DECLARE
     v_history TEXT;
     v_record_id TEXT;
     v_full_name TEXT;
+    v_log_code INTEGER;
 BEGIN
     -- Tenta pegar o ID do usuário da sessão do Supabase/PostgREST
     BEGIN
@@ -49,21 +50,11 @@ BEGIN
         SELECT full_name INTO v_full_name FROM profiles WHERE id = v_user_id;
     END IF;
 
-    -- Determina o record_id (convertendo para TEXT)
+    -- Determina o record_id (usa sempre a coluna 'id' convertida para TEXT)
     IF (TG_OP = 'DELETE') THEN
-        v_record_id := CASE 
-            WHEN (TG_TABLE_NAME = 'solicitudes_clase') THEN OLD.solicitud_id::TEXT
-            WHEN (TG_TABLE_NAME = 'mensajes') THEN OLD.mensaje_id::TEXT
-            WHEN (TG_TABLE_NAME = 'chats') THEN OLD.chat_id::TEXT
-            ELSE OLD.id::TEXT 
-        END;
+        v_record_id := OLD.id::TEXT;
     ELSE
-        v_record_id := CASE 
-            WHEN (TG_TABLE_NAME = 'solicitudes_clase') THEN NEW.solicitud_id::TEXT
-            WHEN (TG_TABLE_NAME = 'mensajes') THEN NEW.mensaje_id::TEXT
-            WHEN (TG_TABLE_NAME = 'chats') THEN NEW.chat_id::TEXT
-            ELSE NEW.id::TEXT 
-        END;
+        v_record_id := NEW.id::TEXT;
     END IF;
 
     -- Gera histórico amigável
@@ -76,17 +67,12 @@ BEGIN
     IF (TG_OP = 'INSERT') THEN
         INSERT INTO audit_logs (table_name, record_id, action, new_data, changed_by, history)
         VALUES (TG_TABLE_NAME, v_record_id, TG_OP, to_jsonb(NEW), v_user_id, v_history)
-        RETURNING log_code INTO v_record_id; 
+        RETURNING log_code INTO v_log_code; 
         
         -- Atualiza o registro original com o código do log
-        -- Usamos v_record_id apenas para o UPDATE, não para o ID real
-        IF v_record_id IS NOT NULL THEN
-             -- Evita recursão disparando o trigger novamente
-            IF pg_trigger_depth() < 2 THEN
-                EXECUTE format('UPDATE %I SET last_log_code = %L WHERE %I = %L', TG_TABLE_NAME, v_record_id, 
-                               CASE WHEN TG_TABLE_NAME = 'solicitudes_clase' THEN 'solicitud_id' ELSE 'id' END, 
-                               CASE WHEN TG_TABLE_NAME = 'solicitudes_clase' THEN NEW.solicitud_id ELSE NEW.id END);
-            END IF;
+        IF v_log_code IS NOT NULL AND pg_trigger_depth() < 2 THEN
+            EXECUTE format('UPDATE %I SET last_log_code = $1 WHERE id = $2', TG_TABLE_NAME)
+            USING v_log_code, NEW.id;
         END IF;
 
         RETURN NEW;
@@ -98,12 +84,13 @@ BEGIN
 
         INSERT INTO audit_logs (table_name, record_id, action, old_data, new_data, changed_by, history)
         VALUES (TG_TABLE_NAME, v_record_id, TG_OP, to_jsonb(OLD), to_jsonb(NEW), v_user_id, v_history)
-        RETURNING log_code INTO v_record_id;
+        RETURNING log_code INTO v_log_code;
 
         -- Atualiza o registro original
-        EXECUTE format('UPDATE %I SET last_log_code = %L WHERE %I = %L', TG_TABLE_NAME, v_record_id, 
-                       CASE WHEN TG_TABLE_NAME = 'solicitudes_clase' THEN 'solicitud_id' ELSE 'id' END, 
-                       CASE WHEN TG_TABLE_NAME = 'solicitudes_clase' THEN NEW.solicitud_id ELSE NEW.id END);
+        IF v_log_code IS NOT NULL THEN
+            EXECUTE format('UPDATE %I SET last_log_code = $1 WHERE id = $2', TG_TABLE_NAME)
+            USING v_log_code, NEW.id;
+        END IF;
 
         RETURN NEW;
     ELSIF (TG_OP = 'DELETE') THEN
@@ -123,7 +110,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 DO $$
 DECLARE
     t TEXT;
-    tables_to_audit TEXT[] := ARRAY['profiles', 'appointments', 'billing', 'class_slots', 'solicitudes_clase', 'assigned_packages_log', 'student_messages', 'financial_titles'];
+    tables_to_audit TEXT[] := ARRAY['profiles', 'appointments', 'billing', 'class_slots', 'assigned_packages_log', 'student_messages', 'financial_titles'];
 BEGIN
     FOREACH t IN ARRAY tables_to_audit LOOP
         -- Verifica se a tabela existe antes de tentar alterá-la
@@ -144,25 +131,17 @@ END $$;
 DO $$
 DECLARE
     t TEXT;
-    tables_to_audit TEXT[] := ARRAY['profiles', 'appointments', 'billing', 'class_slots', 'solicitudes_clase', 'assigned_packages_log', 'student_messages', 'financial_titles'];
-    v_key_col TEXT;
+    tables_to_audit TEXT[] := ARRAY['profiles', 'appointments', 'billing', 'class_slots', 'assigned_packages_log', 'student_messages', 'financial_titles'];
 BEGIN
     FOREACH t IN ARRAY tables_to_audit LOOP
         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
-            v_key_col := CASE 
-                WHEN (t = 'solicitudes_clase') THEN 'solicitud_id'
-                WHEN (t = 'mensajes') THEN 'mensaje_id'
-                WHEN (t = 'chats') THEN 'chat_id'
-                ELSE 'id' 
-            END;
-            
             -- Insere um log 'INITIAL' para registros que ainda não possuem log code
             EXECUTE format('
                 INSERT INTO audit_logs (table_name, record_id, action, new_data, history)
-                SELECT %L, %I::text, %L, to_jsonb(r), %L || %I::text 
+                SELECT %L, id::text, %L, to_jsonb(r), %L || id::text 
                 FROM %I r
                 WHERE last_log_code IS NULL', 
-                t, v_key_col, 'INITIAL', 'Carga inicial do registro ', v_key_col, t);
+                t, 'INITIAL', 'Carga inicial do registro ', t);
         END IF;
     END LOOP;
 END $$;
