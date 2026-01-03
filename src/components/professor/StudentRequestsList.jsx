@@ -7,6 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
+const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
+const daysOfWeekFull = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
 export function StudentRequestsList({ professorId }) {
     const { toast } = useToast();
     const { notifications, respondToRequest, loading } = useNotifications(professorId, {
@@ -113,6 +116,25 @@ export function StudentRequestsList({ professorId }) {
                                         <p className="text-xs text-slate-500 mt-1">
                                             {new Date(notif.created_at).toLocaleString('pt-BR')}
                                         </p>
+
+                                        {/* Detalhes de Dias e Horários */}
+                                        {(notif.metadata?.preferred_schedule || notif.metadata?.horarios_propuestos) && (
+                                            <div className="mt-2 flex flex-wrap gap-1">
+                                                {notif.metadata.preferred_schedule ? (
+                                                    Object.entries(notif.metadata.preferred_schedule).map(([dayIdx, time]) => (
+                                                        <Badge key={dayIdx} variant="outline" className="text-[10px] bg-slate-50 border-slate-200">
+                                                            {daysOfWeekMap[dayIdx]} {time?.substring(0, 5)}
+                                                        </Badge>
+                                                    ))
+                                                ) : (
+                                                    Array.isArray(notif.metadata.horarios_propuestos) && notif.metadata.horarios_propuestos.map((hp, idx) => (
+                                                        <Badge key={idx} variant="outline" className="text-[10px] bg-slate-50 border-slate-200">
+                                                            {hp.day?.substring(0, 3)} {hp.time?.substring(0, 5)}
+                                                        </Badge>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex gap-2 ml-4">

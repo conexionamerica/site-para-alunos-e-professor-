@@ -635,48 +635,29 @@ const HomeTab = ({ dashboardData }) => {
       // Buscar dados do professor
       const selectedProf = professors.find(p => p.id === selectedProfessorId);
 
-      // Crear los horarios propuestos basados en las preferencias seleccionadas
-      const horariosPropuestos = studentPreferences.days.map(dayIndex => ({
-        day: daysOfWeek[dayIndex],
-        day_index: dayIndex,
-        time: studentPreferences.time
-      }));
+      // Converter preferências para o formato do banco de dados (object { dayIndex: time })
+      const preferredScheduleObj = {};
+      studentPreferences.days.forEach(d => {
+        preferredScheduleObj[d] = studentPreferences.time;
+      });
 
-      // 1. Actualizar el assigned_professor_id del estudiante usando RPC para mayor seguridad
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('admin_link_professor', {
-          p_student_id: selectedStudentForVinculacao.id,
-          p_professor_id: selectedProfessorId
-        });
+      // 1. Actualizar el assigned_professor_id y preferred_schedule del estudiante
+      const { data: updateData, error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          assigned_professor_id: selectedProfessorId,
+          preferred_schedule: preferredScheduleObj
+        })
+        .eq('id', selectedStudentForVinculacao.id)
+        .select();
 
-
-      if (rpcError || (rpcData && rpcData.success === false)) {
-        // Fallback: Intentar update normal si RPC no existe o falla
-        const { data: updateData, error: updateError } = await supabase
-          .from('profiles')
-          .update({ assigned_professor_id: selectedProfessorId })
-          .eq('id', selectedStudentForVinculacao.id)
-          .select();
-
-        if (updateError || !updateData || updateData.length === 0) {
-          throw updateError || new Error('Falha ao vincular professor via RPC e Update.');
-        }
+      if (updateError || !updateData || updateData.length === 0) {
+        throw updateError || new Error('Falha ao vincular professor e salvar preferências.');
       }
 
 
-      // 2. Crear notificación para el profesor
-      const { error: notifError } = await supabase.from('notifications').insert({
-        user_id: selectedProfessorId,
-        type: 'new_student_assigned',
-        content: {
-          message: `Novo aluno atribuído: ${selectedStudentForVinculacao.full_name}`,
-          student_id: selectedStudentForVinculacao.id,
-          student_name: selectedStudentForVinculacao.full_name,
-          horarios_propuestos: horariosPropuestos
-        }
-      });
-
-      if (notifError) console.warn('Notification error (non-critical):', notifError);
+      // 2. Notificação é gerada automaticamente pelo gatilho no banco de dados (profiles_trigger)
+      // notify_student_reallocation será disparado pois assigned_professor_id mudou.
 
       // 3. Remover o aluno da lista de pendências localmente
       setPendenciasData(prev => ({
