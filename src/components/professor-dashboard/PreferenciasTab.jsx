@@ -708,8 +708,9 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       return;
     }
 
-    if (!effectiveProfessorId) {
-      toast({ variant: 'destructive', title: 'Erro de Autenticação', description: 'ID do Professor não está disponível.' });
+    // Permitir continuar se for superadmin mesmo sem professor (será gerada pendência)
+    if (!effectiveProfessorId && !isSuperadmin) {
+      toast({ variant: 'destructive', title: 'Cuidado', description: 'Selecione um professor ou use o perfil de administrador para gerar pendências.' });
       return;
     }
 
@@ -735,41 +736,32 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       const classDurationMinutes = isAutomaticScheduling ? parseInt(duration, 10) : 30;
       const slotsPerClass = Math.ceil(classDurationMinutes / 15);
 
-      // --- 1. VALIDAÇÃO DE DISPONIBILIDADE (AGENDAMENTO AUTOMÁTICO) ---
+      // --- 1. VALIDAÇÃO DE DISPONIBILIDADE E GERAÇÃO DE AGENDAMENTOS ---
       let appointmentInserts = [];
+      let conflictsCount = 0;
+
       if (isAutomaticScheduling) {
-        // Fetch slots do professor
-        const { data: allSlots, error: slotsError } = await supabase
-          .from('class_slots')
-          .select('*')
-          .eq('professor_id', effectiveProfessorId);
+        let allSlots = [];
+        let existingAppts = [];
 
-        if (slotsError) throw new Error("Erro ao buscar horários do professor.");
+        // Fetch dados do professor apenas se um professor for selecionado
+        if (effectiveProfessorId) {
+          const { data: slots, error: slotsError } = await supabase
+            .from('class_slots')
+            .select('*')
+            .eq('professor_id', effectiveProfessorId);
 
-        // TRAVA DE SEGURANÇA: Verificar se horários escolhidos estão ativos
-        for (const dayIdx of days) {
-          const startTime = dayTimes[dayIdx];
-          const startTimeFull = `${startTime}:00`;
+          if (slotsError) throw new Error("Erro ao buscar horários do professor.");
+          allSlots = slots || [];
 
-          for (let i = 0; i < slotsPerClass; i++) {
-            const slotTimeObj = parse(startTimeFull, 'HH:mm:ss', new Date());
-            const slotTime = format(add(slotTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
-
-            const matchingSlot = allSlots.find(s => s.day_of_week === dayIdx && s.start_time === slotTime);
-
-            if (!matchingSlot || matchingSlot.status !== 'active') {
-              throw new Error(`O horário ${slotTime.substring(0, 5)} na ${daysOfWeek[dayIdx]} não está disponível como 'Ativo' nas suas preferências.`);
-            }
-          }
+          const { data: appts } = await supabase
+            .from('appointments')
+            .select('class_datetime, duration_minutes')
+            .eq('professor_id', effectiveProfessorId)
+            .gte('class_datetime', finalStartDate.toISOString())
+            .in('status', ['scheduled', 'rescheduled']);
+          existingAppts = appts || [];
         }
-
-        // Fetch agendamentos existentes para evitar conflitos dinâmicos
-        const { data: existingAppts } = await supabase
-          .from('appointments')
-          .select('class_datetime, duration_minutes')
-          .eq('professor_id', effectiveProfessorId)
-          .gte('class_datetime', finalStartDate.toISOString())
-          .in('status', ['scheduled', 'rescheduled']);
 
         // GERAR AGENDAMENTOS
         let currentDate = new Date(finalStartDate);
@@ -783,35 +775,74 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
             const startTimeFull = `${startTime}:00`;
             const startTimeObj = parse(startTimeFull, 'HH:mm:ss', currentDate);
 
-            // Verifica conflito com aulas já existentes
             const newSlotStart = startTimeObj;
             const newSlotEnd = add(newSlotStart, { minutes: classDurationMinutes });
 
-            const hasConflict = (existingAppts || []).some(apt => {
-              const aptStart = parseISO(apt.class_datetime);
-              const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
-              return (newSlotStart < aptEnd && newSlotEnd > aptStart);
-            });
+            let hasConflict = false;
+            let isInactive = false;
 
-            if (!hasConflict) {
-              const primarySlot = allSlots.find(s => s.day_of_week === dayIdx && s.start_time === startTimeFull);
+            if (effectiveProfessorId) {
+              // Verifica se horários escolhidos estão ativos
+              for (let i = 0; i < slotsPerClass; i++) {
+                const slotTimeObj = parse(startTimeFull, 'HH:mm:ss', new Date());
+                const slotTime = format(add(slotTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
+                const matchingSlot = allSlots.find(s => s.day_of_week === dayIdx && s.start_time === slotTime);
+                if (!matchingSlot || matchingSlot.status !== 'active') {
+                  isInactive = true;
+                  break;
+                }
+              }
 
+              // Verifica conflito com aulas já existentes
+              hasConflict = existingAppts.some(apt => {
+                const aptStart = parseISO(apt.class_datetime);
+                const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
+                return (newSlotStart < aptEnd && newSlotEnd > aptStart);
+              });
+            }
+
+            // Se houver conflito ou estiver inativo, incrementamos contador
+            if (hasConflict || isInactive) {
+              conflictsCount++;
+              // Se o usuário optar por gerar pendência, criamos sem professor
               appointmentInserts.push({
                 student_id: selectedStudentId,
-                professor_id: effectiveProfessorId,
+                professor_id: null, // Pendência
                 class_datetime: newSlotStart.toISOString(),
-                class_slot_id: primarySlot?.id,
+                class_slot_id: null,
                 status: 'scheduled',
                 duration_minutes: classDurationMinutes,
               });
-              classesScheduled++;
+            } else {
+              // Tudo OK, cria com o professor (ou sem, se nenhum foi selecionado)
+              const primarySlot = effectiveProfessorId
+                ? allSlots.find(s => s.day_of_week === dayIdx && s.start_time === startTimeFull)
+                : null;
+
+              appointmentInserts.push({
+                student_id: selectedStudentId,
+                professor_id: effectiveProfessorId || null,
+                class_datetime: newSlotStart.toISOString(),
+                class_slot_id: primarySlot?.id || null,
+                status: 'scheduled',
+                duration_minutes: classDurationMinutes,
+              });
             }
+            classesScheduled++;
           }
           currentDate = add(currentDate, { days: 1 });
         }
 
+        // --- SINALIZAÇÃO DE CONFLITOS ---
+        if (effectiveProfessorId && conflictsCount > 0) {
+          if (!window.confirm(`Sinalização de Agenda: O professor selecionado possui ${conflictsCount} conflitos de horário ou horários inativos para este pacote.\n\nDeseja gerar essas ${conflictsCount} aulas como PENDÊNCIAS (sem professor atribuído)?`)) {
+            setIsSubmittingPackage(false);
+            return;
+          }
+        }
+
         if (appointmentInserts.length === 0) {
-          throw new Error("Não foi possível agendar nenhuma aula no período selecionado. Verifique conflitos na agenda.");
+          throw new Error("Não foi possível agendar nenhuma aula no período selecionado. Verifique os dias escolhidos.");
         }
       }
 
@@ -941,11 +972,12 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
                 {professorIdFromProps === 'all' && (
                   <div className="space-y-2">
                     <Label>Professor Titular das Aulas</Label>
-                    <Select value={effectiveProfessorId || ''} onValueChange={setLocalProfessorId}>
+                    <Select value={effectiveProfessorId || 'none'} onValueChange={(v) => setLocalProfessorId(v === 'none' ? null : v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o professor" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="none">Sem Professor (Gerar Pendência)</SelectItem>
                         {professors.map(prof => (
                           <SelectItem key={prof.id} value={prof.id}>{prof.full_name}</SelectItem>
                         ))}
