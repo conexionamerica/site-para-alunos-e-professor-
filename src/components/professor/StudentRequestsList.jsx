@@ -119,20 +119,23 @@ export function StudentRequestsList({ professorId }) {
 
                                         {/* Detalhes de Dias e Horários */}
                                         {(notif.metadata?.preferred_schedule || notif.metadata?.horarios_propuestos) && (
-                                            <div className="mt-2 flex flex-wrap gap-1">
-                                                {notif.metadata.preferred_schedule ? (
-                                                    Object.entries(notif.metadata.preferred_schedule).map(([dayIdx, time]) => (
-                                                        <Badge key={dayIdx} variant="outline" className="text-[10px] bg-slate-50 border-slate-200">
-                                                            {daysOfWeekMap[dayIdx]} {time?.substring(0, 5)}
-                                                        </Badge>
-                                                    ))
-                                                ) : (
-                                                    Array.isArray(notif.metadata.horarios_propuestos) && notif.metadata.horarios_propuestos.map((hp, idx) => (
-                                                        <Badge key={idx} variant="outline" className="text-[10px] bg-slate-50 border-slate-200">
-                                                            {hp.day?.substring(0, 3)} {hp.time?.substring(0, 5)}
-                                                        </Badge>
-                                                    ))
-                                                )}
+                                            <div className="mt-2">
+                                                <p className="text-[10px] font-medium text-slate-500 mb-1 uppercase tracking-wider">Horários das aulas:</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {notif.metadata.preferred_schedule ? (
+                                                        Object.entries(notif.metadata.preferred_schedule).map(([dayIdx, time]) => (
+                                                            <Badge key={dayIdx} variant="outline" className="text-[10px] bg-slate-50 border-slate-200">
+                                                                {daysOfWeekMap[dayIdx]} {time?.substring(0, 5)}
+                                                            </Badge>
+                                                        ))
+                                                    ) : (
+                                                        Array.isArray(notif.metadata.horarios_propuestos) && notif.metadata.horarios_propuestos.map((hp, idx) => (
+                                                            <Badge key={idx} variant="outline" className="text-[10px] bg-slate-50 border-slate-200">
+                                                                {hp.day?.substring(0, 3)} {hp.time?.substring(0, 5)}
+                                                            </Badge>
+                                                        ))
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
