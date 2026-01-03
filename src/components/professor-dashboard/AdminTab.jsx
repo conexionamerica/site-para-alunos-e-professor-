@@ -1251,6 +1251,168 @@ const AdminTab = ({ dashboardData }) => {
                             </div>
                         )}
 
+                        {/* Seção de Dados Complementares para EDIÇÃO */}
+                        {editingUser && (
+                            <div className="border-t pt-4 mt-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="font-semibold text-sm text-slate-700">
+                                        Dados Complementares
+                                    </h4>
+                                    {editingUser.registration_status === 'complete' ? (
+                                        <Badge className="bg-green-100 text-green-700 border-green-300">
+                                            Cadastro Completo
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="text-amber-700 border-amber-300">
+                                            Pré-cadastro
+                                        </Badge>
+                                    )}
+                                </div>
+                                <p className="text-xs text-slate-500 mb-4">
+                                    Atualize os dados para cadastro completo. Necessário para contratos e títulos financeiros.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="edit_phone">Telefone *</Label>
+                                        <Input
+                                            id="edit_phone"
+                                            value={formatPhone(formData.phone)}
+                                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                            placeholder="(00) 00000-0000"
+                                            maxLength={15}
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="edit_cpf">CPF</Label>
+                                        <Input
+                                            id="edit_cpf"
+                                            value={formatCPF(formData.cpf)}
+                                            onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                                            placeholder="000.000.000-00"
+                                            maxLength={14}
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="edit_birth_date">Data de Nascimento</Label>
+                                        <Input
+                                            id="edit_birth_date"
+                                            type="date"
+                                            value={formData.birth_date}
+                                            onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="mt-4">
+                                    <h5 className="font-medium text-sm text-slate-700 mb-3">Endereço</h5>
+                                    <div className="grid gap-3">
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div className="col-span-2 grid gap-2">
+                                                <Label htmlFor="edit_address_street">Rua</Label>
+                                                <Input
+                                                    id="edit_address_street"
+                                                    value={formData.address_street}
+                                                    onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
+                                                    placeholder="Nome da rua"
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="edit_address_number">Número</Label>
+                                                <Input
+                                                    id="edit_address_number"
+                                                    value={formData.address_number}
+                                                    onChange={(e) => setFormData({ ...formData, address_number: e.target.value })}
+                                                    placeholder="123"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="edit_address_complement">Complemento</Label>
+                                                <Input
+                                                    id="edit_address_complement"
+                                                    value={formData.address_complement}
+                                                    onChange={(e) => setFormData({ ...formData, address_complement: e.target.value })}
+                                                    placeholder="Apto, bloco..."
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="edit_address_neighborhood">Bairro</Label>
+                                                <Input
+                                                    id="edit_address_neighborhood"
+                                                    value={formData.address_neighborhood}
+                                                    onChange={(e) => setFormData({ ...formData, address_neighborhood: e.target.value })}
+                                                    placeholder="Nome do bairro"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="edit_address_city">Cidade</Label>
+                                                <Input
+                                                    id="edit_address_city"
+                                                    value={formData.address_city}
+                                                    onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
+                                                    placeholder="Cidade"
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="edit_address_state">Estado</Label>
+                                                <Select
+                                                    value={formData.address_state}
+                                                    onValueChange={(value) => setFormData({ ...formData, address_state: value })}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="UF" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="AC">AC</SelectItem>
+                                                        <SelectItem value="AL">AL</SelectItem>
+                                                        <SelectItem value="AP">AP</SelectItem>
+                                                        <SelectItem value="AM">AM</SelectItem>
+                                                        <SelectItem value="BA">BA</SelectItem>
+                                                        <SelectItem value="CE">CE</SelectItem>
+                                                        <SelectItem value="DF">DF</SelectItem>
+                                                        <SelectItem value="ES">ES</SelectItem>
+                                                        <SelectItem value="GO">GO</SelectItem>
+                                                        <SelectItem value="MA">MA</SelectItem>
+                                                        <SelectItem value="MT">MT</SelectItem>
+                                                        <SelectItem value="MS">MS</SelectItem>
+                                                        <SelectItem value="MG">MG</SelectItem>
+                                                        <SelectItem value="PA">PA</SelectItem>
+                                                        <SelectItem value="PB">PB</SelectItem>
+                                                        <SelectItem value="PR">PR</SelectItem>
+                                                        <SelectItem value="PE">PE</SelectItem>
+                                                        <SelectItem value="PI">PI</SelectItem>
+                                                        <SelectItem value="RJ">RJ</SelectItem>
+                                                        <SelectItem value="RN">RN</SelectItem>
+                                                        <SelectItem value="RS">RS</SelectItem>
+                                                        <SelectItem value="RO">RO</SelectItem>
+                                                        <SelectItem value="RR">RR</SelectItem>
+                                                        <SelectItem value="SC">SC</SelectItem>
+                                                        <SelectItem value="SP">SP</SelectItem>
+                                                        <SelectItem value="SE">SE</SelectItem>
+                                                        <SelectItem value="TO">TO</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="edit_address_zip_code">CEP</Label>
+                                                <Input
+                                                    id="edit_address_zip_code"
+                                                    value={formatCEP(formData.address_zip_code)}
+                                                    onChange={(e) => setFormData({ ...formData, address_zip_code: e.target.value })}
+                                                    placeholder="00000-000"
+                                                    maxLength={9}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* PERMISSÕES: Agora gerenciadas exclusivamente na aba "Perfis" */}
                         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                             <p className="text-xs text-blue-800">
