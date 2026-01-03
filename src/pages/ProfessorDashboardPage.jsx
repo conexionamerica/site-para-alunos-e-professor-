@@ -726,10 +726,16 @@ const ProfessorDashboardPage = () => {
                 <main className="flex-1 overflow-x-hidden overflow-y-auto w-full">
                     {/* Container fluido com padding responsivo */}
                     <div className="w-full py-4 lg:py-8">
-                        <Tabs value={activeTab} onOpenChange={setActiveTab} className="h-full">
-                            {/* Tabs Content */}
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+                            {/* Tabs Content - TODOS renderizados simultaneamente para manter estado */}
                             {navItems.map(item => (
-                                <TabsContent key={item.id} value={item.id} className="mt-0">
+                                <TabsContent
+                                    key={item.id}
+                                    value={item.id}
+                                    className="mt-0"
+                                    style={{ display: activeTab === item.id ? 'block' : 'none' }}
+                                    forceMount={true}
+                                >
                                     {/* Passar dashboardData filtrado para os componentes */}
                                     <item.component
                                         dashboardData={{
