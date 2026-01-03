@@ -5,8 +5,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     log_code SERIAL,                     -- Código sequencial único e fácil de ler
     table_name TEXT NOT NULL,            -- Nome da tabela afetada
-    record_id UUID,                      -- ID do registro afetado
-    action TEXT NOT NULL,                -- INSERT, UPDATE, DELETE
+    record_id TEXT,                      -- ID do registro afetado (armazenado como texto para suportar UUID e INT)
+    action TEXT NOT NULL,                -- INSERT, UPDATE, DELETE, INITIAL
     old_data JSONB,                      -- Dados antes da alteração
     new_data JSONB,                      -- Dados após a alteração
     changed_by UUID REFERENCES profiles(id), -- Usuário que realizou a ação
@@ -26,7 +26,7 @@ RETURNS TRIGGER AS $$
 DECLARE
     v_user_id UUID;
     v_history TEXT;
-    v_record_id UUID;
+    v_record_id TEXT;
     v_full_name TEXT;
 BEGIN
     -- Tenta pegar o ID do usuário da sessão do Supabase/PostgREST
@@ -41,23 +41,20 @@ BEGIN
         SELECT full_name INTO v_full_name FROM profiles WHERE id = v_user_id;
     END IF;
 
-    -- Determina o record_id (geralmente a coluna 'id', ajustando para tabelas com nomes diferentes)
+    -- Determina o record_id (convertendo para TEXT)
     IF (TG_OP = 'DELETE') THEN
-        -- Tenta pegar o ID do registro (assume 'id' ou o primeiro campo UUID)
         v_record_id := CASE 
-            WHEN (OLD.id IS NOT NULL) THEN OLD.id 
-            WHEN (TG_TABLE_NAME = 'solicitudes_clase') THEN OLD.solicitud_id
-            WHEN (TG_TABLE_NAME = 'mensajes') THEN OLD.mensaje_id
-            WHEN (TG_TABLE_NAME = 'chats') THEN OLD.chat_id
-            ELSE NULL 
+            WHEN (TG_TABLE_NAME = 'solicitudes_clase') THEN OLD.solicitud_id::TEXT
+            WHEN (TG_TABLE_NAME = 'mensajes') THEN OLD.mensaje_id::TEXT
+            WHEN (TG_TABLE_NAME = 'chats') THEN OLD.chat_id::TEXT
+            ELSE OLD.id::TEXT 
         END;
     ELSE
         v_record_id := CASE 
-            WHEN (NEW.id IS NOT NULL) THEN NEW.id 
-            WHEN (TG_TABLE_NAME = 'solicitudes_clase') THEN NEW.solicitud_id
-            WHEN (TG_TABLE_NAME = 'mensajes') THEN NEW.mensaje_id
-            WHEN (TG_TABLE_NAME = 'chats') THEN NEW.chat_id
-            ELSE NULL 
+            WHEN (TG_TABLE_NAME = 'solicitudes_clase') THEN NEW.solicitud_id::TEXT
+            WHEN (TG_TABLE_NAME = 'mensajes') THEN NEW.mensaje_id::TEXT
+            WHEN (TG_TABLE_NAME = 'chats') THEN NEW.chat_id::TEXT
+            ELSE NEW.id::TEXT 
         END;
     END IF;
 
@@ -154,7 +151,7 @@ BEGIN
             -- Insere um log 'INITIAL' para registros que ainda não possuem log code
             EXECUTE format('
                 INSERT INTO audit_logs (table_name, record_id, action, new_data, history)
-                SELECT %L, %I, %L, to_jsonb(r), %L || %I::text 
+                SELECT %L, %I::text, %L, to_jsonb(r), %L || %I::text 
                 FROM %I r
                 WHERE last_log_code IS NULL', 
                 t, v_key_col, 'INITIAL', 'Carga inicial do registro ', v_key_col, t);
