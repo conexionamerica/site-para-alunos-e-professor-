@@ -272,7 +272,7 @@ const ProfessorDashboardPage = () => {
                 schema: 'public',
                 table: 'appointments'
             }, () => {
-                fetchData();
+                // fetchData(); // DESABILITADO: Causava refresh automático e perda de dados
             })
             .subscribe();
 
@@ -283,7 +283,7 @@ const ProfessorDashboardPage = () => {
                 schema: 'public',
                 table: 'solicitudes_clase'
             }, () => {
-                fetchData();
+                // fetchData(); // DESABILITADO: Causava refresh automático e perda de dados
             })
             .subscribe();
 
@@ -294,7 +294,7 @@ const ProfessorDashboardPage = () => {
                 schema: 'public',
                 table: 'profiles'
             }, () => {
-                fetchData();
+                // fetchData(); // DESABILITADO: Causava refresh automático e perda de dados
             })
             .subscribe();
 
