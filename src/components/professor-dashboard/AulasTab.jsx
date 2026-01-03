@@ -672,7 +672,12 @@ const AulasTab = ({ dashboardData }) => {
 
     const handleOpenReschedule = (appointment) => {
         // Adiciona o customPackageId e professorId ao objeto appointment (necessário para o Dialog)
-        setSelectedAppointment({ ...appointment, customPackageId, professorId });
+        // IMPORTANTE: Usa o professor_id DA AULA, não o do usuário logado
+        setSelectedAppointment({
+            ...appointment,
+            customPackageId,
+            professorId: appointment.professor_id // Usa o professor da aula, não o logado
+        });
         setIsRescheduleDialogOpen(true);
     }
 
