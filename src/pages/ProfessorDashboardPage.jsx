@@ -119,8 +119,18 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         .select('*');
     if (logsError) throw logsError;
 
-    const { data: chatList, error: chatListError } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
-    if (chatListError && chatListError.code !== '42883') throw chatListError;
+    // 9. Fetch de Chats (Superadmin ve todos, profesor solo los suyos)
+    const { data: chatList, error: chatListError } = await supabase.rpc('get_chat_list_v2', {
+        p_prof_id: isSuperadmin ? null : professorId
+    });
+    if (chatListError) {
+        console.error("Erro ao buscar lista de chats:", chatListError);
+        // Fallback para RPC antiga se a nova falhar (migração ainda não aplicada)
+        if (chatListError.code === 'PGRST202') {
+            const { data: oldChatList } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
+            chatList = oldChatList || [];
+        }
+    }
 
     // 10. Fetch de configurações de role (permissões de abas)
     const { data: roleSettings, error: roleSettingsError } = await supabase
@@ -312,11 +322,23 @@ const ProfessorDashboardPage = () => {
             if (!user?.id) return;
 
             try {
-                // 1. Buscar os IDs dos chats que pertencem a este professor
-                const { data: chats, error: chatsError } = await supabase
-                    .from('chats')
-                    .select('chat_id')
-                    .eq('profesor_id', user.id);
+                // 1. Buscar os IDs dos chats (Superadmin vê todos, professor vê apenas os seus)
+                let chatsQuery = supabase.from('chats').select('chat_id');
+
+                // Verificar se o usuário é superadmin para decidir o filtro
+                const { data: userProfile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                const isSuperadmin = userProfile?.role === 'superadmin' || userProfile?.role === 'admin';
+
+                if (!isSuperadmin) {
+                    chatsQuery = chatsQuery.eq('profesor_id', user.id);
+                }
+
+                const { data: chats, error: chatsError } = await chatsQuery;
 
                 if (chatsError) throw chatsError;
                 if (!chats || chats.length === 0) {

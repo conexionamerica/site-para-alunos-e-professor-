@@ -153,6 +153,7 @@ const ConversasTab = ({ dashboardData }) => {
   // Extração segura das propriedades
   const professorId = dashboardData?.professorId;
   const professorName = dashboardData?.professorName || 'Professor';
+  const isSuperadmin = dashboardData?.isSuperadmin || false;
   const chatListData = dashboardData?.data?.chatList || []; // Assumindo que a lista de chats agregada vem em dashboardData.data.chatList
   const loading = dashboardData?.loading || false;
 
@@ -163,26 +164,31 @@ const ConversasTab = ({ dashboardData }) => {
 
   const fetchChatList = useCallback(async () => {
     if (!professorId) return;
-    // Otimização: A lista de chats deve vir do componente pai (ProfessorDashboardPage)
-    // Se a lista já foi carregada, usaremos ela para evitar re-fetch desnecessário
+
     if (chatListData.length > 0 && !loading) {
       setChatList(chatListData);
       return;
     }
 
-    // Se não houver dados ou estiver carregando, forçar a busca (fallback)
-    // No entanto, no escopo deste exercício, confiaremos que o pai fará o fetch inicial.
-    // Manteremos a busca aqui caso o pai não passe a lista de chats completa (chatList)
     if (!loading) {
-      const { data, error } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
+      const { data, error } = await supabase.rpc('get_chat_list_v2', {
+        p_prof_id: isSuperadmin ? null : professorId
+      });
+
       if (error) {
         console.error("Error fetching chat list:", error);
-        toast({ variant: 'destructive', title: 'Erro ao carregar conversas', description: error.message });
+        // Fallback para RPC antiga
+        if (error.code === 'PGRST202' && !isSuperadmin) {
+          const { data: fallbackData } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
+          setChatList(fallbackData || []);
+        } else {
+          toast({ variant: 'destructive', title: 'Erro ao carregar conversas', description: error.message });
+        }
       } else {
         setChatList(data || []);
       }
     }
-  }, [professorId, chatListData.length, loading, toast]); // Adiciona dependências de chatListData e loading
+  }, [professorId, chatListData.length, loading, toast, isSuperadmin]);
 
   // Função para buscar contagem de mensagens não lidas por chat
   const fetchUnreadCounts = useCallback(async () => {
@@ -217,19 +223,23 @@ const ConversasTab = ({ dashboardData }) => {
     if (!professorId) return;
 
     const handleInserts = (payload) => {
-      // CORREÇÃO: Força o re-fetch da lista de chats para atualizar last_message e unreadCount
       fetchChatList();
-      fetchUnreadCounts(); // Atualiza contagem de não lidas
+      fetchUnreadCounts();
     };
 
     const channel = supabase.channel('professor-chat-list')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes' }, handleInserts)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats', filter: `profesor_id=eq.${professorId}` }, handleInserts)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'chats',
+        filter: isSuperadmin ? undefined : `profesor_id=eq.${professorId}`
+      }, handleInserts)
       .subscribe();
 
     return () => supabase.removeChannel(channel);
 
-  }, [professorId, fetchChatList, fetchUnreadCounts, chatListData]);
+  }, [professorId, fetchChatList, fetchUnreadCounts, chatListData, isSuperadmin]);
 
   // Buscar contagem de mensagens não lidas quando a lista de chats mudar
   useEffect(() => {
@@ -257,23 +267,30 @@ const ConversasTab = ({ dashboardData }) => {
           <div className="space-y-2 max-h-[70vh] overflow-y-auto">
             {loading ? <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div> :
               chatList.length > 0 ? chatList.map(chat => (
-                <div key={chat.chat_id} onClick={() => setActiveChat(chat)} className={cn("flex items-start gap-4 p-3 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors border", unreadCounts[chat.chat_id] > 0 && "bg-sky-50 border-sky-200")}>
-                  <Avatar><AvatarImage src={chat.alumno_avatar_url} /><AvatarFallback>{chat.alumno_full_name?.[0] || 'A'}</AvatarFallback></Avatar>
+                <div key={chat.chat_id} onClick={() => setActiveChat(chat)} className={cn("flex items-start gap-4 p-3 rounded-lg hover:bg-slate-100 cursor-pointer transition-colors border shadow-sm bg-white", unreadCounts[chat.chat_id] > 0 && "bg-sky-50 border-sky-200")}>
+                  <Avatar className="h-10 w-10"><AvatarImage src={chat.alumno_avatar_url} /><AvatarFallback>{chat.alumno_full_name?.[0] || 'A'}</AvatarFallback></Avatar>
                   <div className="flex-1 overflow-hidden">
-                    <div className="flex justify-between items-center">
-                      <p className={cn("font-semibold text-slate-800 truncate", unreadCounts[chat.chat_id] > 0 && "text-sky-800")}>{chat.alumno_full_name}</p>
+                    <div className="flex justify-between items-center mb-0.5">
+                      <div className="flex flex-col">
+                        <p className={cn("font-bold text-slate-800 truncate leading-none mb-1", unreadCounts[chat.chat_id] > 0 && "text-sky-800")}>{chat.alumno_full_name}</p>
+                        {isSuperadmin && (
+                          <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tight">
+                            Professor: {chat.profesor_full_name || 'Desconhecido'}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         {unreadCounts[chat.chat_id] > 0 && (
-                          <span className="bg-sky-600 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                          <span className="bg-sky-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                             {unreadCounts[chat.chat_id]}
                           </span>
                         )}
                         {chat.last_message_time && (
-                          <p className="text-xs text-slate-400 flex-shrink-0">{formatDistanceToNow(new Date(chat.last_message_time), { addSuffix: true, locale: ptBR })}</p>
+                          <p className="text-[10px] text-slate-400 flex-shrink-0 font-medium">{formatDistanceToNow(new Date(chat.last_message_time), { addSuffix: true, locale: ptBR })}</p>
                         )}
                       </div>
                     </div>
-                    <p className={cn("text-sm truncate", unreadCounts[chat.chat_id] > 0 ? "text-slate-700 font-medium" : "text-slate-500")}>{chat.last_message_content || 'Nenhuma mensagem ainda.'}</p>
+                    <p className={cn("text-xs truncate max-w-[90%]", unreadCounts[chat.chat_id] > 0 ? "text-slate-700 font-semibold" : "text-slate-500")}>{chat.last_message_content || 'Nenhuma mensagem ainda.'}</p>
                   </div>
                 </div>
               )) :
