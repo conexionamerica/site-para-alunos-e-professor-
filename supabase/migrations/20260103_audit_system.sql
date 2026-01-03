@@ -14,8 +14,16 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Índices para performance
-CREATE INDEX IF NOT EXISTS idx_audit_logs_table ON audit_logs(table_name);
+-- Garantir que a coluna record_id seja TEXT (caso a tabela já exista com UUID)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='audit_logs' AND column_name='record_id' AND data_type='uuid'
+    ) THEN
+        ALTER TABLE audit_logs ALTER COLUMN record_id TYPE TEXT USING record_id::TEXT;
+    END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_audit_logs_record ON audit_logs(record_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(changed_by);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC);

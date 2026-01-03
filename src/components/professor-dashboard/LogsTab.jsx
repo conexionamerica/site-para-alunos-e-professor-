@@ -125,20 +125,23 @@ const LogsTab = ({ dashboardData }) => {
         }
     };
 
-    // Filtros calculados localmente
+    // Filtros calculados localmente (inclui data e usuário)
     const filteredLogs = useMemo(() => {
-        return logs.filter(log => {
-            const matchCode = filterCode === '' || log.log_code.toString().includes(filterCode);
-            const matchUser = filterUser === 'all' || log.changed_by === filterUser;
-            const matchTable = filterTable === 'all' || log.table_name === filterTable;
-            const matchAction = filterAction === 'all' || log.action === filterAction;
-            const matchSearch = searchTerm === '' ||
-                (log.history || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (log.table_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-            return matchCode && matchUser && matchTable && matchAction && matchSearch;
-        });
-    }, [logs, filterCode, filterUser, filterTable, filterAction, searchTerm]);
+        return logs
+            .filter(log => {
+                const matchCode = filterCode === '' || log.log_code.toString().includes(filterCode);
+                const matchUser = filterUser === 'all' || log.changed_by === filterUser;
+                const matchTable = filterTable === 'all' || log.table_name === filterTable;
+                const matchAction = filterAction === 'all' || log.action === filterAction;
+                const matchSearch = searchTerm === '' ||
+                    (log.history || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (log.table_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+                const matchStart = filterStartDate === '' || new Date(log.created_at) >= new Date(filterStartDate);
+                const matchEnd = filterEndDate === '' || new Date(log.created_at) <= new Date(filterEndDate);
+                return matchCode && matchUser && matchTable && matchAction && matchSearch && matchStart && matchEnd;
+            })
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // Decrescente
+    }, [logs, filterCode, filterUser, filterTable, filterAction, searchTerm, filterStartDate, filterEndDate]);
 
     const users = useMemo(() => {
         const uniqueUsers = [];
@@ -165,6 +168,8 @@ const LogsTab = ({ dashboardData }) => {
         setFilterTable('all');
         setFilterAction('all');
         setSearchTerm('');
+        setFilterStartDate('');
+        setFilterEndDate('');
     };
 
     return (
@@ -244,6 +249,18 @@ const LogsTab = ({ dashboardData }) => {
                         <Button variant="ghost" size="icon" onClick={clearFilters} title="Limpar filtros">
                             <FilterX className="h-4 w-4 text-slate-500" />
                         </Button>
+                    </div>
+                </div>
+
+                {/* Filtros de data */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Data início</label>
+                        <Input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="h-9" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Data fim</label>
+                        <Input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="h-9" />
                     </div>
                 </div>
             </div>
