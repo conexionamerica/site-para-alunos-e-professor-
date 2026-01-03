@@ -211,6 +211,16 @@ const ProfessorDashboardPage = () => {
             const isSuperadmin = userProfile?.role === 'superadmin';
 
             const data = await fetchProfessorDashboardData(currentUserId, isSuperadmin);
+
+            // Função de update condicional - só recarrega se estiver na aba Serviços
+            const conditionalUpdate = () => {
+                // Apenas recarregar dados automaticamente se estiver na aba "servicos"
+                const currentTab = window.location.hash || '#home';
+                if (currentTab.includes('servicos')) {
+                    fetchData();
+                }
+            };
+
             setDashboardData({
                 data: {
                     ...data,
@@ -223,7 +233,7 @@ const ProfessorDashboardPage = () => {
                 userRole: data.userRole,
                 isSuperadmin: data.isSuperadmin,
                 loading: false,
-                onUpdate: fetchData
+                onUpdate: conditionalUpdate // Update condicional em vez de fetchData direto
             });
         } catch (error) {
             console.error("Erro ao carregar dados do dashboard:", error);
