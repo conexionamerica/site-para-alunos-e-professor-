@@ -5,6 +5,7 @@
 DROP POLICY IF EXISTS "Professors can insert their own feedback" ON class_feedback;
 DROP POLICY IF EXISTS "Only class professor can insert feedback" ON class_feedback;
 DROP POLICY IF EXISTS "insert_own_feedback" ON class_feedback;
+DROP POLICY IF EXISTS "Professors and superadmins can insert feedback" ON class_feedback;
 
 -- Cria nova política que permite professores E superadmins inserirem feedback
 CREATE POLICY "Professors and superadmins can insert feedback"
@@ -24,6 +25,7 @@ WITH CHECK (
 -- Atualiza política de UPDATE também
 DROP POLICY IF EXISTS "Professors can update their own feedback" ON class_feedback;
 DROP POLICY IF EXISTS "update_own_feedback" ON class_feedback;
+DROP POLICY IF EXISTS "Professors and superadmins can update feedback" ON class_feedback;
 
 CREATE POLICY "Professors and superadmins can update feedback"
 ON class_feedback FOR UPDATE
@@ -40,6 +42,7 @@ USING (
 -- Política de SELECT (visualização)
 DROP POLICY IF EXISTS "Users can view feedback for their classes" ON class_feedback;
 DROP POLICY IF EXISTS "select_own_feedback" ON class_feedback;
+DROP POLICY IF EXISTS "Users can view relevant feedback" ON class_feedback;
 
 CREATE POLICY "Users can view relevant feedback"
 ON class_feedback FOR SELECT
@@ -61,6 +64,7 @@ USING (
 -- Política de DELETE
 DROP POLICY IF EXISTS "Professors can delete their own feedback" ON class_feedback;
 DROP POLICY IF EXISTS "delete_own_feedback" ON class_feedback;
+DROP POLICY IF EXISTS "Professors and superadmins can delete feedback" ON class_feedback;
 
 CREATE POLICY "Professors and superadmins can delete feedback"
 ON class_feedback FOR DELETE
