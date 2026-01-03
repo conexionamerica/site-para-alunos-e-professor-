@@ -57,10 +57,38 @@ BEGIN
         v_record_id := NEW.id::TEXT;
     END IF;
 
-    -- Gera histórico amigável
+    -- Gera histórico amigável com detalhes contextuais
     v_history := TG_TABLE_NAME || ' - ' || TG_OP || ' realizada';
     IF v_full_name IS NOT NULL THEN
         v_history := v_history || ' por ' || v_full_name;
+    END IF;
+    
+    -- Adiciona detalhes contextuais baseados na tabela
+    IF TG_OP != 'DELETE' THEN
+        -- Para class_feedback, inclui o comentário
+        IF TG_TABLE_NAME = 'class_feedback' AND NEW.comment IS NOT NULL AND NEW.comment != '' THEN
+            v_history := v_history || ' | Comentário: ' || LEFT(NEW.comment, 200);
+        END IF;
+        
+        -- Para appointments com observação de reagendamento
+        IF TG_TABLE_NAME = 'appointments' AND NEW.reschedule_reason IS NOT NULL AND NEW.reschedule_reason != '' THEN
+            v_history := v_history || ' | Motivo: ' || LEFT(NEW.reschedule_reason, 200);
+        END IF;
+        
+        -- Para assigned_packages_log com observação
+        IF TG_TABLE_NAME = 'assigned_packages_log' AND NEW.observation IS NOT NULL AND NEW.observation != '' THEN
+            v_history := v_history || ' | Obs: ' || LEFT(NEW.observation, 200);
+        END IF;
+        
+        -- Para student_messages
+        IF TG_TABLE_NAME = 'student_messages' AND NEW.content IS NOT NULL THEN
+            v_history := v_history || ' | Mensagem: ' || LEFT(NEW.content, 100);
+        END IF;
+        
+        -- Para billing com notas
+        IF TG_TABLE_NAME = 'billing' AND NEW.notes IS NOT NULL AND NEW.notes != '' THEN
+            v_history := v_history || ' | Notas: ' || LEFT(NEW.notes, 200);
+        END IF;
     END IF;
 
     -- Insere na tabela de logs
@@ -110,7 +138,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 DO $$
 DECLARE
     t TEXT;
-    tables_to_audit TEXT[] := ARRAY['profiles', 'appointments', 'billing', 'class_slots', 'assigned_packages_log', 'student_messages', 'financial_titles'];
+    tables_to_audit TEXT[] := ARRAY['profiles', 'appointments', 'billing', 'class_slots', 'assigned_packages_log', 'student_messages', 'financial_titles', 'class_feedback'];
 BEGIN
     FOREACH t IN ARRAY tables_to_audit LOOP
         -- Verifica se a tabela existe antes de tentar alterá-la
@@ -131,7 +159,7 @@ END $$;
 DO $$
 DECLARE
     t TEXT;
-    tables_to_audit TEXT[] := ARRAY['profiles', 'appointments', 'billing', 'class_slots', 'assigned_packages_log', 'student_messages', 'financial_titles'];
+    tables_to_audit TEXT[] := ARRAY['profiles', 'appointments', 'billing', 'class_slots', 'assigned_packages_log', 'student_messages', 'financial_titles', 'class_feedback'];
 BEGIN
     FOREACH t IN ARRAY tables_to_audit LOOP
         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
