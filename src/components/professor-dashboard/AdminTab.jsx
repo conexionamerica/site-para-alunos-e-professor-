@@ -175,8 +175,24 @@ const AdminTab = ({ dashboardData }) => {
         return `${firstName}${year}`;
     };
 
+    const generateUsername = (fullName) => {
+        if (!fullName || !fullName.trim()) return '';
+
+        const nameParts = fullName.trim().split(' ').filter(part => part.length > 0);
+
+        if (nameParts.length === 0) return '';
+        if (nameParts.length === 1) return nameParts[0].toLowerCase();
+
+        // Pegar primeiro nome + último sobrenome
+        const firstName = nameParts[0];
+        const lastName = nameParts[nameParts.length - 1];
+
+        // Formato: nome.sobrenome (tudo em minúsculas)
+        return `${firstName}.${lastName}`.toLowerCase();
+    };
+
     const getNextStudentCode = () => {
-        // Usar allProfiles para garantir que pegamos o maior código de ALL os perfis do sistema, 
+        // Usar allProfiles para garantir que pegamos o maior código de ALL os perfis do sistema,
         // e não apenas dos alunos visíveis no filtro atual.
         const studentCodes = allProfiles
             .filter(p => p.student_code)
@@ -531,7 +547,7 @@ const AdminTab = ({ dashboardData }) => {
             }
 
             setIsUserDialogOpen(false);
-            onUpdate?.();
+            // onUpdate?.(); // DESABILITADO: Não atualizar automaticamente, apenas com botões
         } catch (error) {
             console.error('Error saving user:', error);
             let errorDescription = error.message || 'Erro desconhecido ao salvar usuário.';
@@ -1017,18 +1033,21 @@ const AdminTab = ({ dashboardData }) => {
                                     <Input
                                         id="full_name"
                                         value={formData.full_name}
-                                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                                        placeholder="Nome do usuário"
+                                        onChange={(e) => {
+                                            const newName = e.target.value;
+                                            // Gerar username automaticamente
+                                            const newUsername = generateUsername(newName);
+                                            setFormData({ ...formData, full_name: newName, username: newUsername });
+
+                                            // Gerar senha se tiver data de nascimento
+                                            if (formData.birth_date) {
+                                                const pwd = generatePasswordFromNameAndBirthdate(newName, formData.birth_date);
+                                                setGeneratedPassword(pwd);
+                                            }
+                                        }}
+                                        placeholder="Nome completo do usuário"
                                     />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="username">Username</Label>
-                                    <Input
-                                        id="username"
-                                        value={formData.username}
-                                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                        placeholder="username"
-                                    />
+                                    <p className="text-xs text-slate-500">Username: <strong>{formData.username || '(aguardando nome)'}</strong></p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
