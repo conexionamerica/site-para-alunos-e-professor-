@@ -198,13 +198,14 @@ BEGIN
     END LOOP;
 END $$;
 
--- 4. Função de reversão (UNDO)
+-- 5. Função de reversão (UNDO)
 CREATE OR REPLACE FUNCTION reverse_audit_log(p_log_id UUID) 
 RETURNS JSONB AS $$
 DECLARE
     v_log audit_logs;
     v_sql TEXT;
     v_key_col TEXT;
+    v_record_exists BOOLEAN;
 BEGIN
     -- Busca o log
     SELECT * INTO v_log FROM audit_logs WHERE id = p_log_id;
@@ -213,37 +214,66 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Log não encontrado');
     END IF;
 
-    -- Define a coluna de chave primária baseado na tabela
-    v_key_col := CASE 
-        WHEN (v_log.table_name = 'solicitudes_clase') THEN 'solicitud_id'
-        WHEN (v_log.table_name = 'mensajes') THEN 'mensaje_id'
-        WHEN (v_log.table_name = 'chats') THEN 'chat_id'
-        ELSE 'id' 
-    END;
+    -- Verifica se já foi revertido
+    IF v_log.history LIKE '%[REVERTIDO%' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Este log já foi revertido anteriormente.');
+    END IF;
+
+    -- Define a coluna de chave primária baseado na tabela (sempre 'id' para as tabelas principais)
+    v_key_col := 'id';
 
     -- Lógica de reversão
     CASE v_log.action
         WHEN 'INSERT' THEN
             -- Reverter INSERT é deletar o registro novo
-            v_sql := format('DELETE FROM %I WHERE %I = %L', v_log.table_name, v_key_col, v_log.record_id);
-            EXECUTE v_sql;
+            -- Primeiro verifica se o registro existe
+            EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
+            INTO v_record_exists
+            USING v_log.record_id::UUID;
+            
+            IF NOT v_record_exists THEN
+                RETURN jsonb_build_object('success', false, 'message', 'Registro não encontrado. Pode já ter sido deletado.');
+            END IF;
+            
+            EXECUTE format('DELETE FROM %I WHERE %I = $1', v_log.table_name, v_key_col)
+            USING v_log.record_id::UUID;
             
         WHEN 'UPDATE' THEN
-            -- Reverter UPDATE é restaurar old_data
-            v_sql := format('UPDATE %I SET (%s) = (SELECT * FROM jsonb_populate_record(NULL::%I, %L)) WHERE %I = %L', 
-                            v_log.table_name, 
-                            (SELECT string_agg(quote_ident(key), ',') FROM jsonb_each(v_log.old_data)),
-                            v_log.table_name, 
-                            v_log.old_data, 
-                            v_key_col, 
-                            v_log.record_id);
-            EXECUTE v_sql;
+            -- Reverter UPDATE: deletar o registro atual e inserir o old_data
+            -- Isso é mais seguro do que tentar fazer UPDATE com todos os campos
+            
+            -- Verifica se o registro existe
+            EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
+            INTO v_record_exists
+            USING v_log.record_id::UUID;
+            
+            IF NOT v_record_exists THEN
+                RETURN jsonb_build_object('success', false, 'message', 'Registro não encontrado para reversão.');
+            END IF;
+            
+            -- Deleta o registro atual
+            EXECUTE format('DELETE FROM %I WHERE %I = $1', v_log.table_name, v_key_col)
+            USING v_log.record_id::UUID;
+            
+            -- Insere os dados antigos de volta
+            EXECUTE format('INSERT INTO %I SELECT * FROM jsonb_populate_record(NULL::%I, $1)', 
+                          v_log.table_name, v_log.table_name)
+            USING v_log.old_data;
             
         WHEN 'DELETE' THEN
             -- Reverter DELETE é inserir old_data de volta
-            v_sql := format('INSERT INTO %I SELECT * FROM jsonb_populate_record(NULL::%I, %L)', 
-                            v_log.table_name, v_log.table_name, v_log.old_data);
-            EXECUTE v_sql;
+            -- Primeiro verifica se o registro já existe (para evitar duplicação)
+            EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
+            INTO v_record_exists
+            USING v_log.record_id::UUID;
+            
+            IF v_record_exists THEN
+                RETURN jsonb_build_object('success', false, 'message', 'Registro já existe. Não é possível restaurar.');
+            END IF;
+            
+            EXECUTE format('INSERT INTO %I SELECT * FROM jsonb_populate_record(NULL::%I, $1)', 
+                          v_log.table_name, v_log.table_name)
+            USING v_log.old_data;
             
         WHEN 'INITIAL' THEN
             RETURN jsonb_build_object('success', false, 'message', 'Registros de carga inicial não podem ser revertidos automaticamente por segurança.');
@@ -252,8 +282,8 @@ BEGIN
             RETURN jsonb_build_object('success', false, 'message', 'Tipo de ação não suportada para reversão automática: ' || v_log.action);
     END CASE;
 
-    -- Registra no próprio log que ele foi revertido (ou deleta o log? melhor manter e marcar)
-    UPDATE audit_logs SET history = history || ' [REVERTIDO EM ' || NOW() || ']' WHERE id = p_log_id;
+    -- Registra no próprio log que ele foi revertido
+    UPDATE audit_logs SET history = COALESCE(history, '') || ' [REVERTIDO EM ' || NOW() || ']' WHERE id = p_log_id;
 
     RETURN jsonb_build_object('success', true, 'message', 'Operação revertida com sucesso');
 
