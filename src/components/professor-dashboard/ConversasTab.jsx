@@ -154,8 +154,20 @@ const ConversasTab = ({ dashboardData }) => {
   const professorId = dashboardData?.professorId;
   const professorName = dashboardData?.professorName || 'Professor';
   const isSuperadmin = dashboardData?.isSuperadmin || false;
-  const chatListData = dashboardData?.data?.chatList || []; // Assumindo que a lista de chats agregada vem em dashboardData.data.chatList
+  const globalProfessorFilter = dashboardData?.globalProfessorFilter || 'all';
+  const filteredProfessorId = dashboardData?.filteredProfessorId;
+
+  // Para superadmin com filtro aplicado, usar o chatList filtrado
+  // Para professor normal, usar o chatList que já vem filtrado
+  const chatListData = dashboardData?.data?.chatList || [];
   const loading = dashboardData?.loading || false;
+
+  // O professorId efetivo para marcar mensagens como lidas
+  // Se superadmin está filtrando por professor, usa o ID do professor filtrado
+  // Caso contrário, usa o ID do usuário logado
+  const effectiveProfessorId = (isSuperadmin && globalProfessorFilter !== 'all')
+    ? filteredProfessorId
+    : professorId;
 
   const [chatList, setChatList] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
@@ -165,14 +177,22 @@ const ConversasTab = ({ dashboardData }) => {
   const fetchChatList = useCallback(async () => {
     if (!professorId) return;
 
+    // Se os dados já vieram do pai (filtrados), usa eles diretamente
     if (chatListData.length > 0 && !loading) {
       setChatList(chatListData);
       return;
     }
 
-    if (!loading) {
+    // Fallback: buscar via RPC se não tiver dados do pai
+    if (!loading && chatListData.length === 0) {
+      // Para professor normal, sempre filtra pelo seu ID
+      // Para superadmin, filtra pelo globalProfessorFilter se aplicado
+      const filterProfId = isSuperadmin
+        ? (globalProfessorFilter === 'all' ? null : globalProfessorFilter)
+        : professorId;
+
       const { data, error } = await supabase.rpc('get_chat_list_v2', {
-        p_prof_id: isSuperadmin ? null : professorId
+        p_prof_id: filterProfId
       });
 
       if (error) {
@@ -188,11 +208,11 @@ const ConversasTab = ({ dashboardData }) => {
         setChatList(data || []);
       }
     }
-  }, [professorId, chatListData.length, loading, toast, isSuperadmin]);
+  }, [professorId, chatListData, loading, toast, isSuperadmin, globalProfessorFilter]);
 
   // Função para buscar contagem de mensagens não lidas por chat
   const fetchUnreadCounts = useCallback(async () => {
-    if (!professorId || chatList.length === 0) return;
+    if (!effectiveProfessorId || chatList.length === 0) return;
 
     const chatIds = chatList.map(c => c.chat_id);
     const counts = {};
@@ -202,7 +222,7 @@ const ConversasTab = ({ dashboardData }) => {
         .from('mensajes')
         .select('mensaje_id', { count: 'exact', head: true })
         .eq('chat_id', chatId)
-        .neq('remitente_id', professorId)
+        .neq('remitente_id', effectiveProfessorId)
         .eq('leido', false);
 
       if (!error) {
@@ -211,7 +231,7 @@ const ConversasTab = ({ dashboardData }) => {
     }
 
     setUnreadCounts(counts);
-  }, [professorId, chatList]);
+  }, [effectiveProfessorId, chatList]);
 
   useEffect(() => {
     // Se o pai passar a lista, use-a.
@@ -256,7 +276,7 @@ const ConversasTab = ({ dashboardData }) => {
   }, [fetchUnreadCounts]);
 
   if (activeChat) {
-    return <ChatInterface activeChat={activeChat} professorId={professorId} professorName={professorName} onBack={handleBackFromChat} />;
+    return <ChatInterface activeChat={activeChat} professorId={effectiveProfessorId} professorName={professorName} onBack={handleBackFromChat} />;
   }
 
   return (

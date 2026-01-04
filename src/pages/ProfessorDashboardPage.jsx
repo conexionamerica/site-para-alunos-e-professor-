@@ -500,6 +500,10 @@ const ProfessorDashboardPage = () => {
                 classSlots: (dashboardData.data?.classSlots || []).filter(
                     slot => slot.professor_id === globalProfessorFilter
                 ),
+                // Filtrar chatList (conversas do professor filtrado)
+                chatList: (dashboardData.data?.chatList || []).filter(
+                    chat => chat.profesor_id === globalProfessorFilter
+                ),
                 // Manter todos os slots para lógicas de matching (ex: trocar professor)
                 allClassSlots: dashboardData.data?.classSlots || [],
             },
