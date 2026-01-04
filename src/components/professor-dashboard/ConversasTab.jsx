@@ -162,6 +162,8 @@ const ConversasTab = ({ dashboardData }) => {
   // Para professor normal, usar o chatList que já vem filtrado
   const chatListData = dashboardData?.data?.chatList || [];
   const allStudents = dashboardData?.data?.students || [];
+  const appointments = dashboardData?.data?.appointments || [];
+  const allBillings = dashboardData?.data?.allBillings || [];
   const loading = dashboardData?.loading || false;
 
   // O professorId efetivo para marcar mensagens como lidas
@@ -179,11 +181,43 @@ const ConversasTab = ({ dashboardData }) => {
   const [creatingChat, setCreatingChat] = useState(false);
   const { toast } = useToast();
 
+  // Alunos vinculados ao professor (via appointments ou billing)
+  const professorStudents = useMemo(() => {
+    // Se for superadmin sem filtro, mostrar todos os alunos
+    if (isSuperadmin && globalProfessorFilter === 'all') {
+      return allStudents;
+    }
+
+    // Coletar IDs de alunos do professor a partir de appointments
+    const studentIdsFromAppointments = new Set(
+      appointments
+        .filter(apt => apt.professor_id === effectiveProfessorId)
+        .map(apt => apt.student_id)
+    );
+
+    // Coletar IDs de alunos do professor a partir de billings (professor_id pode estar no billing via assigned_professor_id no profiles)
+    // Também considerar alunos que têm billing ativo com o professor
+    const studentIdsFromBillings = new Set(
+      allBillings
+        .filter(b => b.professor_id === effectiveProfessorId)
+        .map(b => b.user_id)
+    );
+
+    // Unir os dois conjuntos
+    const allProfessorStudentIds = new Set([
+      ...studentIdsFromAppointments,
+      ...studentIdsFromBillings
+    ]);
+
+    // Filtrar alunos que pertencem a esse professor
+    return allStudents.filter(student => allProfessorStudentIds.has(student.id));
+  }, [allStudents, appointments, allBillings, effectiveProfessorId, isSuperadmin, globalProfessorFilter]);
+
   // Lista de alunos que ainda não têm conversa iniciada
   const studentsWithoutChat = useMemo(() => {
     const chatStudentIds = new Set(chatList.map(c => c.alumno_id));
-    return allStudents.filter(student => !chatStudentIds.has(student.id));
-  }, [chatList, allStudents]);
+    return professorStudents.filter(student => !chatStudentIds.has(student.id));
+  }, [chatList, professorStudents]);
 
   // Filtrar alunos pela busca
   const filteredStudentsWithoutChat = useMemo(() => {
