@@ -53,6 +53,7 @@ const LogsTab = ({ dashboardData }) => {
 
     // Filtros
     const [filterCode, setFilterCode] = useState('');
+    const [filterClassCode, setFilterClassCode] = useState(''); // Filtro por código de aula
     const [filterUser, setFilterUser] = useState('all');
     const [filterTable, setFilterTable] = useState('all');
     const [filterAction, setFilterAction] = useState('all');
@@ -185,15 +186,23 @@ const LogsTab = ({ dashboardData }) => {
                 const matchUser = filterUser === 'all' || log.changed_by === filterUser;
                 const matchTable = filterTable === 'all' || log.table_name === filterTable;
                 const matchAction = filterAction === 'all' || log.action === filterAction;
+
+                // Buscar class_code no old_data ou new_data
+                const classCode = log.old_data?.class_code || log.new_data?.class_code || '';
+                const matchClassCode = filterClassCode === '' ||
+                    classCode.toLowerCase().includes(filterClassCode.toLowerCase());
+
                 const matchSearch = searchTerm === '' ||
                     (log.history || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    (log.table_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+                    (log.table_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    classCode.toLowerCase().includes(searchTerm.toLowerCase());
+
                 const matchStart = filterStartDate === '' || new Date(log.created_at) >= new Date(filterStartDate);
                 const matchEnd = filterEndDate === '' || new Date(log.created_at) <= new Date(filterEndDate);
-                return matchCode && matchUser && matchTable && matchAction && matchSearch && matchStart && matchEnd;
+                return matchCode && matchUser && matchTable && matchAction && matchSearch && matchStart && matchEnd && matchClassCode;
             })
             .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // Decrescente
-    }, [logs, filterCode, filterUser, filterTable, filterAction, searchTerm, filterStartDate, filterEndDate]);
+    }, [logs, filterCode, filterClassCode, filterUser, filterTable, filterAction, searchTerm, filterStartDate, filterEndDate]);
 
     const users = useMemo(() => {
         const uniqueUsers = [];
@@ -216,6 +225,7 @@ const LogsTab = ({ dashboardData }) => {
 
     const clearFilters = () => {
         setFilterCode('');
+        setFilterClassCode('');
         setFilterUser('all');
         setFilterTable('all');
         setFilterAction('all');
@@ -258,6 +268,13 @@ const LogsTab = ({ dashboardData }) => {
                         type="number"
                         value={filterCode}
                         onChange={(e) => setFilterCode(e.target.value)}
+                        className="h-9 w-[100px]"
+                    />
+
+                    <Input
+                        placeholder="Cód. Aula (AULA-...)"
+                        value={filterClassCode}
+                        onChange={(e) => setFilterClassCode(e.target.value)}
                         className="h-9"
                     />
 
@@ -348,7 +365,7 @@ const LogsTab = ({ dashboardData }) => {
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex flex-col gap-1">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <Badge variant={
                                                     log.action === 'INITIAL' ? 'outline' :
                                                         log.action === 'INSERT' ? 'success' :
@@ -358,10 +375,16 @@ const LogsTab = ({ dashboardData }) => {
                                                         log.action === 'INSERT' ? 'INCLUSÃO' :
                                                             log.action === 'UPDATE' ? 'ALTERAÇÃO' : 'EXCLUSÃO'}
                                                 </Badge>
+                                                {/* Exibir código da aula se for appointments */}
+                                                {log.table_name === 'appointments' && (log.old_data?.class_code || log.new_data?.class_code) && (
+                                                    <span className="font-mono text-xs text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                                                        {log.old_data?.class_code || log.new_data?.class_code}
+                                                    </span>
+                                                )}
                                                 <span className="font-medium text-slate-800">{log.history}</span>
                                             </div>
                                             <span className="text-[10px] text-slate-400 font-mono">
-                                                ID: {log.record_id || 'N/A'} | Tabela: {log.table_name}
+                                                ID: {log.record_id || 'N/A'} | Tabela: {translateTableName(log.table_name)}
                                             </span>
                                         </div>
                                     </TableCell>
