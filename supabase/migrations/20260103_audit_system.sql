@@ -215,6 +215,7 @@ DECLARE
     v_new_day_of_week INTEGER;
     v_old_start_time TIME;
     v_new_start_time TIME;
+    v_is_uuid BOOLEAN;
 BEGIN
     -- Busca o log
     SELECT * INTO v_log FROM audit_logs WHERE id = p_log_id;
@@ -231,26 +232,46 @@ BEGIN
     -- Define a coluna de chave primária baseado na tabela (sempre 'id' para as tabelas principais)
     v_key_col := 'id';
 
+    -- Verificar se record_id é UUID válido (36 caracteres com hífens)
+    v_is_uuid := v_log.record_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+
     -- Lógica de reversão
     CASE v_log.action
         WHEN 'INSERT' THEN
             -- Reverter INSERT é deletar o registro novo
-            EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
-            INTO v_record_exists
-            USING v_log.record_id::UUID;
+            IF v_is_uuid THEN
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
+                INTO v_record_exists
+                USING v_log.record_id::UUID;
+            ELSE
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I::TEXT = $1)', v_log.table_name, v_key_col)
+                INTO v_record_exists
+                USING v_log.record_id;
+            END IF;
             
             IF NOT v_record_exists THEN
                 RETURN jsonb_build_object('success', false, 'message', 'Registro não encontrado. Pode já ter sido deletado.');
             END IF;
             
-            EXECUTE format('DELETE FROM %I WHERE %I = $1', v_log.table_name, v_key_col)
-            USING v_log.record_id::UUID;
+            IF v_is_uuid THEN
+                EXECUTE format('DELETE FROM %I WHERE %I = $1', v_log.table_name, v_key_col)
+                USING v_log.record_id::UUID;
+            ELSE
+                EXECUTE format('DELETE FROM %I WHERE %I::TEXT = $1', v_log.table_name, v_key_col)
+                USING v_log.record_id;
+            END IF;
             
         WHEN 'UPDATE' THEN
             -- Verifica se o registro existe
-            EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
-            INTO v_record_exists
-            USING v_log.record_id::UUID;
+            IF v_is_uuid THEN
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
+                INTO v_record_exists
+                USING v_log.record_id::UUID;
+            ELSE
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I::TEXT = $1)', v_log.table_name, v_key_col)
+                INTO v_record_exists
+                USING v_log.record_id;
+            END IF;
             
             IF NOT v_record_exists THEN
                 RETURN jsonb_build_object('success', false, 'message', 'Registro não encontrado para reversão.');
@@ -275,8 +296,13 @@ BEGIN
             
             -- Executar UPDATE
             IF v_set_clause != '' THEN
-                EXECUTE format('UPDATE %I SET %s WHERE %I = $1', v_log.table_name, v_set_clause, v_key_col)
-                USING v_log.record_id::UUID;
+                IF v_is_uuid THEN
+                    EXECUTE format('UPDATE %I SET %s WHERE %I = $1', v_log.table_name, v_set_clause, v_key_col)
+                    USING v_log.record_id::UUID;
+                ELSE
+                    EXECUTE format('UPDATE %I SET %s WHERE %I::TEXT = $1', v_log.table_name, v_set_clause, v_key_col)
+                    USING v_log.record_id;
+                END IF;
             END IF;
             
             -- TRATAMENTO ESPECIAL PARA APPOINTMENTS (reagendamentos)
@@ -315,9 +341,15 @@ BEGIN
             
         WHEN 'DELETE' THEN
             -- Reverter DELETE é inserir old_data de volta
-            EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
-            INTO v_record_exists
-            USING v_log.record_id::UUID;
+            IF v_is_uuid THEN
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
+                INTO v_record_exists
+                USING v_log.record_id::UUID;
+            ELSE
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I::TEXT = $1)', v_log.table_name, v_key_col)
+                INTO v_record_exists
+                USING v_log.record_id;
+            END IF;
             
             IF v_record_exists THEN
                 RETURN jsonb_build_object('success', false, 'message', 'Registro já existe. Não é possível restaurar.');
