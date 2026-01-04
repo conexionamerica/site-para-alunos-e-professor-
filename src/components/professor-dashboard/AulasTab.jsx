@@ -1052,6 +1052,7 @@ const AulasTab = ({ dashboardData }) => {
                 <Table>
                     <TableHeader className="bg-slate-50">
                         <TableRow>
+                            <TableHead className="w-[120px]">Código</TableHead>
                             <TableHead>Aluno</TableHead>
                             <TableHead>Matéria</TableHead>
                             <TableHead>Tipo de aula</TableHead>
@@ -1064,7 +1065,7 @@ const AulasTab = ({ dashboardData }) => {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={can_manage_classes ? "7" : "6"} className="text-center p-8">
+                                <TableCell colSpan={can_manage_classes ? "8" : "7"} className="text-center p-8">
                                     <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                                 </TableCell>
                             </TableRow>
@@ -1081,6 +1082,11 @@ const AulasTab = ({ dashboardData }) => {
 
                                 return (
                                     <TableRow key={apt.id}>
+                                        <TableCell>
+                                            <span className="font-mono text-xs text-sky-700 bg-sky-50 px-2 py-1 rounded">
+                                                {apt.class_code || `#${apt.id}`}
+                                            </span>
+                                        </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
                                                 <Avatar className="h-8 w-8">
