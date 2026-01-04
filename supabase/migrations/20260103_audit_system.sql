@@ -198,14 +198,23 @@ BEGIN
     END LOOP;
 END $$;
 
--- 5. Função de reversão (UNDO)
+-- 5. Função de reversão (UNDO) - Versão melhorada
 CREATE OR REPLACE FUNCTION reverse_audit_log(p_log_id UUID) 
 RETURNS JSONB AS $$
 DECLARE
     v_log audit_logs;
-    v_sql TEXT;
     v_key_col TEXT;
     v_record_exists BOOLEAN;
+    v_key TEXT;
+    v_value TEXT;
+    v_set_clause TEXT := '';
+    v_old_datetime TIMESTAMPTZ;
+    v_new_datetime TIMESTAMPTZ;
+    v_professor_id UUID;
+    v_old_day_of_week INTEGER;
+    v_new_day_of_week INTEGER;
+    v_old_start_time TIME;
+    v_new_start_time TIME;
 BEGIN
     -- Busca o log
     SELECT * INTO v_log FROM audit_logs WHERE id = p_log_id;
@@ -226,7 +235,6 @@ BEGIN
     CASE v_log.action
         WHEN 'INSERT' THEN
             -- Reverter INSERT é deletar o registro novo
-            -- Primeiro verifica se o registro existe
             EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
             INTO v_record_exists
             USING v_log.record_id::UUID;
@@ -239,9 +247,6 @@ BEGIN
             USING v_log.record_id::UUID;
             
         WHEN 'UPDATE' THEN
-            -- Reverter UPDATE: deletar o registro atual e inserir o old_data
-            -- Isso é mais seguro do que tentar fazer UPDATE com todos os campos
-            
             -- Verifica se o registro existe
             EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
             INTO v_record_exists
@@ -251,18 +256,65 @@ BEGIN
                 RETURN jsonb_build_object('success', false, 'message', 'Registro não encontrado para reversão.');
             END IF;
             
-            -- Deleta o registro atual
-            EXECUTE format('DELETE FROM %I WHERE %I = $1', v_log.table_name, v_key_col)
-            USING v_log.record_id::UUID;
+            -- Construir cláusula SET dinamicamente a partir do old_data
+            FOR v_key, v_value IN SELECT key, value FROM jsonb_each_text(v_log.old_data)
+            LOOP
+                -- Ignorar campos que não devem ser atualizados
+                IF v_key NOT IN ('last_log_code') THEN
+                    IF v_set_clause != '' THEN
+                        v_set_clause := v_set_clause || ', ';
+                    END IF;
+                    -- Usar quote_literal para escapar valores, tratando NULL
+                    IF v_value IS NULL THEN
+                        v_set_clause := v_set_clause || quote_ident(v_key) || ' = NULL';
+                    ELSE
+                        v_set_clause := v_set_clause || quote_ident(v_key) || ' = ' || quote_literal(v_value);
+                    END IF;
+                END IF;
+            END LOOP;
             
-            -- Insere os dados antigos de volta
-            EXECUTE format('INSERT INTO %I SELECT * FROM jsonb_populate_record(NULL::%I, $1)', 
-                          v_log.table_name, v_log.table_name)
-            USING v_log.old_data;
+            -- Executar UPDATE
+            IF v_set_clause != '' THEN
+                EXECUTE format('UPDATE %I SET %s WHERE %I = $1', v_log.table_name, v_set_clause, v_key_col)
+                USING v_log.record_id::UUID;
+            END IF;
+            
+            -- TRATAMENTO ESPECIAL PARA APPOINTMENTS (reagendamentos)
+            -- Ao reverter um reagendamento, precisamos também reverter os slots de agenda
+            IF v_log.table_name = 'appointments' THEN
+                -- Extrair dados do old_data e new_data para identificar a mudança
+                v_old_datetime := (v_log.old_data->>'class_datetime')::TIMESTAMPTZ;
+                v_new_datetime := (v_log.new_data->>'class_datetime')::TIMESTAMPTZ;
+                v_professor_id := (v_log.old_data->>'professor_id')::UUID;
+                
+                -- Se houve mudança de data/hora (reagendamento)
+                IF v_old_datetime IS DISTINCT FROM v_new_datetime AND v_professor_id IS NOT NULL THEN
+                    -- Calcular dia da semana e horário antigo/novo
+                    v_old_day_of_week := EXTRACT(DOW FROM v_old_datetime)::INTEGER;
+                    v_new_day_of_week := EXTRACT(DOW FROM v_new_datetime)::INTEGER;
+                    v_old_start_time := v_old_datetime::TIME;
+                    v_new_start_time := v_new_datetime::TIME;
+                    
+                    -- Liberar o slot NOVO (que foi ocupado no reagendamento)
+                    UPDATE class_slots 
+                    SET status = 'active'
+                    WHERE professor_id = v_professor_id 
+                      AND day_of_week = v_new_day_of_week 
+                      AND start_time = v_new_start_time
+                      AND status = 'filled';
+                    
+                    -- Ocupar novamente o slot ANTIGO (que estava ocupado antes)
+                    UPDATE class_slots 
+                    SET status = 'filled'
+                    WHERE professor_id = v_professor_id 
+                      AND day_of_week = v_old_day_of_week 
+                      AND start_time = v_old_start_time
+                      AND status = 'active';
+                END IF;
+            END IF;
             
         WHEN 'DELETE' THEN
             -- Reverter DELETE é inserir old_data de volta
-            -- Primeiro verifica se o registro já existe (para evitar duplicação)
             EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I WHERE %I = $1)', v_log.table_name, v_key_col)
             INTO v_record_exists
             USING v_log.record_id::UUID;
