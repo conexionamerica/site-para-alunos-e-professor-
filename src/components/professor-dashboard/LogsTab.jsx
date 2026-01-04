@@ -49,7 +49,6 @@ const LogsTab = ({ dashboardData }) => {
     const { toast } = useToast();
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [reverting, setReverting] = useState(null); // ID do log sendo revertido
     const [selectedLog, setSelectedLog] = useState(null); // Log selecionado para ver detalhes
 
     // Filtros
@@ -177,42 +176,6 @@ const LogsTab = ({ dashboardData }) => {
         fetchLogs();
     }, [fetchLogs]);
 
-    const handleRevert = async (log) => {
-        if (!window.confirm(`Tem certeza que deseja reverter a ação #${log.log_code}? Isso restaurará os dados para o estado anterior.`)) {
-            return;
-        }
-
-        setReverting(log.id);
-        try {
-            const { data, error } = await supabase.rpc('reverse_audit_log', { p_log_id: log.id });
-
-            if (error) throw error;
-
-            if (data?.success) {
-                toast({
-                    title: 'Operação revertida!',
-                    description: data.message
-                });
-                fetchLogs();
-                if (onUpdate) onUpdate();
-            } else {
-                toast({
-                    variant: 'destructive',
-                    title: 'Falha na reversão',
-                    description: data?.message || 'Erro desconhecido'
-                });
-            }
-        } catch (error) {
-            console.error('Erro ao reverter:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Erro sistêmico',
-                description: error.message
-            });
-        } finally {
-            setReverting(null);
-        }
-    };
 
     // Filtros calculados localmente (inclui data e usuário)
     const filteredLogs = useMemo(() => {
@@ -413,35 +376,16 @@ const LogsTab = ({ dashboardData }) => {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 text-sky-600 hover:text-sky-700 hover:bg-sky-50"
-                                                onClick={() => setSelectedLog(log)}
-                                                title="Ver detalhes"
-                                            >
-                                                <Eye className="h-3.5 w-3.5 mr-1" />
-                                                Detalhes
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50 disabled:opacity-30"
-                                                onClick={() => handleRevert(log)}
-                                                disabled={reverting === log.id || log.history?.includes('[REVERTIDO') || log.action === 'INITIAL'}
-                                                title={log.action === 'INITIAL' ? 'Registros de carga inicial não podem ser revertidos' : 'Reverter esta ação'}
-                                            >
-                                                {reverting === log.id ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <>
-                                                        <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                                                        Reverter
-                                                    </>
-                                                )}
-                                            </Button>
-                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 text-sky-600 hover:text-sky-700 hover:bg-sky-50"
+                                            onClick={() => setSelectedLog(log)}
+                                            title="Ver detalhes"
+                                        >
+                                            <Eye className="h-3.5 w-3.5 mr-1" />
+                                            Detalhes
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))
