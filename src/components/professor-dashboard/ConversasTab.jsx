@@ -1,13 +1,14 @@
 // Arquivo: src/components/professor-dashboard/ConversasTab.jsx
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Send, Loader2, MessageSquare as MessageSquareText } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, MessageSquare as MessageSquareText, UserPlus, Search } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getBrazilDate } from '@/lib/dateUtils';
@@ -160,6 +161,7 @@ const ConversasTab = ({ dashboardData }) => {
   // Para superadmin com filtro aplicado, usar o chatList filtrado
   // Para professor normal, usar o chatList que já vem filtrado
   const chatListData = dashboardData?.data?.chatList || [];
+  const allStudents = dashboardData?.data?.students || [];
   const loading = dashboardData?.loading || false;
 
   // O professorId efetivo para marcar mensagens como lidas
@@ -172,7 +174,89 @@ const ConversasTab = ({ dashboardData }) => {
   const [chatList, setChatList] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState({}); // Contagem de não lidas por chat_id
+  const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+  const [newChatSearch, setNewChatSearch] = useState('');
+  const [creatingChat, setCreatingChat] = useState(false);
   const { toast } = useToast();
+
+  // Lista de alunos que ainda não têm conversa iniciada
+  const studentsWithoutChat = useMemo(() => {
+    const chatStudentIds = new Set(chatList.map(c => c.alumno_id));
+    return allStudents.filter(student => !chatStudentIds.has(student.id));
+  }, [chatList, allStudents]);
+
+  // Filtrar alunos pela busca
+  const filteredStudentsWithoutChat = useMemo(() => {
+    if (!newChatSearch.trim()) return studentsWithoutChat;
+    const search = newChatSearch.toLowerCase();
+    return studentsWithoutChat.filter(s =>
+      s.full_name?.toLowerCase().includes(search) ||
+      s.email?.toLowerCase().includes(search)
+    );
+  }, [studentsWithoutChat, newChatSearch]);
+
+  // Criar nova conversa com um aluno
+  const handleStartNewChat = async (student) => {
+    if (!effectiveProfessorId) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível identificar o professor.' });
+      return;
+    }
+
+    setCreatingChat(true);
+    try {
+      // Verificar se já existe um chat (evitar duplicação)
+      const { data: existingChat } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('alumno_id', student.id)
+        .eq('profesor_id', effectiveProfessorId)
+        .maybeSingle();
+
+      if (existingChat) {
+        // Chat já existe, abrir diretamente
+        setActiveChat({
+          ...existingChat,
+          alumno_full_name: student.full_name,
+          alumno_avatar_url: student.avatar_url
+        });
+        setIsNewChatOpen(false);
+        return;
+      }
+
+      // Criar novo chat
+      const { data: newChat, error } = await supabase
+        .from('chats')
+        .insert({
+          alumno_id: student.id,
+          profesor_id: effectiveProfessorId
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Atualizar lista de chats
+      const chatWithDetails = {
+        ...newChat,
+        alumno_full_name: student.full_name,
+        alumno_avatar_url: student.avatar_url,
+        last_message_content: null,
+        last_message_time: null
+      };
+
+      setChatList(prev => [chatWithDetails, ...prev]);
+      setActiveChat(chatWithDetails);
+      setIsNewChatOpen(false);
+      setNewChatSearch('');
+
+      toast({ title: 'Conversa iniciada!', description: `Você pode agora enviar mensagens para ${student.full_name}.` });
+    } catch (error) {
+      console.error('Erro ao criar chat:', error);
+      toast({ variant: 'destructive', title: 'Erro ao criar conversa', description: error.message });
+    } finally {
+      setCreatingChat(false);
+    }
+  };
 
   const fetchChatList = useCallback(async () => {
     if (!professorId) return;
@@ -283,7 +367,86 @@ const ConversasTab = ({ dashboardData }) => {
     <div className="w-full">
       <div className="w-full px-4 lg:px-8">
         <div className="bg-white p-6 rounded-lg shadow-sm">
-          <h3 className="text-xl font-bold mb-4">Conversas com Alunos</h3>
+          {/* Header com título e botão de nova conversa */}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold">Conversas com Alunos</h3>
+
+            {/* Botão de Nova Conversa */}
+            <Dialog open={isNewChatOpen} onOpenChange={setIsNewChatOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="bg-sky-600 hover:bg-sky-700"
+                  disabled={studentsWithoutChat.length === 0}
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Nova Conversa
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Iniciar Nova Conversa</DialogTitle>
+                  <DialogDescription>
+                    Selecione um aluno para iniciar uma nova conversa.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {/* Campo de busca */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    placeholder="Buscar aluno..."
+                    value={newChatSearch}
+                    onChange={(e) => setNewChatSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
+                {/* Lista de alunos */}
+                <div className="max-h-[300px] overflow-y-auto space-y-2">
+                  {filteredStudentsWithoutChat.length > 0 ? (
+                    filteredStudentsWithoutChat.map(student => (
+                      <div
+                        key={student.id}
+                        onClick={() => !creatingChat && handleStartNewChat(student)}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-lg border hover:bg-slate-50 cursor-pointer transition-colors",
+                          creatingChat && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={student.avatar_url} />
+                          <AvatarFallback className="bg-sky-100 text-sky-600">
+                            {student.full_name?.[0] || 'A'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="font-medium text-slate-800">{student.full_name}</p>
+                          <p className="text-xs text-slate-500">{student.email}</p>
+                        </div>
+                        {creatingChat ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-sky-600" />
+                        ) : (
+                          <MessageSquareText className="w-4 h-4 text-slate-400" />
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-slate-500 py-8">
+                      {newChatSearch ? (
+                        <p>Nenhum aluno encontrado com "{newChatSearch}"</p>
+                      ) : (
+                        <p>Todos os alunos já possuem uma conversa iniciada.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Lista de conversas */}
           <div className="space-y-2 max-h-[70vh] overflow-y-auto">
             {loading ? <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div> :
               chatList.length > 0 ? chatList.map(chat => (
@@ -315,9 +478,19 @@ const ConversasTab = ({ dashboardData }) => {
                 </div>
               )) :
                 <div className="flex flex-col items-center justify-center h-64 text-center text-slate-500">
-                  <MessageSquareText className="w-16 h-16 mb-4" />
+                  <MessageSquareText className="w-16 h-16 mb-4 opacity-20" />
                   <p className="text-lg">Nenhuma conversa iniciada.</p>
-                  <p className="text-sm">Quando um aluno enviar uma mensagem, ela aparecerá aqui.</p>
+                  <p className="text-sm mb-4">Clique em "Nova Conversa" para enviar uma mensagem a um aluno.</p>
+                  {studentsWithoutChat.length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsNewChatOpen(true)}
+                      className="mt-2"
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Iniciar Conversa
+                    </Button>
+                  )}
                 </div>}
           </div>
         </div>
