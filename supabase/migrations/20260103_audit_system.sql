@@ -198,7 +198,7 @@ BEGIN
     END LOOP;
 END $$;
 
--- 5. Função de reversão (UNDO) - Versão melhorada
+-- 5. Função de reversão (UNDO) - Versão robusta
 CREATE OR REPLACE FUNCTION reverse_audit_log(p_log_id UUID) 
 RETURNS JSONB AS $$
 DECLARE
@@ -216,6 +216,8 @@ DECLARE
     v_old_start_time TIME;
     v_new_start_time TIME;
     v_is_uuid BOOLEAN;
+    v_sql TEXT;
+    v_affected_rows INTEGER;
 BEGIN
     -- Busca o log
     SELECT * INTO v_log FROM audit_logs WHERE id = p_log_id;
@@ -227,6 +229,11 @@ BEGIN
     -- Verifica se já foi revertido
     IF v_log.history LIKE '%[REVERTIDO%' THEN
         RETURN jsonb_build_object('success', false, 'message', 'Este log já foi revertido anteriormente.');
+    END IF;
+
+    -- Verifica se tem dados para reverter
+    IF v_log.old_data IS NULL AND v_log.action = 'UPDATE' THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Log não contém dados anteriores para reversão.');
     END IF;
 
     -- Define a coluna de chave primária baseado na tabela (sempre 'id' para as tabelas principais)
@@ -278,43 +285,61 @@ BEGIN
             END IF;
             
             -- Construir cláusula SET dinamicamente a partir do old_data
-            FOR v_key, v_value IN SELECT key, value FROM jsonb_each_text(v_log.old_data)
+            -- IMPORTANTE: Excluir campos que não devem ser atualizados
+            FOR v_key, v_value IN SELECT key, value::TEXT FROM jsonb_each(v_log.old_data)
             LOOP
-                -- Ignorar campos que não devem ser atualizados
-                IF v_key NOT IN ('last_log_code') THEN
+                -- Ignorar campos de sistema e chave primária
+                IF v_key NOT IN ('id', 'created_at', 'last_log_code') THEN
                     IF v_set_clause != '' THEN
                         v_set_clause := v_set_clause || ', ';
                     END IF;
-                    -- Usar quote_literal para escapar valores, tratando NULL
-                    IF v_value IS NULL THEN
+                    
+                    -- Verificar se o valor é null no JSONB (não string 'null')
+                    IF (v_log.old_data -> v_key) IS NULL OR (v_log.old_data -> v_key)::TEXT = 'null' THEN
                         v_set_clause := v_set_clause || quote_ident(v_key) || ' = NULL';
                     ELSE
+                        -- Usar quote_literal para escapar valores
                         v_set_clause := v_set_clause || quote_ident(v_key) || ' = ' || quote_literal(v_value);
                     END IF;
                 END IF;
             END LOOP;
             
-            -- Executar UPDATE
-            IF v_set_clause != '' THEN
-                IF v_is_uuid THEN
-                    EXECUTE format('UPDATE %I SET %s WHERE %I = $1', v_log.table_name, v_set_clause, v_key_col)
-                    USING v_log.record_id::UUID;
-                ELSE
-                    EXECUTE format('UPDATE %I SET %s WHERE %I::TEXT = $1', v_log.table_name, v_set_clause, v_key_col)
-                    USING v_log.record_id;
-                END IF;
+            -- Executar UPDATE se tiver campos para atualizar
+            IF v_set_clause = '' THEN
+                RETURN jsonb_build_object('success', false, 'message', 'Nenhum campo para reverter.');
+            END IF;
+            
+            -- Montar e executar SQL
+            IF v_is_uuid THEN
+                v_sql := format('UPDATE %I SET %s WHERE %I = %L', v_log.table_name, v_set_clause, v_key_col, v_log.record_id::UUID);
+            ELSE
+                v_sql := format('UPDATE %I SET %s WHERE %I::TEXT = %L', v_log.table_name, v_set_clause, v_key_col, v_log.record_id);
+            END IF;
+            
+            EXECUTE v_sql;
+            GET DIAGNOSTICS v_affected_rows = ROW_COUNT;
+            
+            IF v_affected_rows = 0 THEN
+                RETURN jsonb_build_object('success', false, 'message', 'Nenhum registro foi atualizado. Verifique se o registro ainda existe.');
             END IF;
             
             -- TRATAMENTO ESPECIAL PARA APPOINTMENTS (reagendamentos)
             -- Ao reverter um reagendamento, precisamos também reverter os slots de agenda
             IF v_log.table_name = 'appointments' THEN
                 -- Extrair dados do old_data e new_data para identificar a mudança
-                v_old_datetime := (v_log.old_data->>'class_datetime')::TIMESTAMPTZ;
-                v_new_datetime := (v_log.new_data->>'class_datetime')::TIMESTAMPTZ;
-                v_professor_id := (v_log.old_data->>'professor_id')::UUID;
+                BEGIN
+                    v_old_datetime := (v_log.old_data->>'class_datetime')::TIMESTAMPTZ;
+                    v_new_datetime := (v_log.new_data->>'class_datetime')::TIMESTAMPTZ;
+                    v_professor_id := (v_log.old_data->>'professor_id')::UUID;
+                EXCEPTION WHEN OTHERS THEN
+                    -- Ignora erros de conversão
+                    v_old_datetime := NULL;
+                    v_new_datetime := NULL;
+                END;
                 
                 -- Se houve mudança de data/hora (reagendamento)
-                IF v_old_datetime IS DISTINCT FROM v_new_datetime AND v_professor_id IS NOT NULL THEN
+                IF v_old_datetime IS NOT NULL AND v_new_datetime IS NOT NULL 
+                   AND v_old_datetime IS DISTINCT FROM v_new_datetime AND v_professor_id IS NOT NULL THEN
                     -- Calcular dia da semana e horário antigo/novo
                     v_old_day_of_week := EXTRACT(DOW FROM v_old_datetime)::INTEGER;
                     v_new_day_of_week := EXTRACT(DOW FROM v_new_datetime)::INTEGER;
@@ -372,6 +397,7 @@ BEGIN
     RETURN jsonb_build_object('success', true, 'message', 'Operação revertida com sucesso');
 
 EXCEPTION WHEN OTHERS THEN
-    RETURN jsonb_build_object('success', false, 'message', 'Erro ao reverter: ' || SQLERRM);
+    RETURN jsonb_build_object('success', false, 'message', 'Erro ao reverter: ' || SQLERRM, 'detail', SQLSTATE);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
