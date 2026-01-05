@@ -983,10 +983,16 @@ const HomeTab = ({ dashboardData }) => {
     setIsUploadingPdf(true);
 
     try {
+      // Obtener el usuario autenticado actual
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        throw new Error('Usuário não autenticado');
+      }
+
       // Gerar nome único para o arquivo
       const fileExt = pdfFile.name.split('.').pop();
       const fileName = `${selectedAulaForPdf.id}_${Date.now()}.${fileExt}`;
-      const filePath = `class-materials/${professorId}/${fileName}`;
+      const filePath = `class-materials/${currentUser.id}/${fileName}`;
 
       // 1. Upload do arquivo para Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -1008,12 +1014,13 @@ const HomeTab = ({ dashboardData }) => {
       const fileUrl = urlData?.publicUrl;
 
       // 3. Salvar registro na tabela class_materials
+      // Usamos currentUser.id como professor_id para que coincida con auth.uid() en RLS
       const { error: dbError } = await supabase
         .from('class_materials')
         .insert({
           appointment_id: selectedAulaForPdf.id,
           student_id: selectedAulaForPdf.student_id,
-          professor_id: professorId,
+          professor_id: currentUser.id,
           material_name: pdfMaterialName.trim(),
           file_name: pdfFile.name,
           file_url: fileUrl,
