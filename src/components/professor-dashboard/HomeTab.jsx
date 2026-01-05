@@ -1725,7 +1725,7 @@ const HomeTab = ({ dashboardData }) => {
           <div className="space-y-6">
 
             {/* Card: Solicitações Pendentes */}
-            <Card className="shadow-sm">
+            <Card className="shadow-sm h-[400px] flex flex-col">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg font-bold text-slate-800">Solicitações Pendentes</CardTitle>
@@ -1740,7 +1740,7 @@ const HomeTab = ({ dashboardData }) => {
                 </div>
                 <CardDescription>Solicitações de aulas aguardando sua aprovação</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1 overflow-y-auto">
                 {loading ? (
                   <div className="flex justify-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -1794,12 +1794,12 @@ const HomeTab = ({ dashboardData }) => {
             </Card>
 
             {/* Card: Aulas em seguida */}
-            <Card className="shadow-sm">
+            <Card className="shadow-sm h-[400px] flex flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-bold text-slate-800">Aulas em seguida</CardTitle>
                 <CardDescription>Próximas aulas agendadas</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1 overflow-y-auto">
                 {loading ? (
                   <div className="flex justify-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -1861,7 +1861,7 @@ const HomeTab = ({ dashboardData }) => {
           <div className="space-y-6">
 
             {/* Card: Próxima Aula */}
-            <Card className="shadow-sm border-l-4 border-l-sky-500">
+            <Card className="shadow-sm h-[400px] flex flex-col border-l-4 border-l-sky-500">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1879,7 +1879,7 @@ const HomeTab = ({ dashboardData }) => {
                   )}
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1 overflow-y-auto">
                 {loading ? (
                   <div className="flex justify-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -1938,12 +1938,12 @@ const HomeTab = ({ dashboardData }) => {
             </Card>
 
             {/* Card: Aulas no mês */}
-            <Card className="shadow-sm">
+            <Card className="shadow-sm h-[400px] flex flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-bold text-slate-800">Aulas no mês</CardTitle>
                 <CardDescription>Total por status referente a todas as aulas do professor</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1">
                 <div className="space-y-4">
                   {/* Completas */}
                   <div className="space-y-2">
