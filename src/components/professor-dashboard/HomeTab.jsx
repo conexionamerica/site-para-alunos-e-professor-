@@ -9,7 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { getBrazilDate } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, AlertTriangle, Users, BookOpen, Package, Bell, Filter, UserX, Calendar, CheckCircle, XCircle, RefreshCw, History, Eye, EyeOff, ExternalLink, UserPlus, Search } from 'lucide-react';
+import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, AlertTriangle, Users, BookOpen, Package, Bell, Filter, UserX, Calendar, CheckCircle, XCircle, RefreshCw, History, Eye, EyeOff, ExternalLink, UserPlus, Search, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { TabsContent, Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1688,16 +1688,320 @@ const HomeTab = ({ dashboardData }) => {
   }
 
   // Visão normal (Início) - para professores ou superadmin na aba Início
+  // Calcular estatísticas do mês
+  const monthStats = useMemo(() => {
+    const now = getBrazilDate();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    const monthAppointments = allAppointments.filter(apt => {
+      const aptDate = new Date(apt.class_datetime);
+      return aptDate >= startOfMonth && aptDate <= endOfMonth;
+    });
+
+    const completed = monthAppointments.filter(a => a.status === 'completed').length;
+    const missed = monthAppointments.filter(a => a.status === 'missed').length;
+    const scheduled = monthAppointments.filter(a => ['scheduled', 'rescheduled'].includes(a.status)).length;
+    const total = monthAppointments.length || 1; // Evitar divisão por zero
+
+    return {
+      total,
+      completed,
+      missed,
+      scheduled,
+      completedPercent: Math.round((completed / total) * 100),
+      missedPercent: Math.round((missed / total) * 100),
+      scheduledPercent: Math.round((scheduled / total) * 100)
+    };
+  }, [allAppointments]);
+
   return (
     <div className="w-full">
       <div className="w-full px-4 lg:px-8">
-        {/* Componente de Solicitações de Novos Alunos para Professor */}
-        {!isSuperadmin && professorId && (
-          <div className="mb-6">
-            <StudentRequestsList professorId={professorId} onUpdate={onUpdate} />
+        {/* Grid principal: 2 colunas em desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* ===== COLUNA ESQUERDA ===== */}
+          <div className="space-y-6">
+
+            {/* Card: Solicitações Pendentes */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg font-bold text-slate-800">Solicitações Pendentes</CardTitle>
+                  <Badge className={cn(
+                    "px-3 py-1 text-sm font-semibold",
+                    solicitudes.length > 0
+                      ? "bg-sky-500 text-white"
+                      : "bg-slate-100 text-slate-600"
+                  )}>
+                    {solicitudes.length} pendentes
+                  </Badge>
+                </div>
+                <CardDescription>Solicitações de aulas aguardando sua aprovação</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                  </div>
+                ) : solicitudes.length > 0 ? (
+                  <div className="space-y-3">
+                    {solicitudes.map(req => (
+                      <div key={req.solicitud_id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={req.profile?.avatar_url} />
+                            <AvatarFallback className="bg-blue-100 text-blue-700">
+                              {req.profile?.full_name?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-semibold text-slate-800">{req.profile?.full_name}</p>
+                            {renderHorarios(req.horarios_propuestos)}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-green-600 border-green-600 hover:bg-green-50"
+                            onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Aceita')}
+                            disabled={updatingRequestId === req.solicitud_id}
+                          >
+                            {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 border-red-600 hover:bg-red-50"
+                            onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Rejeitada')}
+                            disabled={updatingRequestId === req.solicitud_id}
+                          >
+                            {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-10">
+                    <CalendarHeart className="w-16 h-16 mx-auto mb-3 text-slate-300" />
+                    <p className="text-slate-500">Não há solicitações pendentes no momento</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Card: Aulas em seguida */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-bold text-slate-800">Aulas em seguida</CardTitle>
+                <CardDescription>Próximas aulas agendadas</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                  </div>
+                ) : upcomingClasses.length > 0 ? (
+                  <div className="space-y-4">
+                    {upcomingClasses.slice(0, 5).map((apt) => {
+                      const aptDate = parseISO(apt.class_datetime);
+                      const dayName = format(aptDate, "EEEE, d 'de' MMMM", { locale: ptBR });
+                      const timeStart = format(aptDate, "HH:mm");
+                      const timeEnd = format(new Date(aptDate.getTime() + (apt.duration_minutes || 30) * 60000), "HH:mm");
+
+                      return (
+                        <div key={apt.id} className="p-4 border rounded-lg bg-white hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <p className="font-bold text-sky-700">
+                                {apt.student?.spanish_level ? 'Espanhol' : 'Inglês'} - {apt.student?.spanish_level || 'Básico'}
+                              </p>
+                              <p className="text-sm text-slate-600 mt-1">
+                                <span className="font-medium">Aluno:</span> {apt.student?.full_name || 'N/A'}
+                              </p>
+                              <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                                <span className="flex items-center gap-1">
+                                  <CalendarDays className="w-3 h-3" />
+                                  {dayName}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {timeStart} - {timeEnd}
+                                </span>
+                              </div>
+                            </div>
+                            <Badge className="bg-sky-100 text-sky-700 border-sky-200">
+                              Efetiva
+                            </Badge>
+                          </div>
+                          <div className="mt-3 pt-3 border-t flex justify-end">
+                            <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-700">
+                              <FileText className="w-4 h-4 mr-1" />
+                              Adicionar Material PDF
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-10">
+                    <CalendarDays className="w-16 h-16 mx-auto mb-3 text-slate-300" />
+                    <p className="text-slate-500">Nenhuma aula agendada no momento</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
-        )}
-        {/* Modal de Vinculação de Professor (também disponível na visão Início para superadmin) */}
+
+          {/* ===== COLUNA DIREITA ===== */}
+          <div className="space-y-6">
+
+            {/* Card: Próxima Aula */}
+            <Card className="shadow-sm border-l-4 border-l-sky-500">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-bold text-slate-800">Próxima Aula</CardTitle>
+                    {nextClass && (
+                      <p className="text-sm text-slate-500 mt-1">
+                        Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}
+                      </p>
+                    )}
+                  </div>
+                  {nextClass && (
+                    <Badge className="bg-sky-100 text-sky-700 border-sky-200">
+                      Efetiva
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                  </div>
+                ) : nextClass ? (
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-sky-700">
+                      {nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}
+                    </h3>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-xs text-slate-400 uppercase font-semibold">Aluno</p>
+                        <p className="font-semibold text-slate-800 uppercase">{nextClass.student?.full_name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 uppercase font-semibold">Duração</p>
+                        <p className="font-semibold text-slate-800">{nextClass.duration_minutes || 45}m</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <CalendarDays className="w-4 h-4 text-slate-400" />
+                        {format(new Date(nextClass.class_datetime), "EEEE, d 'de' MMMM", { locale: ptBR })}
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        {format(new Date(nextClass.class_datetime), "HH'h'mm")} - {format(new Date(new Date(nextClass.class_datetime).getTime() + (nextClass.duration_minutes || 45) * 60000), "HH'h'mm")}
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <span className="text-xs uppercase font-semibold text-slate-400">Nível:</span>
+                        <span>{nextClass.student?.spanish_level || 'Intermediário'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                      <Button variant="outline" className="flex-1">
+                        <FileText className="w-4 h-4 mr-2" />
+                        PDF Aulas
+                      </Button>
+                      <Button asChild className="flex-1 bg-emerald-500 hover:bg-emerald-600">
+                        <a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">
+                          Iniciar Aula
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <CalendarDays className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                    <p className="text-slate-500">Nenhuma aula agendada</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Card: Aulas no mês */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg font-bold text-slate-800">Aulas no mês</CardTitle>
+                <CardDescription>Total por status referente a todas as aulas do professor</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Completas */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-500" />
+                        <span className="text-slate-600">{monthStats.completed}/{monthStats.total} Completas</span>
+                      </div>
+                      <span className="font-semibold text-slate-700">{monthStats.completedPercent}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2">
+                      <div
+                        className="bg-emerald-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${monthStats.completedPercent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Falta Aluno */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <UserX className="w-4 h-4 text-orange-500" />
+                        <span className="text-slate-600">{monthStats.missed}/{monthStats.total} Falta Aluno</span>
+                      </div>
+                      <span className="font-semibold text-slate-700">{monthStats.missedPercent}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2">
+                      <div
+                        className="bg-orange-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${monthStats.missedPercent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Agendadas */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-sky-500" />
+                        <span className="text-slate-600">{monthStats.scheduled}/{monthStats.total} Aulas Agendadas</span>
+                      </div>
+                      <span className="font-semibold text-slate-700">{monthStats.scheduledPercent}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2">
+                      <div
+                        className="bg-sky-500 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${monthStats.scheduledPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Modal de Vinculação de Professor */}
         <Dialog open={showVincularModal} onOpenChange={setShowVincularModal}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -1711,148 +2015,6 @@ const HomeTab = ({ dashboardData }) => {
             </DialogHeader>
           </DialogContent>
         </Dialog>
-
-        {/* Sección de Aulas - Para Profesores ou Superadmin em visão de professor filtrado */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-8">
-          <div className="lg:col-span-2 bg-white p-4 sm:p-6 rounded-lg shadow-sm">
-            <h3 className="font-bold mb-4">Solicitações de Agendamento ({solicitudes.length})</h3>
-            {loading ? <div className="flex justify-center p-4"><Loader2 className="w-6 h-6 animate-spin" /></div> :
-              solicitudes.length > 0 ? (
-                <div className="space-y-4">
-                  {solicitudes.map(req => (
-                    <div key={req.solicitud_id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-slate-50 rounded-lg border">
-                      <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                        <Avatar><AvatarImage src={req.profile?.avatar_url} /><AvatarFallback>{req.profile?.full_name?.[0]}</AvatarFallback></Avatar>
-                        <div>
-                          <p className="font-semibold">{req.profile?.full_name}</p>
-                          {renderHorarios(req.horarios_propuestos)}
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mt-3 sm:mt-0 self-end sm:self-center">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
-                          onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Aceita')}
-                          disabled={updatingRequestId === req.solicitud_id}
-                        >
-                          {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
-                          onClick={() => handleUpdateRequestStatus(req.solicitud_id, 'Rejeitada')}
-                          disabled={updatingRequestId === req.solicitud_id}
-                        >
-                          {updatingRequestId === req.solicitud_id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) :
-                <div className="text-center py-10 text-slate-500">
-                  <CalendarHeart className="w-12 h-12 mx-auto mb-2 text-slate-400" />
-                  <p className="font-semibold">Nenhuma solicitação pendente.</p>
-                  <p className="text-sm">Quando um aluno solicitar uma aula, aparecerá aqui.</p>
-                </div>}
-          </div>
-          <div className="space-y-4 lg:space-y-8">
-            <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4">
-              <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
-              {loading ? (
-                <p>Carregando...</p>
-              ) : nextClass ? (
-                <>
-                  <p className="text-xs text-slate-500">Começa {formatDistanceToNowStrict(new Date(nextClass.class_datetime), { locale: ptBR, addSuffix: true })}</p>
-                  <h3 className="text-lg font-bold mt-1">{nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}</h3>
-                  <p className="text-sm mt-2"><strong>Aluno:</strong> {nextClass.student?.full_name || 'Não definido'}</p>
-                  <p className="text-sm"><strong>Nível:</strong> {nextClass.student?.spanish_level || 'Não definido'}</p>
-                  <p className="text-sm"><strong>Professor:</strong> {nextClass.professor?.full_name || (data.professors?.find(p => p.id === nextClass.professor_id)?.full_name) || 'Não definido'}</p>
-                  <Button asChild className="w-full mt-4 bg-sky-600 hover:bg-sky-700"><a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">Iniciar Aula</a></Button>
-                </>
-              ) : (
-                <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
-              )}
-            </div>
-
-            {/* Novo Card: Próximas 24 Horas */}
-            <div className="bg-white rounded-lg border-l-4 border-blue-500 shadow-sm p-4">
-              <h3 className="text-lg font-bold mb-3">Próximas 24 Horas</h3>
-              {loading ? (
-                <p className="text-sm text-slate-500">Carregando...</p>
-              ) : next24Hours.length > 0 ? (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {next24Hours.map(apt => {
-                    const aptDate = parseISO(apt.class_datetime);
-                    return (
-                      <div key={apt.id} className="flex justify-between items-center p-2 border rounded hover:bg-slate-50">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-800">
-                            {apt.student?.full_name || 'Aluno'}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {format(aptDate, "dd/MM 'às' HH:mm", { locale: ptBR })}
-                          </p>
-                        </div>
-                        <div className="text-xs text-slate-600">
-                          {apt.duration_minutes || 30} min
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-slate-500 text-sm">Nenhuma aula nas próximas 24 horas.</p>
-              )}
-            </div>
-
-            {/* Card de Todas as Aulas Agendadas */}
-            <div className="bg-white rounded-lg border-l-4 border-emerald-500 shadow-sm p-4">
-              <h3 className="text-lg font-bold mb-2">Todas as Aulas Agendadas ({upcomingClasses.length})</h3>
-              {loading ? (
-                <p>Carregando...</p>
-              ) : upcomingClasses.length > 0 ? (
-                <div className="space-y-3 max-h-80 overflow-y-auto">
-                  {upcomingClasses.map((classItem, index) => (
-                    <div
-                      key={classItem.id}
-                      className={cn(
-                        "p-3 rounded-lg border transition-all",
-                        index === 0 ? "bg-sky-50 border-sky-200" : "bg-slate-50 border-slate-200"
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="text-xs text-slate-500">
-                            {formatDistanceToNowStrict(new Date(classItem.class_datetime), { locale: ptBR, addSuffix: true })}
-                          </p>
-                          <p className="text-sm font-medium">
-                            {format(new Date(classItem.class_datetime), "EEE, dd/MM 'às' HH:mm", { locale: ptBR })}
-                          </p>
-                          <p className="text-xs text-slate-600 mt-1">
-                            <strong>Aluno:</strong> {classItem.student?.full_name || 'N/A'}
-                          </p>
-                        </div>
-                        {index === 0 && (
-                          <span className="text-xs bg-sky-500 text-white px-2 py-1 rounded-full font-medium">
-                            Próxima
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-slate-500">
-                  <CalendarDays className="w-10 h-10 mx-auto mb-2 text-slate-400" />
-                  <p className="text-sm">Nenhuma aula agendada no momento.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

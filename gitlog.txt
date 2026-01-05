@@ -1,0 +1,30 @@
+﻿4e72bf0a chore: trigger new deploy with clean build
+ba807aea feat: add class_code filter and display in audit logs for appointment tracking
+ccbe6c0c feat: add class_code column to AulasTab for tracking appointments
+7430227b feat: remove revert button from logs, add class_code field for appointment tracking
+0a887728 fix: robust audit reversal function - exclude id/created_at from UPDATE, add validation and better error handling
+df42102e feat: improve audit system with UUID/numeric ID support and detailed log viewer with before/after comparison
+6123e632 fix: improve reverse_audit_log to use dynamic UPDATE and handle class_slots on appointment reversals
+e8243da1 fix: filter students in new chat modal to show only students linked to the professor via appointments or billings
+2014be90 feat: add New Conversation button with student selector modal in Conversas tab
+06cdbf6e feat: filter Conversas tab by professor - admins see all, professors see only their own chats
+b5b00648 feat: hide 'Aulas Dispon├¡veis' card and scheduling options from student panel
+d22a9756 fix: rewrite reverse_audit_log with robust DELETE+INSERT approach for UPDATE reversal
+8b9d1c79 fix: use JSONB to extract optional fields in audit trigger to avoid column not found errors
+01b9f636 fix: add DROP IF EXISTS for new policies to allow re-execution
+b479fb3b feat: add class_feedback to audit and include contextual details in history
+0a42dae3 fix: update class_feedback RLS to allow superadmins to insert feedback
+e213a898 fix: simplify audit trigger to use only 'id' column, remove solicitudes_clase
+81c90741 fix: use appointment.professor_id instead of logged user id for rescheduling
+51cbb8f0 fix: use useMemo and primitive string as useEffect dependency to prevent infinite loop
+7197f80d fix: remove setRescheduleField from useEffect deps to prevent infinite loop
+0b02352f fix: add setField function to useFormPersistence hook
+84f3bdce fix: replace undefined setNewTime with setRescheduleField in AulasTab
+c4c4ac61 fix: add missing date filter state variables in LogsTab
+801437ef feat: logs UI  ordem decrescente, filtros de data e usu├írio
+83031a90 fix(audit): change record_id to TEXT to support mixed ID types and fix cast error
+347b33c6 feat: implement baseline log capture and safety check for undo
+fb77297c fix: make audit migration more robust by checking table existence
+a41fc727 feat: implement global chat view for admins and update RPC get_chat_list_v2
+1b7465c2 feat: implement auto-refresh, form persistence and unify history tab
+c628d160 Fix: implement student transfer approval flow (pending link)
