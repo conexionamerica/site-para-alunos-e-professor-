@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History } from 'lucide-react';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -20,6 +20,7 @@ import AdminTab from '@/components/professor-dashboard/AdminTab';
 import ServicosTab from '@/components/professor-dashboard/ServicosTab';
 import FinanceiroTab from '@/components/professor-dashboard/FinanceiroTab';
 import LogsTab from '@/components/professor-dashboard/LogsTab';
+import AvisosTab from '@/components/professor-dashboard/AvisosTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 import { getBrazilDate } from '@/lib/dateUtils';
@@ -438,6 +439,7 @@ const ProfessorDashboardPage = () => {
         { id: 'servicos', icon: Headphones, label: 'Serviços', component: ServicosTab, permission: 'servicos' },
         { id: 'financeiro', icon: DollarSign, label: 'Financeiro', component: FinanceiroTab, permission: 'financeiro' },
         { id: 'administracao', icon: Shield, label: 'Administração', component: AdminTab, permission: 'admtab' },
+        { id: 'avisos', icon: Megaphone, label: 'Avisos', component: AvisosTab, permission: 'inicio' },
         { id: 'logs', icon: History, label: "Log's", component: LogsTab, permission: 'logs' },
     ] : [
         { id: 'home', icon: Home, label: 'Início', component: HomeTab, permission: 'inicio' },
@@ -447,6 +449,7 @@ const ProfessorDashboardPage = () => {
         { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab, permission: 'aulas' },
         { id: 'servicos', icon: Headphones, label: 'Serviços', component: ServicosTab, permission: 'servicos' },
         { id: 'financeiro', icon: DollarSign, label: 'Financeiro', component: FinanceiroTab, permission: 'financeiro' },
+        { id: 'avisos', icon: Megaphone, label: 'Avisos', component: AvisosTab, permission: 'inicio' },
         { id: 'preferencias', icon: Settings, label: 'Preferências', component: PreferenciasTab, permission: 'preferencias' },
     ];
 
@@ -755,6 +758,7 @@ const ProfessorDashboardPage = () => {
                                 >
                                     {/* Passar dashboardData filtrado para os componentes */}
                                     <item.component
+                                        setActiveTab={setActiveTab}
                                         dashboardData={{
                                             ...filteredDashboardData,
                                             // Indicar se é a aba "Painel" (para o HomeTab mostrar pendências)

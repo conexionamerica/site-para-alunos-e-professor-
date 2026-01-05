@@ -9,7 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { getBrazilDate } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, AlertTriangle, Users, BookOpen, Package, Bell, Filter, UserX, Calendar, CheckCircle, XCircle, RefreshCw, History, Eye, EyeOff, ExternalLink, UserPlus, Search, FileText, Upload, Trash2 } from 'lucide-react';
+import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, AlertTriangle, Users, BookOpen, Package, Bell, Filter, UserX, Calendar, CheckCircle, XCircle, RefreshCw, History, Eye, EyeOff, ExternalLink, UserPlus, Search, FileText, Upload, Trash2, DollarSign, Megaphone, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { TabsContent, Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -37,7 +37,7 @@ for (let hour = 7; hour <= 23; hour++) {
   TIME_OPTIONS.push(`${String(hour).padStart(2, '0')}:30`);
 }
 
-const HomeTab = ({ dashboardData }) => {
+const HomeTab = ({ dashboardData, setActiveTab }) => {
   const { toast } = useToast();
   const [updatingRequestId, setUpdatingRequestId] = useState(null);
   const [solicitudes, setSolicitudes] = useState([]);
@@ -2169,6 +2169,68 @@ const HomeTab = ({ dashboardData }) => {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* ===== SEÇÃO: ATALHOS RÁPIDOS ===== */}
+        <div className="mt-10">
+          <h2 className="text-xl font-bold text-slate-800 mb-6">Atalhos Rápidos</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* My Earnings */}
+            <Card
+              className="hover:shadow-md transition-all cursor-pointer group border-slate-200"
+              onClick={() => setActiveTab && setActiveTab('financeiro')}
+            >
+              <CardContent className="p-6 flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <DollarSign className="w-6 h-6 text-emerald-600" />
+                </div>
+                <h3 className="font-bold text-slate-800 mb-1">My Earnings</h3>
+                <p className="text-xs text-slate-500">Detalhes de ganhos por aulas agendadas</p>
+              </CardContent>
+            </Card>
+
+            {/* Serviços */}
+            <Card
+              className="hover:shadow-md transition-all cursor-pointer group border-slate-200"
+              onClick={() => setActiveTab && setActiveTab('servicos')}
+            >
+              <CardContent className="p-6 flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <LayoutGrid className="w-6 h-6 text-sky-600" />
+                </div>
+                <h3 className="font-bold text-slate-800 mb-1">Serviços</h3>
+                <p className="text-xs text-slate-500">Acessar ferramentas e serviços disponíveis</p>
+              </CardContent>
+            </Card>
+
+            {/* Avisos */}
+            <Card
+              className="hover:shadow-md transition-all cursor-pointer group border-slate-200"
+              onClick={() => setActiveTab && setActiveTab('avisos')}
+            >
+              <CardContent className="p-6 flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Megaphone className="w-6 h-6 text-rose-600" />
+                </div>
+                <h3 className="font-bold text-slate-800 mb-1">Avisos</h3>
+                <p className="text-xs text-slate-500">Ver comunicados e notícias importantes</p>
+              </CardContent>
+            </Card>
+
+            {/* Agenda (Unificando com a foto) */}
+            <Card
+              className="hover:shadow-md transition-all cursor-pointer group border-slate-200"
+              onClick={() => setActiveTab && setActiveTab('agenda')}
+            >
+              <CardContent className="p-6 flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Calendar className="w-6 h-6 text-sky-600" />
+                </div>
+                <h3 className="font-bold text-slate-800 mb-1">Agenda</h3>
+                <p className="text-xs text-slate-500">Visualize sua escala de aulas agendadas</p>
               </CardContent>
             </Card>
           </div>
