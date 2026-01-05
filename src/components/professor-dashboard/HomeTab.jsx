@@ -971,27 +971,78 @@ const HomeTab = ({ dashboardData }) => {
       return;
     }
 
+    if (!selectedAulaForPdf?.id || !selectedAulaForPdf?.student_id) {
+      toast({
+        title: 'Erro',
+        description: 'Informações da aula não encontradas.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     setIsUploadingPdf(true);
 
     try {
-      // Aqui você pode implementar o upload real para o Supabase Storage
-      // Por enquanto, apenas simula o sucesso
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Gerar nome único para o arquivo
+      const fileExt = pdfFile.name.split('.').pop();
+      const fileName = `${selectedAulaForPdf.id}_${Date.now()}.${fileExt}`;
+      const filePath = `class-materials/${professorId}/${fileName}`;
+
+      // 1. Upload do arquivo para Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('class-materials')
+        .upload(filePath, pdfFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        throw new Error(`Erro no upload: ${uploadError.message}`);
+      }
+
+      // 2. Obter URL pública do arquivo
+      const { data: urlData } = supabase.storage
+        .from('class-materials')
+        .getPublicUrl(filePath);
+
+      const fileUrl = urlData?.publicUrl;
+
+      // 3. Salvar registro na tabela class_materials
+      const { error: dbError } = await supabase
+        .from('class_materials')
+        .insert({
+          appointment_id: selectedAulaForPdf.id,
+          student_id: selectedAulaForPdf.student_id,
+          professor_id: professorId,
+          material_name: pdfMaterialName.trim(),
+          file_name: pdfFile.name,
+          file_url: fileUrl,
+          file_size_bytes: pdfFile.size
+        });
+
+      if (dbError) {
+        // Se falhou ao salvar no banco, deletar o arquivo do storage
+        await supabase.storage.from('class-materials').remove([filePath]);
+        throw new Error(`Erro ao salvar: ${dbError.message}`);
+      }
 
       toast({
         title: 'Material enviado!',
-        description: `"${pdfMaterialName}" foi adicionado com sucesso.`,
+        description: `"${pdfMaterialName}" foi adicionado com sucesso para ${selectedAulaForPdf.student?.full_name || 'o aluno'}.`,
       });
 
       setShowPdfModal(false);
       setPdfMaterialName('');
       setPdfFile(null);
       setSelectedAulaForPdf(null);
+
+      // Atualizar dados se necessário
+      if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Erro ao enviar PDF:', error);
       toast({
         title: 'Erro ao enviar',
-        description: 'Ocorreu um erro ao enviar o material. Tente novamente.',
+        description: error.message || 'Ocorreu um erro ao enviar o material. Tente novamente.',
         variant: 'destructive'
       });
     } finally {

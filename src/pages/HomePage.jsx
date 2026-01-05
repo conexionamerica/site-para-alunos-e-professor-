@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Se incluyen los iconos necesarios para la nueva funcionalidad
-import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot } from 'lucide-react';
+import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot, Download, ExternalLink } from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
 import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 import { PlanExpiringBanner } from '@/components/student/PlanExpiringBanner';
@@ -108,6 +108,7 @@ const HomePage = () => {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
   const [roleSettings, setRoleSettings] = useState(null);
+  const [classMaterials, setClassMaterials] = useState([]);
 
   const chatEndRef = React.useRef(null);
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -155,6 +156,15 @@ const HomePage = () => {
       setPastBillings(pastBillingsRes.data || []);
       setFeedbacks(feedbacksRes.data || []);
       setRoleSettings(roleSettingsRes?.data || null);
+
+      // Cargar materiales PDF asociados às aulas do aluno
+      const { data: materialsData } = await supabase
+        .from('class_materials')
+        .select('*')
+        .eq('student_id', user.id)
+        .order('created_at', { ascending: false });
+
+      setClassMaterials(materialsData || []);
 
       if (chatRes.data) {
         setChat(chatRes.data);
@@ -624,22 +634,50 @@ const HomePage = () => {
                     <TableHead>Hora</TableHead>
                     <TableHead>Duração</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Material</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan="4" className="text-center">Carregando...</TableCell></TableRow>
+                    <TableRow><TableCell colSpan="5" className="text-center">Carregando...</TableCell></TableRow>
                   ) : appointments.length > 0 ? (
-                    appointments.map(apt => (
-                      <TableRow key={apt.id}>
-                        <TableCell className="font-medium">{format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR })}</TableCell>
-                        <TableCell>{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell>
-                        <TableCell>{apt.duration_minutes || 30} min</TableCell>
-                        <TableCell><StatusBadge status={apt.status} /></TableCell>
-                      </TableRow>
-                    ))
+                    appointments.map(apt => {
+                      // Buscar materiales para esta aula
+                      const aptMaterials = classMaterials.filter(m => m.appointment_id === apt.id);
+
+                      return (
+                        <TableRow key={apt.id}>
+                          <TableCell className="font-medium">{format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR })}</TableCell>
+                          <TableCell>{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell>
+                          <TableCell>{apt.duration_minutes || 30} min</TableCell>
+                          <TableCell><StatusBadge status={apt.status} /></TableCell>
+                          <TableCell>
+                            {aptMaterials.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {aptMaterials.map(material => (
+                                  <a
+                                    key={material.id}
+                                    href={material.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-sky-100 text-sky-700 rounded-md hover:bg-sky-200 transition-colors"
+                                    title={`Baixar: ${material.material_name}`}
+                                  >
+                                    <FileText className="w-3 h-3" />
+                                    <span className="max-w-[100px] truncate">{material.material_name}</span>
+                                    <Download className="w-3 h-3" />
+                                  </a>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">-</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   ) : (
-                    <TableRow><TableCell colSpan="4" className="text-center p-8 text-slate-500">Nenhuma aula encontrada.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan="5" className="text-center p-8 text-slate-500">Nenhuma aula encontrada.</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
