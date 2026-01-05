@@ -58,6 +58,55 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   const [showVincularModal, setShowVincularModal] = useState(false);
   const [selectedStudentForVinculacao, setSelectedStudentForVinculacao] = useState(null);
   const [selectedProfessorId, setSelectedProfessorId] = useState('');
+  const [showEarningsModal, setShowEarningsModal] = useState(false);
+
+  // Lógica de cálculo para My Earnings
+  const appointments = dashboardData?.data?.appointments || [];
+  const BASE_RATE = 6.11; // R$ 6.11 por cada 30 minutos
+
+  const earningsStats = useMemo(() => {
+    const completedClasses = appointments.filter(apt => apt.status === 'completed');
+    const totalMinutes = completedClasses.reduce((sum, apt) => sum + (apt.duration_minutes || 30), 0);
+    const totalUnits = totalMinutes / 30;
+    const totalEarnings = totalUnits * BASE_RATE;
+
+    const studentStats = {};
+    completedClasses.forEach(apt => {
+      const studentId = apt.student_id;
+      const studentName = apt.student?.full_name || 'Aluno N/A';
+      const duration = apt.duration_minutes || 30;
+
+      if (!studentStats[studentId]) {
+        studentStats[studentId] = {
+          name: studentName,
+          typicalDuration: duration,
+          totalMinutes: 0,
+          units: 0,
+          earnings: 0,
+          sessions: 0
+        };
+      }
+      studentStats[studentId].totalMinutes += duration;
+      studentStats[studentId].sessions += 1;
+    });
+
+    const groupedList = Object.values(studentStats).map(student => {
+      const units = student.totalMinutes / 30;
+      return {
+        ...student,
+        units: units,
+        earnings: units * BASE_RATE
+      };
+    });
+
+    return { totalEarnings, totalMinutes, totalUnits, groupedList };
+  }, [appointments]);
+
+  const formatTimeFull = (minutes) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h}h ${String(m).padStart(2, '0')}m`;
+  };
   const [professorAvailability, setProfessorAvailability] = useState(null);
   const [isVinculando, setIsVinculando] = useState(false);
 
@@ -2181,7 +2230,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
             {/* My Earnings */}
             <Card
               className="hover:shadow-md transition-all cursor-pointer group border-slate-200"
-              onClick={() => setActiveTab && setActiveTab('financeiro')}
+              onClick={() => setShowEarningsModal(true)}
             >
               <CardContent className="p-6 flex flex-col items-center text-center">
                 <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -2404,30 +2453,103 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
             </div>
 
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowPdfModal(false)}
-                disabled={isUploadingPdf}
-              >
-                Cancelar
-              </Button>
+              <Button onClick={() => setShowPdfModal(false)}>Fechar</Button>
               <Button
                 onClick={handleUploadPdf}
-                disabled={isUploadingPdf || !pdfMaterialName.trim() || !pdfFile}
                 className="bg-sky-600 hover:bg-sky-700"
+                disabled={isUploadingPdf || !pdfMaterialName.trim() || !pdfFile}
               >
                 {isUploadingPdf ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Enviando...
-                  </>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
                 ) : (
-                  <>
-                    <Upload className="w-4 h-4 mr-2" />
-                    Enviar Material
-                  </>
+                  <><Upload className="mr-2 h-4 w-4" /> Enviar Material</>
                 )}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal My Earnings (Novo) */}
+        <Dialog open={showEarningsModal} onOpenChange={setShowEarningsModal}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-2xl font-bold text-slate-800">
+                <DollarSign className="h-6 w-6 text-emerald-600" />
+                MY EARNINGS
+              </DialogTitle>
+              <DialogDescription>
+                Detalhamento de ganhos baseados em aulas completadas (Taxa: R$ {BASE_RATE.toFixed(2)} / 30 min)
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              {/* Cuadrados de Resumen */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="bg-emerald-600 text-white border-none shadow-sm">
+                  <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                    <p className="text-xs font-semibold opacity-80 uppercase mb-1">Ganhos Totais</p>
+                    <h3 className="text-2xl font-bold">R$ {earningsStats.totalEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-sky-600 text-white border-none shadow-sm">
+                  <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                    <p className="text-xs font-semibold opacity-80 uppercase mb-1">Tempo em Aula</p>
+                    <h3 className="text-2xl font-bold">{formatTimeFull(earningsStats.totalMinutes)}</h3>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-purple-600 text-white border-none shadow-sm">
+                  <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                    <p className="text-xs font-semibold opacity-80 uppercase mb-1">Aulas Completadas</p>
+                    <h3 className="text-2xl font-bold">{earningsStats.totalUnits.toFixed(1)}</h3>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Tabla de Historial */}
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-slate-50">
+                    <TableRow>
+                      <TableHead className="text-xs font-bold uppercase">Aluno</TableHead>
+                      <TableHead className="text-xs font-bold uppercase">Duração</TableHead>
+                      <TableHead className="text-xs font-bold uppercase">Tempo Total</TableHead>
+                      <TableHead className="text-xs font-bold uppercase">Qtd (30m)</TableHead>
+                      <TableHead className="text-xs font-bold uppercase">Unitário</TableHead>
+                      <TableHead className="text-xs font-bold uppercase text-right">Valor Estimado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {earningsStats.groupedList.length > 0 ? (
+                      earningsStats.groupedList.map((student, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="font-medium text-slate-700">{student.name}</TableCell>
+                          <TableCell>{student.typicalDuration} min</TableCell>
+                          <TableCell>{formatTimeFull(student.totalMinutes)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{student.units.toFixed(1)}</Badge>
+                          </TableCell>
+                          <TableCell className="text-slate-500">R$ {BASE_RATE.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-bold text-emerald-600">
+                            R$ {student.earnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-slate-400">
+                          Nenhuma aula concluída encontrada.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEarningsModal(false)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
