@@ -9,7 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { getBrazilDate } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, AlertTriangle, Users, BookOpen, Package, Bell, Filter, UserX, Calendar, CheckCircle, XCircle, RefreshCw, History, Eye, EyeOff, ExternalLink, UserPlus, Search, FileText, Upload } from 'lucide-react';
+import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, AlertTriangle, Users, BookOpen, Package, Bell, Filter, UserX, Calendar, CheckCircle, XCircle, RefreshCw, History, Eye, EyeOff, ExternalLink, UserPlus, Search, FileText, Upload, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { TabsContent, Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -76,6 +76,8 @@ const HomeTab = ({ dashboardData }) => {
   const [pdfMaterialName, setPdfMaterialName] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [existingMaterials, setExistingMaterials] = useState([]);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
 
   // Extração segura das propriedades
   const professorId = dashboardData?.professorId;
@@ -930,11 +932,27 @@ const HomeTab = ({ dashboardData }) => {
   // ==========================================
   // FUNCIONES PARA MODAL DE PDF
   // ==========================================
-  const handleOpenPdfModal = (aula) => {
+  const handleOpenPdfModal = async (aula) => {
     setSelectedAulaForPdf(aula);
     setPdfMaterialName('');
     setPdfFile(null);
     setShowPdfModal(true);
+
+    // Cargar materiales existentes para esta aula
+    setLoadingMaterials(true);
+    try {
+      const { data: materials } = await supabase
+        .from('class_materials')
+        .select('*')
+        .eq('appointment_id', aula.id)
+        .order('created_at', { ascending: false });
+
+      setExistingMaterials(materials || []);
+    } catch (error) {
+      console.error('Erro ao carregar materiais:', error);
+    } finally {
+      setLoadingMaterials(false);
+    }
   };
 
   const handleFileChange = (e) => {
@@ -1038,12 +1056,20 @@ const HomeTab = ({ dashboardData }) => {
         description: `"${pdfMaterialName}" foi adicionado com sucesso para ${selectedAulaForPdf.student?.full_name || 'o aluno'}.`,
       });
 
-      setShowPdfModal(false);
+      // Recarregar os materiais para mostrar no histórico do modal
+      const { data: updatedMaterials } = await supabase
+        .from('class_materials')
+        .select('*')
+        .eq('appointment_id', selectedAulaForPdf.id)
+        .order('created_at', { ascending: false });
+
+      setExistingMaterials(updatedMaterials || []);
+
+      // Não fechamos o modal imediatamente para o professor ver que foi adicionado ao histórico
       setPdfMaterialName('');
       setPdfFile(null);
-      setSelectedAulaForPdf(null);
 
-      // Atualizar dados se necessário
+      // Atualizar dados se necessário (painel principal)
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Erro ao enviar PDF:', error);
@@ -2230,6 +2256,87 @@ const HomeTab = ({ dashboardData }) => {
                       <X className="w-4 h-4" />
                     </Button>
                   </div>
+                )}
+              </div>
+
+              {/* Histórico de Materiais */}
+              <div className="pt-4 border-t">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <History className="w-4 h-4" />
+                  Materiais já enviados nesta aula
+                </h4>
+
+                {loadingMaterials ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                  </div>
+                ) : existingMaterials.length > 0 ? (
+                  <div className="space-y-2 max-h-[180px] overflow-y-auto pr-2 custom-scrollbar">
+                    {existingMaterials.map((material) => (
+                      <div key={material.id} className="flex items-center gap-3 p-2 rounded-md bg-slate-50 border border-slate-100 group">
+                        <div className="p-1.5 bg-white rounded border border-slate-200">
+                          <FileText className="w-4 h-4 text-slate-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-slate-700 truncate" title={material.material_name}>
+                            {material.material_name}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {material.file_name}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-sky-600"
+                            asChild
+                          >
+                            <a href={material.file_url} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={async () => {
+                              if (window.confirm('Excluir este material?')) {
+                                try {
+                                  // 1. Remover do Storage (opcional, mas recomendado)
+                                  const filePath = material.file_url.split('/public/class-materials/')[1];
+                                  if (filePath) {
+                                    await supabase.storage.from('class-materials').remove([filePath]);
+                                  }
+
+                                  // 2. Remover do Banco
+                                  const { error } = await supabase
+                                    .from('class_materials')
+                                    .delete()
+                                    .eq('id', material.id);
+
+                                  if (error) throw error;
+
+                                  // 3. Atualizar UI
+                                  setExistingMaterials(prev => prev.filter(m => m.id !== material.id));
+                                  toast({ title: 'Material removido' });
+                                } catch (err) {
+                                  console.error(err);
+                                  toast({ title: 'Erro ao remover', variant: 'destructive' });
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-center py-4 text-slate-400 bg-slate-50 rounded-md border border-dashed">
+                    Nenhum material enviado para esta aula.
+                  </p>
                 )}
               </div>
             </div>
