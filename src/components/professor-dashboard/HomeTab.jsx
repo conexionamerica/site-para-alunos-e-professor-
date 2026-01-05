@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StudentRequestsList } from '@/components/professor/StudentRequestsList';
 import { ScheduleRequestsPending } from '@/components/admin/ScheduleRequestsPending';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useFormPersistence } from '@/hooks/useFormPersistence';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Archive } from 'lucide-react';
