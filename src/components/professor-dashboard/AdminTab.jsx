@@ -169,11 +169,29 @@ const AdminTab = ({ dashboardData }) => {
         // Pegar primeiro nome (tudo antes do primeiro espaço)
         const firstName = fullName.trim().split(' ')[0];
 
-        // Pegar ano da data de nascimento
-        const year = new Date(birthDate).getFullYear();
+        // Capitalizar primeira letra, o resto em minúsculo
+        const capitalizedFirstName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+
+        // Pegar ano da data de nascimento de forma robusta
+        // O formato vindo do input type="date" é YYYY-MM-DD
+        let year = '';
+        if (birthDate.includes('-')) {
+            year = birthDate.split('-')[0];
+        } else {
+            // Fallback se vier em outro formato
+            const date = new Date(birthDate);
+            const fullYear = date.getFullYear();
+            year = isNaN(fullYear) ? '' : fullYear.toString();
+        }
+
+        if (!year || year === '1969' || year === '1970') {
+            // Se falhou ou pegou data base do unix, tenta pegar os últimos 4 caracteres se parecer um ano
+            const match = birthDate.match(/\d{4}/);
+            year = match ? match[0] : "2000";
+        }
 
         // Senha = PrimeiroNome + Ano (ex: Maria2005)
-        return `${firstName}${year}`;
+        return `${capitalizedFirstName}${year}`;
     };
 
     const generateUsername = (fullName) => {
@@ -538,7 +556,7 @@ const AdminTab = ({ dashboardData }) => {
 
                     toast({
                         title: 'Sucesso!',
-                        description: `Usuário criado com sucesso. ${formData.role === 'student' ? `Código: ${formData.student_code}. ` : ''}Senha provisória: ${generatedPassword}`,
+                        description: `Usuário criado com sucesso. ${formData.role === 'student' ? `Código: ${formData.student_code}. ` : ''}Senha provisória: ${finalPassword}`,
                         duration: 15000,
                     });
                 } catch (rpcException) {
@@ -1186,15 +1204,6 @@ const AdminTab = ({ dashboardData }) => {
                                                     onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
                                                     placeholder="000.000.000-00"
                                                     maxLength={14}
-                                                />
-                                            </div>
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="birth_date">Data de Nascimento</Label>
-                                                <Input
-                                                    id="birth_date"
-                                                    type="date"
-                                                    value={formData.birth_date}
-                                                    onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
                                                 />
                                             </div>
                                         </div>
