@@ -326,170 +326,49 @@ const AdminTab = ({ dashboardData }) => {
             if (editingUser) {
                 // Verificar se é uma nova atribuição de professor (mudança de professor)
                 const oldProfessorId = editingUser.assigned_professor_id;
-                const newProfessorId = formData.role === 'student' ? (formData.assigned_professor_id || null) : null;
-                const isProfessorChange = formData.role === 'student' && newProfessorId && newProfessorId !== oldProfessorId;
-
                 // Update existing user
                 const updateData = {
-                    full_name: (formData.full_name || '').trim(),
-                    username: (formData.username || '').trim(),
-                    real_email: (formData.email || '').trim(), // Manter real_email atualizado como fonte única
-                    phone: cleanPhone(formData.phone || ''), // NOVO
-                    role: formData.role,
-                    student_code: formData.role === 'student' ? (formData.student_code?.trim() || null) : null,
-                    // NÃO vincula diretamente, cria solicitação para aprovação
-                    assigned_professor_id: isProfessorChange ? null : (oldProfessorId || null),
-                    // Define campos de pendência se houver mudança de professor
-                    pending_professor_id: isProfessorChange ? newProfessorId : null,
-                    pending_professor_status: isProfessorChange ? 'aguardando_aprovacao' : null,
-                    pending_professor_requested_at: isProfessorChange ? new Date().toISOString() : null,
-                    cpf: formData.cpf ? cleanCPF(formData.cpf) : null, // NOVO
-                    birth_date: formData.birth_date || null, // NOVO
-                    gender: formData.gender || null, // NOVO
-                    address_street: formData.address_street?.trim() || null, // NOVO
-                    address_number: formData.address_number?.trim() || null, // NOVO
-                    address_complement: formData.address_complement?.trim() || null, // NOVO
-                    address_neighborhood: formData.address_neighborhood?.trim() || null, // NOVO
-                    address_city: formData.address_city?.trim() || null, // NOVO
-                    address_state: formData.address_state || null, // NOVO
-                    address_zip_code: formData.address_zip_code ? cleanCEP(formData.address_zip_code) : null, // NOVO
-                    is_active: formData.is_active === true
+                    full_name: formData.full_name?.trim(),
+                    email: formData.email?.trim().toLowerCase(), // Update email stored in profiles (optional)
+                    phone: cleanPhone(formData.phone),
+                    student_code: formData.student_code?.trim(),
+                    role: formData.role, // Allow role change
+                    responsible_name: formData.responsible_name?.trim(),
+                    responsible_phone: cleanPhone(formData.responsible_phone),
+                    academic_level: formData.academic_level,
+                    spanish_level: formData.spanish_level,
+                    learning_goals: formData.learning_goals,
+                    observations: formData.observations,
+                    cpf: cleanCPF(formData.cpf),
+                    birth_date: formData.birth_date || null,
+                    gender: formData.gender || null,
+                    address_street: formData.address_street || null,
+                    address_number: formData.address_number || null,
+                    address_complement: formData.address_complement || null,
+                    address_neighborhood: formData.address_neighborhood || null,
+                    address_city: formData.address_city || null,
+                    address_state: formData.address_state || null,
+                    address_zip_code: cleanCEP(formData.address_zip_code) || null,
+                    registration_status: formData.registration_status || 'pre_registered'
                 };
 
-
-                // 1. Se houver mudança de professor, criar solicitação em solicitudes_clase
-                if (isProfessorChange) {
-                    const oldProfessorName = professors.find(p => p.id === oldProfessorId)?.full_name || null;
-
-                    const solicitacaoData = {
-                        type: 'vinculacao',
-                        is_recurring: false,
-                        student_name: formData.full_name,
-                        old_professor_id: oldProfessorId,
-                        old_professor_name: oldProfessorName,
-                        preferred_schedule: editingUser.preferred_schedule || {},
-                        days: Object.keys(editingUser.preferred_schedule || {}).map(Number),
-                        time: Object.values(editingUser.preferred_schedule || {})[0] || '08:00'
-                    };
-
-                    const { error: solicitacaoError } = await supabase.from('solicitudes_clase').insert({
-                        alumno_id: editingUser.id,
-                        profesor_id: newProfessorId,
-                        horarios_propuestos: JSON.stringify(solicitacaoData),
-                        status: 'Pendiente',
-                        is_recurring: false
-                    });
-
-                    if (solicitacaoError) {
-                        console.error('Erro ao criar solicitação de vinculação:', solicitacaoError);
-                        toast({
-                            title: 'Aviso',
-                            description: 'Erro ao criar solicitação de vinculação para o professor.',
-                            variant: 'warning'
-                        });
-                    }
-                }
-
-                // 2. Atualizar o status via RPC (Especialmente importante para inativação funcional)
-                await supabase.rpc('update_user_status', {
-                    p_user_id: editingUser.id,
-                    p_is_active: formData.is_active === true
-                });
-
-                // 3. Atualizar outros dados via update normal (opcional, mas garante campos como full_name)
-                const { data: updatedRows, error: updateError } = await supabase
+                const { error: updateError } = await supabase
                     .from('profiles')
                     .update(updateData)
-                    .eq('id', editingUser.id)
-                    .select();
+                    .eq('id', editingUser.id);
 
                 if (updateError) {
-                    console.error('Erro no update do profile:', updateError);
-                    // Não lançamos erro aqui se o status já foi atualizado pelo RPC
+                    // Check unique constraint violation
+                    if (updateError.message?.includes('duplicate key')) {
+                        throw new Error('Já existe outro usuário com estes dados.');
+                    }
+                    throw updateError;
                 }
 
-                // Lógica de inativação avançada (limpeza de horários e cancelamento de aulas)
-                const wasActive = editingUser.is_active !== false;
-                const willBeActive = formData.is_active;
-
-                if (wasActive && !willBeActive && formData.role === 'student') {
-                    const today = getBrazilDate().toISOString();
-
-                    // Buscar agendamentos futuros
-                    const { data: futureAppointments, error: apptError } = await supabase
-                        .from('appointments')
-                        .select('id, class_slot_id, duration_minutes')
-                        .eq('student_id', editingUser.id)
-                        .gte('class_datetime', today)
-                        .in('status', ['scheduled', 'pending', 'rescheduled']);
-
-                    if (apptError) {
-                        console.error('Erro ao buscar aulas futuras para limpeza:', apptError);
-                        toast({
-                            title: 'Aviso',
-                            description: 'Usuário inativado, mas houve um erro ao limpar agendamentos futuros.',
-                            variant: 'warning'
-                        });
-                    } else if (futureAppointments && futureAppointments.length > 0) {
-                        const slotIdsToFree = new Set();
-                        futureAppointments.forEach(apt => {
-                            if (apt.class_slot_id) slotIdsToFree.add(apt.class_slot_id);
-                        });
-
-                        // Liberar slots no banco
-                        if (slotIdsToFree.size > 0) {
-                            await supabase
-                                .from('class_slots')
-                                .update({ status: 'active' })
-                                .in('id', Array.from(slotIdsToFree));
-                        }
-
-                        // Cancelar aulas futuras no banco
-                        await supabase
-                            .from('appointments')
-                            .update({ status: 'cancelled' })
-                            .eq('student_id', editingUser.id)
-                            .gte('class_datetime', today)
-                            .in('status', ['scheduled', 'pending', 'rescheduled']);
-
-                        // Cancelar/Remover solicitações de aula recorrentes (libera o vínculo fixo)
-                        await supabase
-                            .from('solicitudes_clase')
-                            .delete()
-                            .eq('alumno_id', editingUser.id)
-                            .in('status', ['Aceita', 'Aprovada', 'Pendiente']);
-
-                        toast({
-                            title: 'Aluno Inativado',
-                            description: `Perfil inativado, ${futureAppointments.length} aulas canceladas e todos os vínculos/horários foram liberados.`,
-                        });
-                    } else {
-                        // Mesmo sem agendamentos futuros, limpar solicitações recorrentes por segurança
-                        await supabase
-                            .from('solicitudes_clase')
-                            .delete()
-                            .eq('alumno_id', editingUser.id);
-
-                        toast({
-                            title: 'Sucesso',
-                            description: 'Usuário inativado e vínculos removidos do sistema.',
-                        });
-                    }
-                } else {
-                    // Verificar se foi criada solicitação de vinculação
-                    if (isProfessorChange) {
-                        const newProfessorName = professors.find(p => p.id === newProfessorId)?.full_name || 'professor';
-                        toast({
-                            title: 'Solicitação Enviada!',
-                            description: `Os dados foram atualizados e uma solicitação de vinculação foi enviada para ${newProfessorName}. O professor precisa aprovar na tela inicial.`,
-                        });
-                    } else {
-                        toast({
-                            title: 'Sucesso',
-                            description: 'Dados do usuário (incluindo e-mail) atualizados com sucesso.',
-                        });
-                    }
-                }
+                toast({
+                    title: 'Usuário atualizado!',
+                    description: 'Os dados foram salvos com sucesso.',
+                });
             } else {
                 // Criar novo usuário via RPC - SIMPLIFICADO
                 try {
@@ -511,45 +390,6 @@ const AdminTab = ({ dashboardData }) => {
                         description: `Usuário criado com sucesso. Senha: ${formData.password}`,
                         duration: 10000,
                     });
-
-                    // SE FOR ALUNO E TIVER PROFESSOR SELECIONADO, CRIAR SOLICITAÇÃO
-                    if (formData.role === 'student' && formData.assigned_professor_id) {
-                        const newStudentId = newUserId; // ID retornado pela RPC
-                        const profId = formData.assigned_professor_id;
-                        const profName = professors.find(p => p.id === profId)?.full_name || 'Professor';
-
-                        // 1. Criar solicitação
-                        const solicitacaoData = {
-                            type: 'vinculacao',
-                            is_recurring: false,
-                            student_name: formData.full_name,
-                            old_professor_id: null,
-                            old_professor_name: null,
-                            preferred_schedule: {},
-                            days: [],
-                            time: '08:00'
-                        };
-
-                        await supabase.from('solicitudes_clase').insert({
-                            alumno_id: newStudentId,
-                            profesor_id: profId,
-                            horarios_propuestos: JSON.stringify(solicitacaoData),
-                            status: 'Pendiente',
-                            is_recurring: false
-                        });
-
-                        // 2. Atualizar perfil com pendência
-                        await supabase.from('profiles').update({
-                            pending_professor_id: profId,
-                            pending_professor_status: 'aguardando_aprovacao',
-                            pending_professor_requested_at: new Date().toISOString()
-                        }).eq('id', newStudentId);
-
-                        toast({
-                            title: 'Solicitação Enviada',
-                            description: `Solicitação de vinculação enviada para ${profName}.`,
-                        });
-                    }
                 } catch (rpcException) {
                     console.error('Exception during user creation via RPC:', rpcException);
                     throw rpcException;
@@ -563,7 +403,7 @@ const AdminTab = ({ dashboardData }) => {
             console.error('Error saving user:', error);
             let errorDescription = error.message || 'Erro desconhecido ao salvar usuário.';
 
-            // Mensajes de error más amigables
+            // Mensajes de error más amigáveis
             if (error.message?.includes('duplicate key')) {
                 errorDescription = 'Este usuário ou e-mail já existe no sistema.';
             } else if (error.message?.includes('foreign key')) {
@@ -1088,44 +928,16 @@ const AdminTab = ({ dashboardData }) => {
                                         onValueChange={(value) => setFormData({ ...formData, role: value })}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Selecione o perfil" />
+                                            <SelectValue placeholder="Selecione um tipo" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="student">Aluno</SelectItem>
                                             <SelectItem value="professor">Professor</SelectItem>
-                                            <SelectItem value="superadmin">Administrador</SelectItem>
+                                            {/* Admin creation restricted to DB/Superadmin manually for safety or enable here */}
+                                            {/* <SelectItem value="admin">Administrador</SelectItem> */}
                                         </SelectContent>
                                     </Select>
                                 </div>
-
-                                {/* 5. Professor Vinculado (apenas para alunos) */}
-                                {formData.role === 'student' && (
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="assigned_professor">Professor Vinculado</Label>
-                                        <Select
-                                            value={formData.assigned_professor_id || 'none'}
-                                            onValueChange={(value) => {
-                                                setFormData({ ...formData, assigned_professor_id: value === 'none' ? '' : value });
-                                                checkProfessorAvailability(value);
-                                            }}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione um professor" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="none">Nenhum (pendência)</SelectItem>
-                                                {professors.map(prof => (
-                                                    <SelectItem key={prof.id} value={prof.id}>
-                                                        {prof.full_name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <p className="text-xs text-slate-500">
-                                            O professor selecionado receberá uma solicitação de aprovação.
-                                        </p>
-                                    </div>
-                                )}
                             </>
                         )}
 
@@ -1145,42 +957,6 @@ const AdminTab = ({ dashboardData }) => {
                                         <Badge variant="outline">Código: {editingUser.student_code}</Badge>
                                     )}
                                 </div>
-
-                                {/* Campo de Professor Vinculado para alunos */}
-                                {editingUser.role === 'student' && (
-                                    <div className="grid gap-2 mt-3 pt-3 border-t">
-                                        <Label htmlFor="edit_assigned_professor">Professor Vinculado</Label>
-                                        <Select
-                                            value={formData.assigned_professor_id || 'none'}
-                                            onValueChange={(value) => {
-                                                setFormData({ ...formData, assigned_professor_id: value === 'none' ? '' : value });
-                                                checkProfessorAvailability(value);
-                                            }}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione um professor" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="none">Nenhum (pendência)</SelectItem>
-                                                {professors.map(prof => (
-                                                    <SelectItem key={prof.id} value={prof.id}>
-                                                        {prof.full_name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {editingUser.assigned_professor_id && (
-                                            <p className="text-xs text-slate-500">
-                                                Professor atual: {professors.find(p => p.id === editingUser.assigned_professor_id)?.full_name || 'Desconhecido'}
-                                            </p>
-                                        )}
-                                        {formData.assigned_professor_id && formData.assigned_professor_id !== editingUser.assigned_professor_id && (
-                                            <p className="text-xs text-amber-600">
-                                                ⚠️ {professors.find(p => p.id === formData.assigned_professor_id)?.full_name} receberá uma solicitação de aprovação.
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
                             </div>
                         )}
 

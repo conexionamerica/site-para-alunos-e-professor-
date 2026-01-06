@@ -845,10 +845,33 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
           if (vinculoError) throw vinculoError;
 
+          if (vinculoError) throw vinculoError;
+
+          // ATUALIZAR APPOINTMENTS EXISTENTES (transferir aulas sem professor para este professor)
+          const todayISO = new Date().toISOString();
+          const { error: apptUpdateError } = await supabase
+            .from('appointments')
+            .update({ professor_id: professorId })
+            .eq('student_id', studentId)
+            .is('professor_id', null) // Apenas os que estão sem professor
+            .gte('class_datetime', todayISO) // Apenas futuros
+            .neq('status', 'cancelled'); // Ignorar cancelados
+
+          if (apptUpdateError) console.error("Erro ao transferir aulas:", apptUpdateError);
+
+          // ATUALIZAR LOGS DE PACOTES (transferir logs sem professor)
+          const { error: logUpdateError } = await supabase
+            .from('assigned_packages_log')
+            .update({ professor_id: professorId })
+            .eq('student_id', studentId)
+            .is('professor_id', null);
+
+          if (logUpdateError) console.error("Erro ao transferir logs:", logUpdateError);
+
           toast({
             variant: 'default',
             title: 'Vinculação Aprovada!',
-            description: `${request.profile?.full_name || 'Aluno'} agora está vinculado a você.`
+            description: `${request.profile?.full_name || 'Aluno'} agora está vinculado a você e as aulas pendentes foram assumidas.`
           });
         } catch (e) {
           // Reverter status da solicitação

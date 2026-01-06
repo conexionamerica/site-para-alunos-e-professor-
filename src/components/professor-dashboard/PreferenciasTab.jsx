@@ -260,7 +260,8 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   }, [professorIdFromProps]);
 
   // ID do professor que será usado efetivamente nas ações
-  const effectiveProfessorId = localProfessorId;
+  // Forçado a null para que todos os pacotes sejam criados como pendência.
+  const effectiveProfessorId = null;
 
   const [slots, setSlots] = useState([]);
   const [isSavingSlots, setIsSavingSlots] = useState(false);
@@ -479,7 +480,8 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
     try {
       // CORREÇÃO: Verifica se effectiveProfessorId existe antes de chamar a API
-      if (!effectiveProfessorId) throw new Error("ID do Professor não está disponível.");
+      // Removido o check, pois effectiveProfessorId é sempre null agora.
+      // if (!effectiveProfessorId) throw new Error("ID do Professor não está disponível.");
 
       const { error } = await supabase.from('class_slots').upsert(slotsToUpsert, {
         onConflict: 'professor_id, day_of_week, start_time'
@@ -719,10 +721,11 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
     }
 
     // Permitir continuar se for superadmin mesmo sem professor (será gerada pendência)
-    if (!effectiveProfessorId && !isSuperadmin) {
-      toast({ variant: 'destructive', title: 'Cuidado', description: 'Selecione um professor ou use o perfil de administrador para gerar pendências.' });
-      return;
-    }
+    // REMOVIDO: effectiveProfessorId é sempre null, então sempre será pendência.
+    // if (!effectiveProfessorId && !isSuperadmin) {
+    //   toast({ variant: 'destructive', title: 'Cuidado', description: 'Selecione um professor ou use o perfil de administrador para gerar pendências.' });
+    //   return;
+    // }
 
     // VALIDAÇÃO ESPECÍFICA PARA PERSONALIZADO
     if (isAutomaticScheduling) {
@@ -765,23 +768,24 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
         let existingAppts = [];
 
         // Fetch dados do professor apenas se um professor for selecionado
-        if (effectiveProfessorId) {
-          const { data: slots, error: slotsError } = await supabase
-            .from('class_slots')
-            .select('*')
-            .eq('professor_id', effectiveProfessorId);
+        // REMOVIDO: effectiveProfessorId é sempre null, então não busca slots do professor.
+        // if (effectiveProfessorId) {
+        //   const { data: slots, error: slotsError } = await supabase
+        //     .from('class_slots')
+        //     .select('*')
+        //     .eq('professor_id', effectiveProfessorId);
 
-          if (slotsError) throw new Error("Erro ao buscar horários do professor.");
-          allSlots = slots || [];
+        //   if (slotsError) throw new Error("Erro ao buscar horários do professor.");
+        //   allSlots = slots || [];
 
-          const { data: appts } = await supabase
-            .from('appointments')
-            .select('class_datetime, duration_minutes')
-            .eq('professor_id', effectiveProfessorId)
-            .gte('class_datetime', finalStartDate.toISOString())
-            .in('status', ['scheduled', 'rescheduled']);
-          existingAppts = appts || [];
-        }
+        //   const { data: appts } = await supabase
+        //     .from('appointments')
+        //     .select('class_datetime, duration_minutes')
+        //     .eq('professor_id', effectiveProfessorId)
+        //     .gte('class_datetime', finalStartDate.toISOString())
+        //     .in('status', ['scheduled', 'rescheduled']);
+        //   existingAppts = appts || [];
+        // }
 
         // GERAR AGENDAMENTOS
         let currentDate = new Date(finalStartDate);
@@ -801,65 +805,68 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
             let hasConflict = false;
             let isInactive = false;
 
-            if (effectiveProfessorId) {
-              // Verifica se horários escolhidos estão ativos
-              for (let i = 0; i < slotsPerClass; i++) {
-                const slotTimeObj = parse(startTimeFull, 'HH:mm:ss', new Date());
-                const slotTime = format(add(slotTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
-                const matchingSlot = allSlots.find(s => s.day_of_week === dayIdx && s.start_time === slotTime);
-                if (!matchingSlot || matchingSlot.status !== 'active') {
-                  isInactive = true;
-                  break;
-                }
-              }
+            // REMOVIDO: Lógica de verificação de slots do professor, pois effectiveProfessorId é sempre null.
+            // if (effectiveProfessorId) {
+            //   // Verifica se horários escolhidos estão ativos
+            //   for (let i = 0; i < slotsPerClass; i++) {
+            //     const slotTimeObj = parse(startTimeFull, 'HH:mm:ss', new Date());
+            //     const slotTime = format(add(slotTimeObj, { minutes: i * 15 }), 'HH:mm:ss');
+            //     const matchingSlot = allSlots.find(s => s.day_of_week === dayIdx && s.start_time === slotTime);
+            //     if (!matchingSlot || matchingSlot.status !== 'active') {
+            //       isInactive = true;
+            //       break;
+            //     }
+            //   }
 
-              // Verifica conflito com aulas já existentes
-              hasConflict = existingAppts.some(apt => {
-                const aptStart = parseISO(apt.class_datetime);
-                const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
-                return (newSlotStart < aptEnd && newSlotEnd > aptStart);
-              });
-            }
+            //   // Verifica conflito com aulas já existentes
+            //   hasConflict = existingAppts.some(apt => {
+            //     const aptStart = parseISO(apt.class_datetime);
+            //     const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
+            //     return (newSlotStart < aptEnd && newSlotEnd > aptStart);
+            //   });
+            // }
 
             // Se houver conflito ou estiver inativo, incrementamos contador
-            if (hasConflict || isInactive) {
-              conflictsCount++;
-              // Se o usuário optar por gerar pendência, criamos sem professor
-              appointmentInserts.push({
-                student_id: selectedStudentId,
-                professor_id: null, // Pendência
-                class_datetime: newSlotStart.toISOString(),
-                class_slot_id: null,
-                status: 'scheduled',
-                duration_minutes: classDurationMinutes,
-              });
-            } else {
-              // Tudo OK, cria com o professor (ou sem, se nenhum foi selecionado)
-              const primarySlot = effectiveProfessorId
-                ? allSlots.find(s => s.day_of_week === dayIdx && s.start_time === startTimeFull)
-                : null;
+            // REMOVIDO: A lógica de conflito/inativo para professor, pois não há professor.
+            // if (hasConflict || isInactive) {
+            //   conflictsCount++;
+            //   // Se o usuário optar por gerar pendência, criamos sem professor
+            //   appointmentInserts.push({
+            //     student_id: selectedStudentId,
+            //     professor_id: null, // Pendência
+            //     class_datetime: newSlotStart.toISOString(),
+            //     class_slot_id: null,
+            //     status: 'scheduled',
+            //     duration_minutes: classDurationMinutes,
+            //   });
+            // } else {
+            // Tudo OK, cria com o professor (ou sem, se nenhum foi selecionado)
+            // const primarySlot = effectiveProfessorId
+            //   ? allSlots.find(s => s.day_of_week === dayIdx && s.start_time === startTimeFull)
+            //   : null;
 
-              appointmentInserts.push({
-                student_id: selectedStudentId,
-                professor_id: effectiveProfessorId || null,
-                class_datetime: newSlotStart.toISOString(),
-                class_slot_id: primarySlot?.id || null,
-                status: 'scheduled',
-                duration_minutes: classDurationMinutes,
-              });
-            }
+            appointmentInserts.push({
+              student_id: selectedStudentId,
+              professor_id: null, // Sempre null para pendência
+              class_datetime: newSlotStart.toISOString(),
+              class_slot_id: null, // Não há slot específico sem professor
+              status: 'scheduled',
+              duration_minutes: classDurationMinutes,
+            });
+            // }
             classesScheduled++;
           }
           currentDate = add(currentDate, { days: 1 });
         }
 
         // --- SINALIZAÇÃO DE CONFLITOS ---
-        if (effectiveProfessorId && conflictsCount > 0) {
-          if (!window.confirm(`Sinalização de Agenda: O professor selecionado possui ${conflictsCount} conflitos de horário ou horários inativos para este pacote.\n\nDeseja gerar essas ${conflictsCount} aulas como PENDÊNCIAS (sem professor atribuído)?`)) {
-            setIsSubmittingPackage(false);
-            return;
-          }
-        }
+        // REMOVIDO: Lógica de sinalização de conflitos, pois não há professor para verificar.
+        // if (effectiveProfessorId && conflictsCount > 0) {
+        //   if (!window.confirm(`Sinalização de Agenda: O professor selecionado possui ${conflictsCount} conflitos de horário ou horários inativos para este pacote.\n\nDeseja gerar essas ${conflictsCount} aulas como PENDÊNCIAS (sem professor atribuído)?`)) {
+        //     setIsSubmittingPackage(false);
+        //     return;
+        //   }
+        // }
 
         if (appointmentInserts.length === 0) {
           throw new Error("Não foi possível agendar nenhuma aula no período selecionado. Verifique os dias escolhidos.");
@@ -869,58 +876,58 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       // --- 2. VERIFICAR SE PRECISA APROVAÇÃO DO PROFESSOR ---
       // Se há professor selecionado, criar SOLICITAÇÃO para aprovação
       // Se não há professor, criar pacote diretamente (como pendência)
+      // REMOVIDO: O fluxo de solicitação de aprovação do professor.
+      // if (effectiveProfessorId) {
+      //   // CRIAR SOLICITAÇÃO DE AULAS PARA O PROFESSOR APROVAR
+      //   const solicitacaoData = {
+      //     type: 'atribuicao_aulas', // Tipo especial para atribuição de aulas/pacotes
+      //     is_recurring: isAutomaticScheduling,
+      //     student_name: students.find(s => s.id === selectedStudentId)?.full_name || 'Aluno',
+      //     package_id: selectedPackageData.id,
+      //     package_name: isAutomaticScheduling ? packageName : selectedPackageData.name,
+      //     classes_count: classesToRegister,
+      //     price: priceToRegister,
+      //     start_date: format(finalStartDate, 'yyyy-MM-dd'),
+      //     end_date: format(finalEndDate, 'yyyy-MM-dd'),
+      //     duration_minutes: classDurationMinutes,
+      //     days: days,
+      //     day_times: dayTimes,
+      //     observation: observation,
+      //     time: dayTimes[days[0]] || '08:00'
+      //   };
 
-      if (effectiveProfessorId) {
-        // CRIAR SOLICITAÇÃO DE AULAS PARA O PROFESSOR APROVAR
-        const solicitacaoData = {
-          type: 'atribuicao_aulas', // Tipo especial para atribuição de aulas/pacotes
-          is_recurring: isAutomaticScheduling,
-          student_name: students.find(s => s.id === selectedStudentId)?.full_name || 'Aluno',
-          package_id: selectedPackageData.id,
-          package_name: isAutomaticScheduling ? packageName : selectedPackageData.name,
-          classes_count: classesToRegister,
-          price: priceToRegister,
-          start_date: format(finalStartDate, 'yyyy-MM-dd'),
-          end_date: format(finalEndDate, 'yyyy-MM-dd'),
-          duration_minutes: classDurationMinutes,
-          days: days,
-          day_times: dayTimes,
-          observation: observation,
-          time: dayTimes[days[0]] || '08:00'
-        };
+      //   const { error: solicitacaoError } = await supabase.from('solicitudes_clase').insert({
+      //     alumno_id: selectedStudentId,
+      //     profesor_id: effectiveProfessorId,
+      //     horarios_propuestos: JSON.stringify(solicitacaoData),
+      //     status: 'Pendiente',
+      //     is_recurring: isAutomaticScheduling
+      //   });
 
-        const { error: solicitacaoError } = await supabase.from('solicitudes_clase').insert({
-          alumno_id: selectedStudentId,
-          profesor_id: effectiveProfessorId,
-          horarios_propuestos: JSON.stringify(solicitacaoData),
-          status: 'Pendiente',
-          is_recurring: isAutomaticScheduling
-        });
+      //   if (solicitacaoError) throw solicitacaoError;
 
-        if (solicitacaoError) throw solicitacaoError;
+      //   // Atualizar perfil do aluno com professor pendente
+      //   await supabase.from('profiles').update({
+      //     pending_professor_id: effectiveProfessorId,
+      //     pending_professor_status: 'aguardando_aprovacao',
+      //     pending_professor_requested_at: new Date().toISOString()
+      //   }).eq('id', selectedStudentId);
 
-        // Atualizar perfil do aluno com professor pendente
-        await supabase.from('profiles').update({
-          pending_professor_id: effectiveProfessorId,
-          pending_professor_status: 'aguardando_aprovacao',
-          pending_professor_requested_at: new Date().toISOString()
-        }).eq('id', selectedStudentId);
+      //   const professorName = professors.find(p => p.id === effectiveProfessorId)?.full_name || 'Professor';
 
-        const professorName = professors.find(p => p.id === effectiveProfessorId)?.full_name || 'Professor';
+      //   toast({
+      //     title: 'Solicitação Enviada!',
+      //     description: `Aguardando aprovação de ${professorName}. O pacote será criado após a aprovação.`
+      //   });
 
-        toast({
-          title: 'Solicitação Enviada!',
-          description: `Aguardando aprovação de ${professorName}. O pacote será criado após a aprovação.`
-        });
+      //   // Limpar campos
+      //   setSelectedStudentId(null);
+      //   setObservation('');
+      //   clearPckPersonalData();
 
-        // Limpar campos
-        setSelectedStudentId(null);
-        setObservation('');
-        clearPckPersonalData();
-
-        if (onUpdate) onUpdate();
-        return; // Sair da função - não criar nada mais
-      }
+      //   if (onUpdate) onUpdate();
+      //   return; // Sair da função - não criar nada mais
+      // }
 
       // --- FLUXO SEM PROFESSOR (PENDÊNCIA - CRIAR DIRETAMENTE) ---
 
@@ -1018,7 +1025,8 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
             <form onSubmit={handleAssignPackage} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Seleção de Professor (visível apenas se o global for 'all') */}
-                {professorIdFromProps === 'all' && (
+                {/* REMOVIDO: O Select de professor foi removido conforme a instrução. */}
+                {/* {professorIdFromProps === 'all' && (
                   <div className="space-y-2">
                     <Label>Professor Titular das Aulas</Label>
                     <Select value={effectiveProfessorId || 'none'} onValueChange={(v) => setLocalProfessorId(v === 'none' ? null : v)}>
@@ -1033,7 +1041,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
                       </SelectContent>
                     </Select>
                   </div>
-                )}
+                )} */}
 
                 {/* Seleção de Aluno */}
                 <div className="space-y-2">
