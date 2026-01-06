@@ -92,6 +92,30 @@ const LogsTab = ({ dashboardData }) => {
         return translations[tableName] || tableName;
     };
 
+    // Helper para traduzir campos
+    const translateField = (field) => {
+        const translations = {
+            'class_datetime': 'Data/Hora da Aula',
+            'status': 'Status',
+            'student_id': 'Aluno',
+            'professor_id': 'Professor',
+            'full_name': 'Nome Completo',
+            'email': 'Email',
+            'phone': 'Telefone',
+            'spanish_level': 'Nível de Espanhol',
+            'reschedule_reason': 'Motivo do Reagendamento',
+            'observation': 'Observação',
+            'start_time': 'Horário de Início',
+            'end_time': 'Horário de Término',
+            'day_of_week': 'Dia da Semana',
+            'package_id': 'Pacote',
+            'assigned_classes': 'Aulas Atribuídas',
+            'purchase_date': 'Data da Compra',
+            'expiration_date': 'Data de Expiração'
+        };
+        return translations[field] || field;
+    };
+
     // Helper para gerar descrição humana
     const generateHumanDescription = (log) => {
         try {
