@@ -569,6 +569,21 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
       // Agrupar por professor e calcular compatibilidade real por dia/hora
       const professorMatches = {};
+      const professorIds = [...new Set((allSlots || []).map(s => s.professor_id))];
+
+      // BUSCAR APPOINTMENTS EXISTENTES (Próximos 7 dias) para verificar conflitos reais
+      const today = getBrazilDate();
+      const nextWeek = add(today, { days: 7 });
+
+      const { data: busyApps } = await supabase
+        .from('appointments')
+        .select('professor_id, class_datetime, duration_minutes')
+        .in('professor_id', professorIds)
+        .gte('class_datetime', today.toISOString())
+        .lte('class_datetime', nextWeek.toISOString())
+        .neq('status', 'cancelled');
+
+      const busyAppointments = busyApps || [];
 
       (allSlots || []).forEach(slot => {
         const profId = slot.professor_id;
@@ -579,16 +594,42 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         const slotHour = parseInt(slot.start_time.split(':')[0]);
 
         if (Math.abs(slotHour - targetHour) <= 1) {
-          if (!professorMatches[profId]) {
-            professorMatches[profId] = {
-              professor: slot.professor,
-              matchedDays: new Set(),
-              matchedSlots: [],
-              totalDaysRequested: preferredDays.length
-            };
+          // VERIFICAÇÃO DE CONFLITO COM AGENDA REAL
+          // Calcula a data específica desse slot na próxima semana para checar colisão
+          const slotDayIndex = slot.day_of_week;
+          const currentDayIndex = getDay(today);
+          let daysUntilSlot = slotDayIndex - currentDayIndex;
+          if (daysUntilSlot < 0) daysUntilSlot += 7;
+
+          // Data exata do slot nesta semana
+          const slotDate = add(today, { days: daysUntilSlot });
+          // Ajustar hora
+          const [h, m] = slot.start_time.split(':').map(Number);
+          const slotDateTime = new Date(slotDate.getFullYear(), slotDate.getMonth(), slotDate.getDate(), h, m, 0);
+
+          // Verificar se existe appointment colidindo
+          const hasConflict = busyAppointments.some(apt => {
+            if (apt.professor_id !== profId) return false;
+            const aptStart = parseISO(apt.class_datetime);
+            const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
+            const slotEnd = add(slotDateTime, { minutes: 30 }); // Assumindo slot de 30min para verificação básica
+
+            // Interseção de horários
+            return (slotDateTime < aptEnd && slotEnd > aptStart);
+          });
+
+          if (!hasConflict) {
+            if (!professorMatches[profId]) {
+              professorMatches[profId] = {
+                professor: slot.professor,
+                matchedDays: new Set(),
+                matchedSlots: [],
+                totalDaysRequested: preferredDays.length
+              };
+            }
+            professorMatches[profId].matchedDays.add(slot.day_of_week);
+            professorMatches[profId].matchedSlots.push(slot);
           }
-          professorMatches[profId].matchedDays.add(slot.day_of_week);
-          professorMatches[profId].matchedSlots.push(slot);
         }
       });
 
