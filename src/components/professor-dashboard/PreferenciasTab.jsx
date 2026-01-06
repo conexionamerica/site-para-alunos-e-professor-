@@ -866,7 +866,63 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
         }
       }
 
-      // --- 2. REGISTROS NO BANCO (BILLING, LOGS, APPOINTMENTS) ---
+      // --- 2. VERIFICAR SE PRECISA APROVAÇÃO DO PROFESSOR ---
+      // Se há professor selecionado, criar SOLICITAÇÃO para aprovação
+      // Se não há professor, criar pacote diretamente (como pendência)
+
+      if (effectiveProfessorId) {
+        // CRIAR SOLICITAÇÃO DE AULAS PARA O PROFESSOR APROVAR
+        const solicitacaoData = {
+          type: 'atribuicao_aulas', // Tipo especial para atribuição de aulas/pacotes
+          is_recurring: isAutomaticScheduling,
+          student_name: students.find(s => s.id === selectedStudentId)?.full_name || 'Aluno',
+          package_id: selectedPackageData.id,
+          package_name: isAutomaticScheduling ? packageName : selectedPackageData.name,
+          classes_count: classesToRegister,
+          price: priceToRegister,
+          start_date: format(finalStartDate, 'yyyy-MM-dd'),
+          end_date: format(finalEndDate, 'yyyy-MM-dd'),
+          duration_minutes: classDurationMinutes,
+          days: days,
+          day_times: dayTimes,
+          observation: observation,
+          time: dayTimes[days[0]] || '08:00'
+        };
+
+        const { error: solicitacaoError } = await supabase.from('solicitudes_clase').insert({
+          alumno_id: selectedStudentId,
+          profesor_id: effectiveProfessorId,
+          horarios_propuestos: JSON.stringify(solicitacaoData),
+          status: 'Pendiente',
+          is_recurring: isAutomaticScheduling
+        });
+
+        if (solicitacaoError) throw solicitacaoError;
+
+        // Atualizar perfil do aluno com professor pendente
+        await supabase.from('profiles').update({
+          pending_professor_id: effectiveProfessorId,
+          pending_professor_status: 'aguardando_aprovacao',
+          pending_professor_requested_at: new Date().toISOString()
+        }).eq('id', selectedStudentId);
+
+        const professorName = professors.find(p => p.id === effectiveProfessorId)?.full_name || 'Professor';
+
+        toast({
+          title: 'Solicitação Enviada!',
+          description: `Aguardando aprovação de ${professorName}. O pacote será criado após a aprovação.`
+        });
+
+        // Limpar campos
+        setSelectedStudentId(null);
+        setObservation('');
+        clearPckPersonalData();
+
+        if (onUpdate) onUpdate();
+        return; // Sair da função - não criar nada mais
+      }
+
+      // --- FLUXO SEM PROFESSOR (PENDÊNCIA - CRIAR DIRETAMENTE) ---
 
       // FATURA
       const { error: billErr } = await supabase.from('billing').insert({
@@ -881,7 +937,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
       // LOG
       const { error: logErr } = await supabase.from('assigned_packages_log').insert({
-        professor_id: effectiveProfessorId,
+        professor_id: null, // Sem professor
         student_id: selectedStudentId,
         package_id: selectedPackageData.id,
         observation: observation,
@@ -891,34 +947,10 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       });
       if (logErr) throw logErr;
 
-      // AULAS (Se houver)
+      // AULAS (sem professor - como pendência)
       if (appointmentInserts.length > 0) {
         const { error: aptErr } = await supabase.from('appointments').insert(appointmentInserts);
         if (aptErr) throw aptErr;
-
-        // BLOQUEAR SLOTS (Apenas se houver professor)
-        if (effectiveProfessorId) {
-          const slotIdsToBlock = new Set();
-          const { data: profSlots } = await supabase
-            .from('class_slots')
-            .select('id, day_of_week, start_time')
-            .eq('professor_id', effectiveProfessorId);
-
-          if (profSlots && profSlots.length > 0) {
-            for (const dayIdx of days) {
-              const startTime = dayTimes[dayIdx];
-              for (let i = 0; i < slotsPerClass; i++) {
-                const t = format(add(parse(startTime, 'HH:mm', new Date()), { minutes: i * 15 }), 'HH:mm:ss');
-                const match = profSlots.find(s => s.day_of_week === dayIdx && s.start_time === t);
-                if (match) slotIdsToBlock.add(match.id);
-              }
-            }
-
-            if (slotIdsToBlock.size > 0) {
-              await supabase.from('class_slots').update({ status: 'filled' }).in('id', Array.from(slotIdsToBlock));
-            }
-          }
-        }
       }
 
       // ATUALIZAR ROTINA NO PERFIL
@@ -930,8 +962,8 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
       // --- 3. FINALIZAÇÃO ---
       toast({
-        title: 'Sucesso!',
-        description: `Pacote "${isAutomaticScheduling ? packageName : selectedPackageData.name}" incluído com ${appointmentInserts.length} aulas agendadas.`
+        title: 'Pacote Criado (Pendência)',
+        description: `Pacote "${isAutomaticScheduling ? packageName : selectedPackageData.name}" criado com ${appointmentInserts.length} aulas. ATENÇÃO: Aluno sem professor vinculado.`
       });
 
       // Limpar campos

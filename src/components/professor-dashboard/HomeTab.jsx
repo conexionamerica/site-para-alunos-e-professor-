@@ -885,6 +885,121 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       return;
     }
 
+    // TRATAMENTO ESPECIAL PARA SOLICITAÇÃO DE ATRIBUIÇÃO DE AULAS
+    const isAtribuicaoAulasRequest = solicitacaoData?.type === 'atribuicao_aulas';
+    if (isAtribuicaoAulasRequest) {
+      const studentId = request.alumno_id;
+
+      if (newStatus === 'Aceita') {
+        try {
+          // Extrair dados do pacote armazenados na solicitação
+          const pkgData = solicitacaoData;
+
+          // 1. Criar BILLING
+          const { error: billErr } = await supabase.from('billing').insert({
+            user_id: studentId,
+            package_id: pkgData.package_id,
+            amount_paid: pkgData.price,
+            purchase_date: pkgData.start_date,
+            end_date: pkgData.end_date,
+            custom_package_name: pkgData.is_recurring ? pkgData.package_name : null
+          });
+          if (billErr) throw billErr;
+
+          // 2. Criar LOG
+          const { error: logErr } = await supabase.from('assigned_packages_log').insert({
+            professor_id: professorId,
+            student_id: studentId,
+            package_id: pkgData.package_id,
+            observation: pkgData.observation || '',
+            assigned_classes: pkgData.classes_count,
+            custom_package_name: pkgData.is_recurring ? pkgData.package_name : null,
+            status: 'Ativo'
+          });
+          if (logErr) throw logErr;
+
+          // 3. Criar APPOINTMENTS
+          if (pkgData.is_recurring && pkgData.days && pkgData.days.length > 0) {
+            const appointmentInserts = [];
+            const startDate = parseISO(pkgData.start_date);
+            const endDate = parseISO(pkgData.end_date);
+            let currentDate = getBrazilDate() > startDate ? getBrazilDate() : startDate;
+            let classesScheduled = 0;
+            const classDuration = pkgData.duration_minutes || 30;
+
+            while (classesScheduled < pkgData.classes_count && currentDate <= endDate) {
+              const dayIdx = getDay(currentDate);
+
+              if (pkgData.days.includes(dayIdx)) {
+                const startTime = pkgData.day_times?.[dayIdx] || pkgData.time || '08:00';
+                const [hour, minute] = startTime.split(':').map(Number);
+                const classDateTime = new Date(
+                  currentDate.getFullYear(),
+                  currentDate.getMonth(),
+                  currentDate.getDate(),
+                  hour, minute, 0
+                );
+
+                appointmentInserts.push({
+                  student_id: studentId,
+                  professor_id: professorId,
+                  class_datetime: classDateTime.toISOString(),
+                  class_slot_id: null,
+                  status: 'scheduled',
+                  duration_minutes: classDuration
+                });
+                classesScheduled++;
+              }
+              currentDate = add(currentDate, { days: 1 });
+            }
+
+            if (appointmentInserts.length > 0) {
+              const { error: aptErr } = await supabase.from('appointments').insert(appointmentInserts);
+              if (aptErr) throw aptErr;
+            }
+          }
+
+          // 4. Atualizar perfil do aluno
+          await supabase.from('profiles').update({
+            assigned_professor_id: professorId,
+            pending_professor_id: null,
+            pending_professor_status: null,
+            pending_professor_requested_at: null,
+            preferred_schedule: pkgData.day_times || {}
+          }).eq('id', studentId);
+
+          toast({
+            variant: 'default',
+            title: 'Aulas Aprovadas!',
+            description: `Pacote "${pkgData.package_name}" criado com ${pkgData.classes_count} aulas para ${request.profile?.full_name || 'Aluno'}.`
+          });
+        } catch (e) {
+          await supabase.from('solicitudes_clase').update({ status: 'Pendiente' }).eq('solicitud_id', solicitudId);
+          toast({ variant: 'destructive', title: 'Erro ao aprovar aulas', description: e.message });
+        }
+      } else if (newStatus === 'Rejeitada') {
+        try {
+          await supabase.from('profiles').update({
+            pending_professor_id: null,
+            pending_professor_status: 'rejeitado',
+            pending_professor_requested_at: null
+          }).eq('id', studentId);
+
+          toast({
+            variant: 'destructive',
+            title: 'Aulas Rejeitadas',
+            description: `${request.profile?.full_name || 'Aluno'} não terá aulas criadas. Reaparecerá nas pendências.`
+          });
+        } catch (e) {
+          toast({ variant: 'destructive', title: 'Erro ao rejeitar', description: e.message });
+        }
+      }
+
+      if (onUpdate) onUpdate(solicitudId);
+      setUpdatingRequestId(null);
+      return;
+    }
+
     // 2. Cria as aulas recorrentes se a solicitação for aceita (fluxo normal)
     if (newStatus === 'Aceita' && request.is_recurring) {
       if (typeof request.horarios_propuestos !== 'string' || !request.horarios_propuestos) {
@@ -1061,6 +1176,25 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                 <span>Horários: {schedule.days.map(d => daysOfWeekMap[d]).join(', ')} às {schedule.time}</span>
               </div>
             )}
+          </div>
+        );
+      }
+
+      // Verificar se é uma solicitação de atribuição de aulas
+      if (schedule.type === 'atribuicao_aulas') {
+        return (
+          <div className="mt-2 p-2 bg-green-50 rounded-md border border-green-200">
+            <div className="flex items-center gap-2 text-sm text-green-700">
+              <BookOpen className="w-4 h-4" />
+              <span className="font-semibold">Solicitação de Aulas</span>
+            </div>
+            <div className="text-xs text-green-600 mt-1 space-y-0.5">
+              <p><strong>Pacote:</strong> {schedule.package_name}</p>
+              <p><strong>Aulas:</strong> {schedule.classes_count} | <strong>Valor:</strong> R$ {schedule.price?.toFixed(2)}</p>
+              {schedule.days && schedule.days.length > 0 && (
+                <p><strong>Dias:</strong> {schedule.days.map(d => daysOfWeekMap[d]).join(', ')}</p>
+              )}
+            </div>
           </div>
         );
       }
