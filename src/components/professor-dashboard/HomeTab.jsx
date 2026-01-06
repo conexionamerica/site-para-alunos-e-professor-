@@ -883,36 +883,24 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
               pending_professor_requested_at: null
             })
             .eq('id', studentId);
-
           if (vinculoError) throw vinculoError;
 
-          if (vinculoError) throw vinculoError;
+          // USAR RPC PARA TRANSFERÊNCIA SEGURA DE DADOS (APPOINTMENTS, LOGS, PROFILE)
+          // Isso garante que mesmo sem permissão de update direto (RLS), o servidor faça a troca.
+          const { error: rpcError } = await supabase.rpc('transfer_student_data', {
+            p_student_id: studentId,
+            p_professor_id: professorId
+          });
 
-          // ATUALIZAR APPOINTMENTS EXISTENTES (transferir aulas sem professor para este professor)
-          const todayISO = new Date().toISOString();
-          const { error: apptUpdateError } = await supabase
-            .from('appointments')
-            .update({ professor_id: professorId })
-            .eq('student_id', studentId)
-            .is('professor_id', null) // Apenas os que estão sem professor
-            .gte('class_datetime', todayISO) // Apenas futuros
-            .neq('status', 'cancelled'); // Ignorar cancelados
-
-          if (apptUpdateError) console.error("Erro ao transferir aulas:", apptUpdateError);
-
-          // ATUALIZAR LOGS DE PACOTES (transferir logs sem professor)
-          const { error: logUpdateError } = await supabase
-            .from('assigned_packages_log')
-            .update({ professor_id: professorId })
-            .eq('student_id', studentId)
-            .is('professor_id', null);
-
-          if (logUpdateError) console.error("Erro ao transferir logs:", logUpdateError);
+          if (rpcError) {
+            console.error("Erro na RPC transfer_student_data:", rpcError);
+            throw new Error("Falha ao transferir aulas e dados do aluno. Verifique se a função RPC existe.");
+          }
 
           toast({
             variant: 'default',
             title: 'Vinculação Aprovada!',
-            description: `${request.profile?.full_name || 'Aluno'} agora está vinculado a você e as aulas pendentes foram assumidas.`
+            description: `${request.profile?.full_name || 'Aluno'} vinculado e aulas transferidas com sucesso.`
           });
         } catch (e) {
           // Reverter status da solicitação
