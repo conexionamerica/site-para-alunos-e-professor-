@@ -740,14 +740,24 @@ const AlunosTab = ({ dashboardData }) => {
             return matchesSearch && s.assigned_professor_id === professorId;
         }
 
-        // Para superadmin com filtro ativo: filtrar por assigned_professor_id
+        // Superadmin com filtro ativo: filtrar por assigned_professor_id
         if (effectiveProfessorFilter !== 'all') {
+            if (effectiveProfessorFilter === 'none') {
+                return matchesSearch && !s.assigned_professor_id;
+            }
             return matchesSearch && s.assigned_professor_id === effectiveProfessorFilter;
         }
 
         // Superadmin sem filtro: mostrar todos
         return matchesSearch;
     });
+
+    // Debug
+    useEffect(() => {
+        console.log('AlunosTab Total Students:', students.length);
+        console.log('AlunosTab Filtered Students:', filteredStudents.length);
+        console.log('AlunosTab Filter:', effectiveProfessorFilter);
+    }, [students.length, filteredStudents.length, effectiveProfessorFilter]);
 
 
 
@@ -838,6 +848,7 @@ const AlunosTab = ({ dashboardData }) => {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">Todos os professores</SelectItem>
+                                    <SelectItem value="none">Sem Professor Vinculado</SelectItem>
                                     {professors.map(prof => (
                                         <SelectItem key={prof.id} value={prof.id}>
                                             {prof.full_name}
