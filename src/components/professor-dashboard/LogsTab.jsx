@@ -501,9 +501,13 @@ const LogsTab = ({ dashboardData }) => {
                                 <div className="grid grid-cols-2 gap-3 text-sm">
                                     <div className="bg-slate-50 p-3 rounded-lg">
                                         <p className="text-slate-500 text-xs font-medium">Data/Hora</p>
-                                        <p className="font-semibold text-slate-800">
-                                            {format(new Date(selectedLog.created_at), "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR })}
-                                        </p>
+                                        {(() => {
+                                            try {
+                                                return format(new Date(selectedLog.created_at), "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR });
+                                            } catch (e) {
+                                                return selectedLog.created_at;
+                                            }
+                                        })()}
                                     </div>
                                     <div className="bg-slate-50 p-3 rounded-lg">
                                         <p className="text-slate-500 text-xs font-medium">Tipo de Ação</p>
