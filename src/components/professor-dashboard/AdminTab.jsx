@@ -43,13 +43,14 @@ const AdminTab = ({ dashboardData }) => {
     const [professorAvailability, setProfessorAvailability] = useState(null);
     const [availabilityWarning, setAvailabilityWarning] = useState(null);
 
-    // Form state with persistence - SIMPLIFICADO: apenas campos essenciais
+    // Form state with persistence - Campos essenciais + professor
     const [formData, setFormData, clearFormData] = useFormPersistence('admin_user_form', {
         full_name: '',
         email: '',
         password: '',
         role: 'student',
-        is_active: true
+        is_active: true,
+        assigned_professor_id: '' // Campo para selecionar professor
     });
     const [generatedPassword, setGeneratedPassword] = useState('');
 
@@ -1057,6 +1058,35 @@ const AdminTab = ({ dashboardData }) => {
                                         </SelectContent>
                                     </Select>
                                 </div>
+
+                                {/* 5. Professor Vinculado (apenas para alunos) */}
+                                {formData.role === 'student' && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="assigned_professor">Professor Vinculado</Label>
+                                        <Select
+                                            value={formData.assigned_professor_id || 'none'}
+                                            onValueChange={(value) => {
+                                                setFormData({ ...formData, assigned_professor_id: value === 'none' ? '' : value });
+                                                checkProfessorAvailability(value);
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione um professor" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">Nenhum (pendência)</SelectItem>
+                                                {professors.map(prof => (
+                                                    <SelectItem key={prof.id} value={prof.id}>
+                                                        {prof.full_name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-xs text-slate-500">
+                                            O professor selecionado receberá uma solicitação de aprovação.
+                                        </p>
+                                    </div>
+                                )}
                             </>
                         )}
 
@@ -1076,6 +1106,42 @@ const AdminTab = ({ dashboardData }) => {
                                         <Badge variant="outline">Código: {editingUser.student_code}</Badge>
                                     )}
                                 </div>
+
+                                {/* Campo de Professor Vinculado para alunos */}
+                                {editingUser.role === 'student' && (
+                                    <div className="grid gap-2 mt-3 pt-3 border-t">
+                                        <Label htmlFor="edit_assigned_professor">Professor Vinculado</Label>
+                                        <Select
+                                            value={formData.assigned_professor_id || 'none'}
+                                            onValueChange={(value) => {
+                                                setFormData({ ...formData, assigned_professor_id: value === 'none' ? '' : value });
+                                                checkProfessorAvailability(value);
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Selecione um professor" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">Nenhum (pendência)</SelectItem>
+                                                {professors.map(prof => (
+                                                    <SelectItem key={prof.id} value={prof.id}>
+                                                        {prof.full_name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {editingUser.assigned_professor_id && (
+                                            <p className="text-xs text-slate-500">
+                                                Professor atual: {professors.find(p => p.id === editingUser.assigned_professor_id)?.full_name || 'Desconhecido'}
+                                            </p>
+                                        )}
+                                        {formData.assigned_professor_id && formData.assigned_professor_id !== editingUser.assigned_professor_id && (
+                                            <p className="text-xs text-amber-600">
+                                                ⚠️ {professors.find(p => p.id === formData.assigned_professor_id)?.full_name} receberá uma solicitação de aprovação.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
 
