@@ -741,8 +741,18 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
     try {
       const classesToRegister = isAutomaticScheduling ? parseInt(totalClasses, 10) : selectedPackageData.number_of_classes;
       const priceToRegister = isAutomaticScheduling ? parseFloat(price) : selectedPackageData.price;
-      const finalStartDate = isAutomaticScheduling ? pckStartDate : purchaseDate;
-      const finalEndDate = isAutomaticScheduling ? pckEndDate : endDate;
+
+      // CORREÇÃO: Garantir que as datas sejam objetos Date válidos
+      const rawStartDate = isAutomaticScheduling ? pckStartDate : purchaseDate;
+      const rawEndDate = isAutomaticScheduling ? pckEndDate : endDate;
+      const finalStartDate = rawStartDate instanceof Date ? rawStartDate : new Date(rawStartDate);
+      const finalEndDate = rawEndDate instanceof Date ? rawEndDate : new Date(rawEndDate);
+
+      // Validar se as datas são válidas
+      if (isNaN(finalStartDate.getTime()) || isNaN(finalEndDate.getTime())) {
+        throw new Error('Datas inválidas. Verifique a data de início e fim.');
+      }
+
       const classDurationMinutes = isAutomaticScheduling ? parseInt(duration, 10) : 30;
       const slotsPerClass = Math.ceil(classDurationMinutes / 15);
 

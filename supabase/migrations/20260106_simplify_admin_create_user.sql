@@ -138,9 +138,7 @@ BEGIN
         address_city,
         address_state,
         address_zip_code,
-        is_active,
-        created_at,
-        updated_at
+        is_active
     ) VALUES (
         new_user_id,
         p_full_name,
@@ -160,9 +158,7 @@ BEGIN
         p_address_city,
         p_address_state,
         p_address_zip_code,
-        TRUE,
-        NOW(),
-        NOW()
+        TRUE
     ) RETURNING id INTO new_profile_id;
 
     RETURN new_profile_id;
