@@ -498,6 +498,44 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
 
     if (!student) return null;
 
+    const handleUnbind = async () => {
+        if (!student) return;
+
+        const confirmUnbind = window.confirm(
+            `Tem certeza que deseja DESVINCULAR ${student.full_name}?\n\n` +
+            `O aluno ficará sem professor e os horários na agenda do professor antigo serão LIBERADOS imediatamente.`
+        );
+
+        if (!confirmUnbind) return;
+
+        setIsSubmitting(true);
+        try {
+            const { error: rpcError } = await supabase.rpc('transfer_student_data', {
+                p_student_id: student.id,
+                p_professor_id: null // NULL desvincula e libera slots
+            });
+
+            if (rpcError) throw rpcError;
+
+            toast({
+                title: 'Aluno desvinculado!',
+                description: 'Vínculo removido e horários liberados com sucesso.'
+            });
+
+            onUpdate();
+            onClose();
+        } catch (error) {
+            console.error('Erro ao desvincular:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao desvincular',
+                description: error.message
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const selectedMatch = professorsWithMatch.find(m => m.professor.id === selectedProfessor?.id);
 
     return (
@@ -593,21 +631,34 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
                     )}
                 </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
-                        Cancelar
-                    </Button>
+                <DialogFooter className="flex sm:justify-between items-center w-full">
                     <Button
-                        onClick={handleChangeProfessor}
-                        disabled={!selectedProfessor || isSubmitting}
-                        className="bg-purple-600 hover:bg-purple-700"
+                        type="button"
+                        variant="ghost"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={handleUnbind}
+                        disabled={isSubmitting}
                     >
-                        {isSubmitting ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Alterando...</>
-                        ) : (
-                            <><RefreshCw className="mr-2 h-4 w-4" /> Confirmar Alteração</>
-                        )}
+                        <UserX className="mr-2 h-4 w-4" />
+                        Desvincular
                     </Button>
+
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={handleChangeProfessor}
+                            disabled={!selectedProfessor || isSubmitting}
+                            className="bg-purple-600 hover:bg-purple-700"
+                        >
+                            {isSubmitting ? (
+                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</>
+                            ) : (
+                                <><RefreshCw className="mr-2 h-4 w-4" /> Confirmar Alteração</>
+                            )}
+                        </Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
