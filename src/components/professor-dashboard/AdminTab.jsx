@@ -511,6 +511,45 @@ const AdminTab = ({ dashboardData }) => {
                         description: `Usuário criado com sucesso. Senha: ${formData.password}`,
                         duration: 10000,
                     });
+
+                    // SE FOR ALUNO E TIVER PROFESSOR SELECIONADO, CRIAR SOLICITAÇÃO
+                    if (formData.role === 'student' && formData.assigned_professor_id) {
+                        const newStudentId = newUserId; // ID retornado pela RPC
+                        const profId = formData.assigned_professor_id;
+                        const profName = professors.find(p => p.id === profId)?.full_name || 'Professor';
+
+                        // 1. Criar solicitação
+                        const solicitacaoData = {
+                            type: 'vinculacao',
+                            is_recurring: false,
+                            student_name: formData.full_name,
+                            old_professor_id: null,
+                            old_professor_name: null,
+                            preferred_schedule: {},
+                            days: [],
+                            time: '08:00'
+                        };
+
+                        await supabase.from('solicitudes_clase').insert({
+                            alumno_id: newStudentId,
+                            profesor_id: profId,
+                            horarios_propuestos: JSON.stringify(solicitacaoData),
+                            status: 'Pendiente',
+                            is_recurring: false
+                        });
+
+                        // 2. Atualizar perfil com pendência
+                        await supabase.from('profiles').update({
+                            pending_professor_id: profId,
+                            pending_professor_status: 'aguardando_aprovacao',
+                            pending_professor_requested_at: new Date().toISOString()
+                        }).eq('id', newStudentId);
+
+                        toast({
+                            title: 'Solicitação Enviada',
+                            description: `Solicitação de vinculação enviada para ${profName}.`,
+                        });
+                    }
                 } catch (rpcException) {
                     console.error('Exception during user creation via RPC:', rpcException);
                     throw rpcException;
