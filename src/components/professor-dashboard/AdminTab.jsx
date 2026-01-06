@@ -331,7 +331,7 @@ const AdminTab = ({ dashboardData }) => {
                     full_name: formData.full_name?.trim(),
                     email: formData.email?.trim().toLowerCase(), // Update email stored in profiles (optional)
                     phone: cleanPhone(formData.phone),
-                    student_code: formData.student_code?.trim(),
+                    student_code: formData.student_code?.trim() || null,
                     role: formData.role, // Allow role change
                     responsible_name: formData.responsible_name?.trim(),
                     responsible_phone: cleanPhone(formData.responsible_phone),
@@ -339,7 +339,7 @@ const AdminTab = ({ dashboardData }) => {
                     spanish_level: formData.spanish_level,
                     learning_goals: formData.learning_goals,
                     observations: formData.observations,
-                    cpf: cleanCPF(formData.cpf),
+                    cpf: cleanCPF(formData.cpf) || null,
                     birth_date: formData.birth_date || null,
                     gender: formData.gender || null,
                     address_street: formData.address_street || null,
