@@ -897,12 +897,12 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
             throw new Error("Falha ao transferir aulas e dados do aluno. Verifique se a função RPC existe.");
           }
 
-          const counts = rpcResult || { appointments: 0, logs: 0 };
+          const counts = rpcResult || { appointments: 0, logs: 0, blocked_slots: 0 };
 
           toast({
             variant: 'default',
             title: 'Vinculação Aprovada!',
-            description: `${request.profile?.full_name || 'Aluno'} vinculado com sucesso. (Aulas: ${counts.appointments}, Logs: ${counts.logs})`
+            description: `${request.profile?.full_name || 'Aluno'} vinculado. (Aulas: ${counts.appointments}, Logs: ${counts.logs}, Bloqueios: ${counts.blocked_slots})`
           });
         } catch (e) {
           // Reverter status da solicitação
