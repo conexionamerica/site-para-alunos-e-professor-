@@ -22,8 +22,16 @@ const ProfessorLoginForm = ({ onLogin, loading }) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-2">
-        <Label htmlFor="email-login">Email</Label>
-        <Input id="email-login" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-slate-900 border-slate-700 text-white focus:ring-sky-500" />
+        <Label htmlFor="email-login">Email ou Usuário</Label>
+        <Input
+          id="email-login"
+          type="text"
+          placeholder="seu@email.com ou usuario"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className="bg-slate-900 border-slate-700 text-white focus:ring-sky-500"
+        />
       </div>
       <div className="space-y-2">
         <Label htmlFor="password-login">Senha</Label>
@@ -47,12 +55,34 @@ const ProfessorLoginPage = () => {
   const { setProfessorSession } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = async (email, password) => {
+  const handleLogin = async (identifier, password) => {
     setLoading(true);
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    let loginEmail = identifier;
+
+    // Se não tiver @, assume que é um username e tenta buscar o e-mail
+    if (!identifier.includes('@')) {
+      const { data: profile, error: searchError } = await supabase
+        .from('profiles')
+        .select('real_email')
+        .eq('username', identifier.trim().toLowerCase())
+        .single();
+
+      if (profile?.real_email) {
+        loginEmail = profile.real_email;
+      } else {
+        toast({ variant: "destructive", title: "Usuário não encontrado", description: "O nome de usuário informado não existe." });
+        setLoading(false);
+        return;
+      }
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: loginEmail.trim(),
+      password
+    });
 
     if (authError || !authData.user) {
-      toast({ variant: "destructive", title: "Credenciais inválidas", description: "O e-mail ou a senha estão incorretos." });
+      toast({ variant: "destructive", title: "Credenciais inválidas", description: "O e-mail/usuário ou a senha estão incorretos." });
       setLoading(false);
       return;
     }
