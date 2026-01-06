@@ -56,12 +56,23 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL; END;
 
   -- 6. AULAS, SOLICITAÇÕES
+  -- 6. AULAS, SOLICITAÇÕES
+  -- PRESERVAR EARNINGS: Desvincular aulas completadas em vez de excluir
+  UPDATE appointments 
+  SET student_id = NULL 
+  WHERE student_id = p_user_id AND status = 'completed';
+
+  -- Excluir as demais aulas (futuras, agendadas, pendentes)
   DELETE FROM appointments WHERE student_id = p_user_id OR professor_id = p_user_id;
+  
   DELETE FROM solicitudes_clase WHERE alumno_id = p_user_id OR profesor_id = p_user_id;
 
   -- 7. LOGS E SLOTS
   DELETE FROM class_slots WHERE professor_id = p_user_id;
-  DELETE FROM assigned_packages_log WHERE student_id = p_user_id;
+  
+  -- PRESERVAR HISTÓRICO DE PACOTES
+  UPDATE assigned_packages_log SET student_id = NULL WHERE student_id = p_user_id;
+  -- Se o professor for deletado:
   UPDATE assigned_packages_log SET professor_id = NULL WHERE professor_id = p_user_id;
 
   -- 8. TAREFAS
