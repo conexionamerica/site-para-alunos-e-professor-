@@ -577,16 +577,17 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
   // Funções de exclusão e reversão (esta função DEVE fazer o update no banco de dados)
   const handleDeleteLog = useCallback(async (log) => {
-    const { id: logId, student_id: studentId, package_id: packageId, professor_id: logProfessorId } = log;
+    // 1. Extração de dados expandida incluindo datas mapeadas do histórico
+    const { id: logId, student_id: studentId, package_id: packageId, professor_id: logProfessorId, start_date: startDate, end_date: endDate } = log;
 
     const targetProfessorId = logProfessorId;
 
-    if (!window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. CANCELAR a fatura ativa mais recente.\n3. EXCLUIR TODAS AS AULAS FUTURAS agendadas.\n4. LIBERAR OS HORÁRIOS RECORRENTES (slots).\n\nConfirma a operação?")) {
+    if (!window.confirm("ATENÇÃO: Você está prestes a desfazer a inclusão de um pacote. Isso irá:\n\n1. Marcar o registro como CANCELADO (Permanecerá no histórico).\n2. REMOVER a fatura ativa correspondente.\n3. EXCLUIR TODAS AS AULAS associadas ao pacote (tanto do aluno quanto do professor).\n4. LIBERAR OS HORÁRIOS dos professores.\n\nConfirma a operação?")) {
       return;
     }
 
     try {
-      // Step 1: Mark as Cancelado
+      // Step 1: Mark as Cancelado (Log)
       const { error: updateError } = await supabase
         .from('assigned_packages_log')
         .update({ status: 'Cancelado' })
@@ -595,105 +596,114 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       if (updateError) throw updateError;
 
       let billingRemoved = false;
-      let slotsReverted = false;
+      let slotsRevertedCount = 0;
+      let deletedAptsCount = 0;
 
-      // Step 2: Delete billing
-      const { data: latestBilling, error: billingFetchError } = await supabase
-        .from('billing')
-        .select('id')
-        .eq('user_id', studentId)
-        .eq('package_id', packageId)
-        .gte('end_date', format(getBrazilDate(), 'yyyy-MM-dd'))
-        .order('purchase_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // DATA START: Use log start_date (vindo do billing) ou hoje como fallback
+      const refStartDate = startDate ? parseISO(startDate) : getBrazilDate();
+      // DATA END: Use log end_date (vindo do billing)
+      const refEndDate = endDate ? parseISO(endDate) : null;
 
-      if (billingFetchError && billingFetchError.code !== 'PGRST116') throw billingFetchError;
-
-      if (latestBilling) {
-        const { error: billingDeleteError } = await supabase
-          .from('billing')
-          .delete()
-          .eq('id', latestBilling.id);
-        if (billingDeleteError) throw billingDeleteError;
-        billingRemoved = true;
-      }
-
-      // Step 3: Delete future appointments
+      // Step 2: Identificar e Deletar Appointments (Aulas)
+      // Buscamos aulas do aluno neste período para garantir limpeza total
       let aptQuery = supabase
         .from('appointments')
-        .delete({ count: 'exact' })
+        .select('id, class_slot_id')
         .eq('student_id', studentId)
-        .gte('class_datetime', getBrazilDate().toISOString())
-        .in('status', ['scheduled', 'pending', 'rescheduled']);
+        .gte('class_datetime', format(refStartDate, "yyyy-MM-dd'T'00:00:00"));
 
-      // Filtrar pelo professor do log (pode ser nulo se for pendência)
-      if (logProfessorId) {
-        aptQuery = aptQuery.eq('professor_id', logProfessorId);
-      } else {
-        aptQuery = aptQuery.is('professor_id', null);
+      if (refEndDate) {
+        // Se temos data fim, limitamos (formato ISO para fim do dia)
+        aptQuery = aptQuery.lte('class_datetime', format(refEndDate, "yyyy-MM-dd'T'23:59:59"));
       }
 
-      const { count: deletedAptsCount, error: aptDeleteError } = await aptQuery;
+      // Se o log tem professor, filtramos. Se não, deletamos qualquer aula nesse período (seguro para pacotes recém criados)
+      if (targetProfessorId) {
+        aptQuery = aptQuery.eq('professor_id', targetProfessorId);
+      }
 
-      if (aptDeleteError) throw aptDeleteError;
+      const { data: apptsToDelete, error: apptFetchError } = await aptQuery;
 
-      // Step 4: Revert slots
-      const { data: recurringReq, error: reqFetchError } = await supabase
-        .from('solicitudes_clase')
-        .select('solicitud_id, horarios_propuestos, is_recurring')
-        .eq('alumno_id', studentId)
-        .in('status', ['Aceita', 'Aprovada', 'Pendiente'])
-        .eq('is_recurring', true)
-        .order('solicitud_id', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      if (apptFetchError) throw apptFetchError;
 
-      if (reqFetchError && reqFetchError.code !== 'PGRST116') throw reqFetchError;
+      if (apptsToDelete && apptsToDelete.length > 0) {
+        const apptIds = apptsToDelete.map(a => a.id);
+        const slotIdsToFree = apptsToDelete.map(a => a.class_slot_id).filter(Boolean);
 
-      if (recurringReq && targetProfessorId) {
-        try {
-          const horarios = JSON.parse(recurringReq.horarios_propuestos);
-          if (horarios && horarios.days && horarios.time) {
-            const { data: slotsToRevert, error: slotsFetchError } = await supabase
-              .from('class_slots')
-              .select('id')
-              .eq('professor_id', targetProfessorId)
-              .in('day_of_week', horarios.days)
-              .gte('start_time', horarios.time)
-              .eq('status', 'filled');
+        // A. Deletar Aulas
+        const { error: delApptError, count } = await supabase
+          .from('appointments')
+          .delete({ count: 'exact' })
+          .in('id', apptIds);
 
-            if (slotsFetchError) throw slotsFetchError;
+        if (delApptError) throw delApptError;
+        deletedAptsCount = count;
 
-            if (slotsToRevert && slotsToRevert.length > 0) {
-              const slotIds = slotsToRevert.map(s => s.id);
-              const { error: slotUpdateError, count: revertedSlotsCount } = await supabase
-                .from('class_slots')
-                .update({ status: 'active' }, { count: 'exact' })
-                .in('id', slotIds);
+        // B. Liberar Slots (Se houver IDs de slots vinculados, volta para 'active')
+        if (slotIdsToFree.length > 0) {
+          const uniqueSlotIds = [...new Set(slotIdsToFree)];
+          // Cuidado: só liberar se não houver outra aula lá?
+          // Como deletamos a aula em A, o slot deve ficar livre.
+          const { error: slotError, count: slotCount } = await supabase
+            .from('class_slots')
+            .update({ status: 'active' }, { count: 'exact' })
+            .in('id', uniqueSlotIds);
 
-              if (slotUpdateError) throw slotUpdateError;
-              slotsReverted = revertedSlotsCount > 0;
-            }
-          }
-
-          const { error: reqDeleteError } = await supabase
-            .from('solicitudes_clase')
-            .delete()
-            .eq('solicitud_id', recurringReq.solicitud_id);
-
-          if (reqDeleteError) console.warn("Erro ao deletar solicitação:", reqDeleteError);
-        } catch (e) {
-          console.warn("Could not parse or revert slots:", e);
+          if (!slotError) slotsRevertedCount = slotCount;
         }
       }
 
-      let message = 'Operação concluída. O registro foi marcado como CANCELADO.';
-      if (billingRemoved) message += ' A fatura ativa foi removida.';
-      if (deletedAptsCount > 0) message += ` ${deletedAptsCount} aulas futuras foram excluídas.`;
-      if (slotsReverted) message += ' Os horários recorrentes foram liberados.';
+      // Step 3: Deletar Fatura (Billing)
+      // O histórico já mapeou a fatura correta em 'start_date' (que é o purchase_date)
+      if (startDate) {
+        const { error: billError } = await supabase
+          .from('billing')
+          .delete()
+          .eq('user_id', studentId)
+          .eq('package_id', packageId)
+          .eq('purchase_date', startDate); // Match exato com o log visualizado
 
-      toast({ variant: 'default', title: 'Pacote Cancelado!', description: message });
+        if (!billError) billingRemoved = true;
+      } else {
+        // Fallback se não tivermos data exata: deletar último billing ativo desse pacote
+        const { data: fallbackBilling } = await supabase
+          .from('billing')
+          .select('id')
+          .eq('user_id', studentId)
+          .eq('package_id', packageId)
+          .order('purchase_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (fallbackBilling) {
+          const { error: fbError } = await supabase.from('billing').delete().eq('id', fallbackBilling.id);
+          if (!fbError) billingRemoved = true;
+        }
+      }
+
+      // Step 4: Limpar Solicitações Recorrentes (Legado)
+      // Mantemos por segurança caso tenha sido criado via solicitação
+      try {
+        const { error: reqDeleteError } = await supabase
+          .from('solicitudes_clase')
+          .delete()
+          .eq('alumno_id', studentId)
+          .eq('is_recurring', true)
+          .eq('status', 'Aceita')
+          .gte('updated_at', format(refStartDate, "yyyy-MM-dd'T'00:00:00")); // Criadas a partir do início do pacote
+
+        if (reqDeleteError) console.warn("Erro ao limpar solicitações:", reqDeleteError);
+      } catch (e) {
+        console.warn("Ignorando erro limpeza solicitação:", e);
+      }
+
+      // Mensagem de sucesso detalhada
+      let message = 'Pacote desfeito com sucesso.';
+      if (billingRemoved) message += ' Fatura removida.';
+      if (deletedAptsCount > 0) message += ` ${deletedAptsCount} aulas removidas (Professor notificável).`;
+      if (slotsRevertedCount > 0) message += ` ${slotsRevertedCount} horários liberados.`;
+
+      toast({ variant: 'default', title: 'Operação Completa', description: message });
 
       if (onUpdate) onUpdate();
 
