@@ -731,24 +731,28 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         throw updateError || new Error('Falha ao atualizar perfil do aluno.');
       }
 
-      // 2. Criar notificação para o NOVO professor solicitando aprovação
-      const { error: notifError } = await supabase.from('notifications').insert({
-        user_id: selectedProfessorId,
-        type: 'student_assignment_request',
-        title: 'Solicitação de Novo Aluno',
-        description: `O aluno ${selectedStudentForVinculacao.full_name} solicita ser vinculado a você. Por favor, aprove ou reprove esta solicitação.`,
-        related_user_id: selectedStudentForVinculacao.id,
-        metadata: {
-          action_required: true,
-          student_id: selectedStudentForVinculacao.id,
-          student_name: selectedStudentForVinculacao.full_name,
-          old_professor_id: oldProfessorId,
-          old_professor_name: oldProfessorName,
-          preferred_schedule: preferredScheduleObj
-        }
+      // 2. Criar solicitação na tabela solicitudes_clase (usando a mesma estrutura existente)
+      //    Tipo: 'vinculacao' será identificado no campo horarios_propuestos
+      const solicitacaoData = {
+        type: 'vinculacao', // Tipo especial para identificar solicitação de vinculação
+        is_recurring: false,
+        student_name: selectedStudentForVinculacao.full_name,
+        old_professor_id: oldProfessorId,
+        old_professor_name: oldProfessorName,
+        preferred_schedule: preferredScheduleObj,
+        days: studentPreferences.days,
+        time: studentPreferences.time
+      };
+
+      const { error: solicitacaoError } = await supabase.from('solicitudes_clase').insert({
+        alumno_id: selectedStudentForVinculacao.id,
+        profesor_id: selectedProfessorId,
+        horarios_propuestos: JSON.stringify(solicitacaoData),
+        status: 'Pendiente',
+        is_recurring: false
       });
 
-      if (notifError) console.warn('Notification error (non-critical):', notifError);
+      if (solicitacaoError) throw solicitacaoError;
 
       // 3. Atualizar a lista de pendências para refletir o novo status
       setPendenciasData(prev => ({
@@ -771,7 +775,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
       toast({
         title: 'Solicitação enviada!',
-        description: `Aguardando aprovação de ${selectedProf?.full_name || 'Professor'}. O aluno aparecerá como "Aguardando parecer" no painel de pendências.`,
+        description: `Aguardando aprovação de ${selectedProf?.full_name || 'Professor'}. A solicitação aparecerá na tela inicial do professor.`,
       });
 
       onUpdate?.();
@@ -800,6 +804,16 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       return;
     }
 
+    // Verificar se é uma solicitação de vinculação
+    let solicitacaoData = null;
+    try {
+      solicitacaoData = JSON.parse(request.horarios_propuestos);
+    } catch (e) {
+      // Não é JSON válido, continua normalmente
+    }
+
+    const isVinculacaoRequest = solicitacaoData?.type === 'vinculacao';
+
     // 1. Atualiza o status da solicitação
     const { error: updateError } = await supabase
       .from('solicitudes_clase')
@@ -812,7 +826,66 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       return;
     }
 
-    // 2. Cria as aulas recorrentes se a solicitação for aceita
+    // TRATAMENTO ESPECIAL PARA SOLICITAÇÃO DE VINCULAÇÃO
+    if (isVinculacaoRequest) {
+      const studentId = request.alumno_id;
+
+      if (newStatus === 'Aceita') {
+        try {
+          // Aprovar: Formalizar o vínculo com o professor
+          const { error: vinculoError } = await supabase
+            .from('profiles')
+            .update({
+              assigned_professor_id: professorId, // Vincula ao professor que aprovou
+              pending_professor_id: null, // Limpa o professor pendente
+              pending_professor_status: null,
+              pending_professor_requested_at: null
+            })
+            .eq('id', studentId);
+
+          if (vinculoError) throw vinculoError;
+
+          toast({
+            variant: 'default',
+            title: 'Vinculação Aprovada!',
+            description: `${request.profile?.full_name || 'Aluno'} agora está vinculado a você.`
+          });
+        } catch (e) {
+          // Reverter status da solicitação
+          await supabase.from('solicitudes_clase').update({ status: 'Pendiente' }).eq('solicitud_id', solicitudId);
+          toast({ variant: 'destructive', title: 'Erro ao vincular', description: e.message });
+        }
+      } else if (newStatus === 'Rejeitada') {
+        try {
+          // Rejeitar: Limpar os campos pendentes e manter aluno sem professor
+          const { error: rejectError } = await supabase
+            .from('profiles')
+            .update({
+              assigned_professor_id: null, // Aluno fica sem professor
+              pending_professor_id: null, // Limpa o professor pendente
+              pending_professor_status: 'rejeitado',
+              pending_professor_requested_at: null
+            })
+            .eq('id', studentId);
+
+          if (rejectError) throw rejectError;
+
+          toast({
+            variant: 'destructive',
+            title: 'Vinculação Rejeitada',
+            description: `${request.profile?.full_name || 'Aluno'} continua sem professor vinculado e reaparecerá nas pendências.`
+          });
+        } catch (e) {
+          toast({ variant: 'destructive', title: 'Erro ao rejeitar', description: e.message });
+        }
+      }
+
+      if (onUpdate) onUpdate(solicitudId);
+      setUpdatingRequestId(null);
+      return;
+    }
+
+    // 2. Cria as aulas recorrentes se a solicitação for aceita (fluxo normal)
     if (newStatus === 'Aceita' && request.is_recurring) {
       if (typeof request.horarios_propuestos !== 'string' || !request.horarios_propuestos) {
         toast({ variant: 'destructive', title: 'Erro de Agendamento', description: 'Formato de horário inválido.' });
@@ -969,6 +1042,29 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       if (!horariosJson || typeof horariosJson !== 'string' || !horariosJson.startsWith('{')) return <p className="text-sm text-slate-500">Detalhes não disponíveis</p>;
 
       const schedule = JSON.parse(horariosJson);
+
+      // Verificar se é uma solicitação de vinculação
+      if (schedule.type === 'vinculacao') {
+        return (
+          <div className="mt-2 p-2 bg-purple-50 rounded-md border border-purple-200">
+            <div className="flex items-center gap-2 text-sm text-purple-700">
+              <UserPlus className="w-4 h-4" />
+              <span className="font-semibold">Solicitação de Vinculação</span>
+            </div>
+            {schedule.old_professor_name && (
+              <p className="text-xs text-purple-600 mt-1">
+                Anteriormente com: {schedule.old_professor_name}
+              </p>
+            )}
+            {schedule.days && schedule.days.length > 0 && (
+              <div className="flex items-center gap-4 text-xs text-slate-600 mt-1">
+                <span>Horários: {schedule.days.map(d => daysOfWeekMap[d]).join(', ')} às {schedule.time}</span>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       if (!schedule.is_recurring) return <p className="text-sm text-slate-500">Aula individual</p>;
 
       return (

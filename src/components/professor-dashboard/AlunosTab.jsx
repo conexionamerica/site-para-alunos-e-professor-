@@ -480,29 +480,31 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
 
             if (profileError) throw profileError;
 
-            // 4. Criar notificação para o novo professor solicitando aprovação
-            const { error: notifError } = await supabase.from('notifications').insert({
-                user_id: selectedProfessor.id,
-                type: 'student_assignment_request',
-                title: 'Solicitação de Transferência de Aluno',
-                description: `O aluno ${student.full_name} (anteriormente com ${oldProfessorName}) solicita ser vinculado a você. Aprove ou reprove.`,
-                related_user_id: student.id,
-                metadata: {
-                    action_required: true,
-                    student_id: student.id,
-                    student_name: student.full_name,
-                    old_professor_id: oldProfessorId,
-                    old_professor_name: oldProfessorName,
-                    new_professor_id: selectedProfessor.id,
-                    preferred_schedule: student.preferred_schedule
-                }
+            // 4. Criar solicitação na tabela solicitudes_clase para o novo professor
+            const solicitacaoData = {
+                type: 'vinculacao',
+                is_recurring: false,
+                student_name: student.full_name,
+                old_professor_id: oldProfessorId,
+                old_professor_name: oldProfessorName,
+                preferred_schedule: student.preferred_schedule || student.daySchedules,
+                days: Object.keys(student.daySchedules || {}).map(Number),
+                time: Object.values(student.daySchedules || {})[0] || '08:00'
+            };
+
+            const { error: solicitacaoError } = await supabase.from('solicitudes_clase').insert({
+                alumno_id: student.id,
+                profesor_id: selectedProfessor.id,
+                horarios_propuestos: JSON.stringify(solicitacaoData),
+                status: 'Pendiente',
+                is_recurring: false
             });
 
-            if (notifError) console.error('Error creating notification:', notifError);
+            if (solicitacaoError) console.error('Error creating solicitation:', solicitacaoError);
 
             toast({
                 title: 'Solicitação de transferência enviada!',
-                description: `${student.full_name} agora está aguardando a aprovação de ${selectedProfessor.full_name}. O aluno aparecerá como "Aguardando parecer" no painel de pendências.`
+                description: `Aguardando aprovação de ${selectedProfessor.full_name}. A solicitação aparecerá na tela inicial do professor.`
             });
 
             onUpdate();
