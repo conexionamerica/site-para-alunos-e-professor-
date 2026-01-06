@@ -85,33 +85,71 @@ const LogsTab = ({ dashboardData }) => {
             'mensajes': 'Mensagens',
             'class_feedback': 'Feedbacks',
             'notifications': 'Notificações',
-            'assigned_packages_log': 'Atribuições de Pacotes'
+            'assigned_packages_log': 'Atribuições de Pacotes',
+            'audit_logs': 'Auditoria',
+            'professor_announcements': 'Avisos'
         };
         return translations[tableName] || tableName;
     };
 
-    // Helper para traduzir campos
-    const translateField = (field) => {
-        const translations = {
-            'class_datetime': 'Data/Hora da Aula',
-            'status': 'Status',
-            'student_id': 'Aluno',
-            'professor_id': 'Professor',
-            'full_name': 'Nome Completo',
-            'email': 'Email',
-            'phone': 'Telefone',
-            'spanish_level': 'Nível de Espanhol',
-            'reschedule_reason': 'Motivo do Reagendamento',
-            'observation': 'Observação',
-            'start_time': 'Horário de Início',
-            'end_time': 'Horário de Término',
-            'day_of_week': 'Dia da Semana',
-            'package_id': 'Pacote',
-            'assigned_classes': 'Aulas Atribuídas',
-            'purchase_date': 'Data da Compra',
-            'expiration_date': 'Data de Expiração'
-        };
-        return translations[field] || field;
+    // Helper para gerar descrição humana
+    const generateHumanDescription = (log) => {
+        const table = log.table_name;
+        const action = log.action;
+
+        // 1. Horários (class_slots)
+        if (table === 'class_slots') {
+            const day = translateField(log.new_data?.day_of_week || log.old_data?.day_of_week);
+            const time = log.new_data?.time || log.old_data?.time || '';
+
+            if (action === 'INSERT') return `Novo horário disponível criado (${day} ${time})`;
+            if (action === 'UPDATE') return `Alteração em horário de aula (${day})`;
+            if (action === 'DELETE') return `Remoção de horário disponível`;
+        }
+
+        // 2. Aulas (appointments)
+        if (table === 'appointments') {
+            const date = log.new_data?.class_datetime || log.old_data?.class_datetime;
+            const fmtDate = date ? format(new Date(date), 'dd/MM HH:mm') : '';
+
+            if (action === 'INSERT') return `Nova aula agendada para ${fmtDate}`;
+            if (action === 'UPDATE') {
+                const status = log.new_data?.status;
+                if (status === 'cancelled') return `Aula cancelada (${fmtDate})`;
+                if (status === 'rescheduled') return `Aula reagendada`;
+                if (status === 'completed') return `Aula finalizada`;
+                return `Atualização em agendamento de aula`;
+            }
+            if (action === 'DELETE') return `Agendamento de aula excluído`;
+        }
+
+        // 3. Perfis (profiles)
+        if (table === 'profiles') {
+            const name = log.new_data?.full_name || log.old_data?.full_name || 'Usuário';
+            if (action === 'INSERT') return `Novo usuário cadastrado: ${name}`;
+            if (action === 'UPDATE') return `Dados de perfil atualizados para ${name}`;
+            if (action === 'DELETE') return `Usuário removido: ${name}`;
+        }
+
+        // 4. Solicitações (solicitudes_clase)
+        if (table === 'solicitudes_clase') {
+            if (action === 'INSERT') return `Nova solicitação de aula recebida`;
+            if (action === 'UPDATE') return `Status de solicitação atualizado`;
+        }
+
+        // 5. Avisos (professor_announcements)
+        if (table === 'professor_announcements') {
+            if (action === 'INSERT') return `Novo comunicado publicado`;
+            if (action === 'UPDATE') return `Comunicado alterado/arquivado`;
+            if (action === 'DELETE') return `Comunicado removido`;
+        }
+
+        // Fallback genérico melhorado
+        const actionName = action === 'INSERT' ? 'Inclusão em' :
+            action === 'UPDATE' ? 'Alteração em' :
+                action === 'DELETE' ? 'Exclusão em' : 'Registro em';
+
+        return `${actionName} ${translateTableName(table)}`;
     };
 
     // Formatar valor para exibição
@@ -193,7 +231,7 @@ const LogsTab = ({ dashboardData }) => {
                     classCode.toLowerCase().includes(filterClassCode.toLowerCase());
 
                 const matchSearch = searchTerm === '' ||
-                    (log.history || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (generateHumanDescription(log) || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (log.table_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                     classCode.toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -381,10 +419,10 @@ const LogsTab = ({ dashboardData }) => {
                                                         {log.old_data?.class_code || log.new_data?.class_code}
                                                     </span>
                                                 )}
-                                                <span className="font-medium text-slate-800">{log.history}</span>
+                                                <span className="font-medium text-slate-800">{generateHumanDescription(log)}</span>
                                             </div>
                                             <span className="text-[10px] text-slate-400 font-mono">
-                                                ID: {log.record_id || 'N/A'} | Tabela: {translateTableName(log.table_name)}
+                                                ID: {log.record_id?.split('-')[0] || 'N/A'}... | Tabela: {translateTableName(log.table_name)}
                                             </span>
                                         </div>
                                     </TableCell>
@@ -478,7 +516,7 @@ const LogsTab = ({ dashboardData }) => {
                                 {/* Descrição */}
                                 <div className="bg-sky-50 p-3 rounded-lg border border-sky-200">
                                     <p className="text-sky-700 text-xs font-medium mb-1">Descrição da Movimentação</p>
-                                    <p className="text-sky-900 font-medium">{selectedLog.history || 'Sem descrição'}</p>
+                                    <p className="text-sky-900 font-medium">{generateHumanDescription(selectedLog)}</p>
                                 </div>
 
                                 {/* Aluno relacionado (se aplicável) */}
