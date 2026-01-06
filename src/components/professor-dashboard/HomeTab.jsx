@@ -590,10 +590,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         const targetTime = preferredSchedule[slot.day_of_week]; // "HH:mm"
 
         // Verifica se o slot do professor bate com o horário desejado (ou é próximo ±1h)
-        const targetHour = parseInt(targetTime.split(':')[0]);
-        const slotHour = parseInt(slot.start_time.split(':')[0]);
-
-        if (Math.abs(slotHour - targetHour) <= 1) {
+        if (slot.start_time.substring(0, 5) === targetTime) {
           // VERIFICAÇÃO DE CONFLITO COM AGENDA REAL
           // Calcula a data específica desse slot na próxima semana para checar colisão
           const slotDayIndex = slot.day_of_week;
@@ -640,6 +637,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           matchedDaysCount: match.matchedDays.size,
           matchPercentage: Math.round((match.matchedDays.size / match.totalDaysRequested) * 100)
         }))
+        .filter(match => match.matchPercentage === 100) // FILTRO ESTRITO: Apenas 100% compatível
         .sort((a, b) => b.matchPercentage - a.matchPercentage);
 
       setMatchedProfessors(matchResults);

@@ -404,7 +404,7 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
                         totalSlots: studentDays.length
                     };
                 })
-                .filter(match => match.matchPercentage > 0) // Só mostrar professores com alguma compatibilidade
+                .filter(match => match.matchPercentage === 100) // ESTRITO: Apenas 100% compatível
                 .sort((a, b) => b.matchPercentage - a.matchPercentage); // Ordenar por compatibilidade
 
             setProfessorsWithMatch(matches);
