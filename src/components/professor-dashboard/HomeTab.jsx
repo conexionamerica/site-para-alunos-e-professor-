@@ -214,56 +214,58 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       setLoadingPendencias(true);
       try {
         const today = getBrazilDate();
-        const fiveDaysFromNow = add(today, { days: 5 });
 
         // 1. Alunos sem professor vinculado
         const studentsWithoutProf = students.filter(s =>
           s.is_active !== false && !s.assigned_professor_id
         );
 
-        // 2. Alunos com aulas disponíveis (billing ativo com aulas restantes)
-        const studentsWithClasses = [];
-        for (const student of students.filter(s => s.is_active !== false)) {
-          const studentBillings = allBillings.filter(b =>
-            b.user_id === student.id &&
-            new Date(b.end_date) >= today
-          );
+        // 2. ABA AULAS: Histórico Geral de Aulas (limitado a 50 ou 100 mais recentes)
+        // Buscamos appointments com status 'completed', 'missed', 'rescheduled'
+        const { data: classHistoryData, error: classHistError } = await supabase
+          .from('appointments')
+          .select(`
+             *,
+             student:profiles!student_id(full_name),
+             professor:profiles!professor_id(full_name)
+           `)
+          .in('status', ['completed', 'missed', 'rescheduled'])
+          .order('class_datetime', { ascending: false })
+          .limit(50);
 
-          if (studentBillings.length > 0) {
-            // Contar aulas usadas vs total do pacote
-            const studentAppointments = allAppointments.filter(apt =>
-              apt.student_id === student.id &&
-              ['completed', 'scheduled', 'rescheduled'].includes(apt.status)
-            );
+        if (classHistError) console.error("Erro classHistory:", classHistError);
 
-            // Para cada billing ativo, verificar se há aulas disponíveis
-            for (const billing of studentBillings) {
-              const packageClasses = billing.packages?.number_of_classes || 0;
-              const usedClasses = studentAppointments.filter(apt =>
-                new Date(apt.class_datetime) >= new Date(billing.purchase_date) &&
-                new Date(apt.class_datetime) <= new Date(billing.end_date)
-              ).length;
+        // 3. ABA AVISOS: Erros do Sistema (tabela admin_notifications)
+        const { data: systemWarningsData, error: warnError } = await supabase
+          .from('admin_notifications')
+          .select('*')
+          .in('type', ['error', 'alert', 'system_failure'])
+          .eq('status', 'active')
+          .order('created_at', { ascending: false });
 
-              const availableClasses = packageClasses - usedClasses;
-              if (availableClasses > 0) {
-                studentsWithClasses.push({
-                  student,
-                  billing,
-                  availableClasses,
-                  packageName: billing.packages?.name || 'Pacote'
-                });
-              }
-            }
-          }
-        }
+        if (warnError) console.error("Erro warnings:", warnError);
 
-        // 3. Pacotes expirando em 5 dias
+        // 4. ABA VENCENDO: Pacotes expirando em 5 dias (Excluir os já "Vistos")
+        // Primeiro buscamos os IDs de notificações 'expiry_seen' para filtrar
+        const { data: seenExpiryNotifs } = await supabase
+          .from('admin_notifications')
+          .select('details')
+          .eq('type', 'expiry_seen');
+
+        const seenBillingIds = new Set();
+        seenExpiryNotifs?.forEach(n => {
+          if (n.details?.billing_id) seenBillingIds.add(n.details.billing_id);
+        });
+
         const expiringPackages = [];
         for (const billing of allBillings) {
           const endDate = new Date(billing.end_date);
           const daysUntilExpiry = differenceInDays(endDate, today);
 
           if (daysUntilExpiry >= 0 && daysUntilExpiry <= 5) {
+            // Se já foi marcado como visto, ignora
+            if (seenBillingIds.has(billing.id)) continue;
+
             const student = students.find(s => s.id === billing.user_id);
             if (student && student.is_active !== false) {
               expiringPackages.push({
@@ -276,91 +278,23 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           }
         }
 
-        // 4. Notificações recentes (últimas 48h) - Buscar do banco
-        const twoDaysAgo = add(today, { days: -2 });
+        // 5. ABA HISTÓRICO: Busca geral de notificações resolvidas/vistas
+        // Inclui: assignment_resolved, expiry_seen, warning_seen, etc.
+        const { data: historyData, error: histError } = await supabase
+          .from('admin_notifications')
+          .select('*')
+          .in('status', ['seen', 'resolved', 'archived'])
+          .order('resolved_at', { ascending: false, nullsFirst: false }) // ou created_at desc
+          .limit(50);
 
-        // Buscar solicitações recentemente processadas (aceitas/rejeitadas)
-        const { data: recentRequests, error: reqError } = await supabase
-          .from('solicitudes_clase')
-          .select(`
-            *,
-            profile:profiles!alumno_id(full_name),
-            profesor:profiles!profesor_id(full_name)
-          `)
-          .in('status', ['Aceita', 'Rejeitada'])
-          .gte('updated_at', twoDaysAgo.toISOString())
-          .order('updated_at', { ascending: false })
-          .limit(20);
-
-        if (reqError) console.error('Erro ao buscar notificações:', reqError);
-
-        // Buscar mudanças recentes nos slots de professores
-        const { data: recentSlotChanges, error: slotError } = await supabase
-          .from('class_slots')
-          .select(`
-            *,
-            professor:profiles!professor_id(full_name)
-          `)
-          .gte('updated_at', twoDaysAgo.toISOString())
-          .order('updated_at', { ascending: false })
-          .limit(20);
-
-        if (slotError) console.error('Erro ao buscar mudanças de horários:', slotError);
-
-        // Formatar notificações
-        const notifications = [];
-
-        // Adicionar solicitações processadas
-        (recentRequests || []).forEach(req => {
-          notifications.push({
-            id: `req-${req.solicitud_id}`,
-            type: req.status === 'Aceita' ? 'accepted' : 'rejected',
-            title: req.status === 'Aceita' ? 'Aluno aceito' : 'Solicitação rejeitada',
-            message: `${req.profesor?.full_name || 'Professor'} ${req.status === 'Aceita' ? 'aceitou' : 'rejeitou'} ${req.profile?.full_name || 'aluno'}`,
-            timestamp: req.updated_at,
-            icon: req.status === 'Aceita' ? CheckCircle : XCircle
-          });
-        });
-
-        // Agrupar mudanças de slots por professor
-        const slotChangesByProfessor = {};
-        (recentSlotChanges || []).forEach(slot => {
-          const profId = slot.professor_id;
-          if (!slotChangesByProfessor[profId]) {
-            slotChangesByProfessor[profId] = {
-              professorName: slot.professor?.full_name || 'Professor',
-              changes: []
-            };
-          }
-          slotChangesByProfessor[profId].changes.push(slot);
-        });
-
-        // Adicionar mudanças de horários como notificações
-        Object.values(slotChangesByProfessor).forEach(({ professorName, changes }) => {
-          const inactiveCount = changes.filter(c => c.status === 'inactive').length;
-          const filledCount = changes.filter(c => c.status === 'filled').length;
-
-          if (inactiveCount > 0 || filledCount > 0) {
-            notifications.push({
-              id: `slot-${professorName}-${changes[0]?.id}`,
-              type: 'schedule_change',
-              title: 'Alteração de horários',
-              message: `${professorName} alterou ${changes.length} horário(s)`,
-              details: inactiveCount > 0 ? `${inactiveCount} indisponibilizado(s)` : `${filledCount} ocupado(s)`,
-              timestamp: changes[0]?.updated_at,
-              icon: Calendar
-            });
-          }
-        });
-
-        // Ordenar notificações por data
-        notifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        if (histError) console.error("Erro history:", histError);
 
         setPendenciasData({
           studentsWithoutProfessor: studentsWithoutProf,
-          studentsWithAvailableClasses: studentsWithClasses,
+          classHistory: classHistoryData || [],
+          systemWarnings: systemWarningsData || [],
           packagesExpiringSoon: expiringPackages.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry),
-          recentNotifications: notifications.slice(0, 15)
+          historicoNotifications: historyData || []
         });
 
       } catch (error) {
@@ -381,86 +315,63 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   // Contar totais de pendências
   const pendenciasCounts = useMemo(() => ({
     withoutProfessor: pendenciasData.studentsWithoutProfessor.length,
-    withClasses: pendenciasData.studentsWithAvailableClasses.length,
+    // withClasses: agora é Histórico (Aulas), não conta como pendência ativa "a resolver", mas pode exibir total
+    classHistory: pendenciasData.classHistory?.length || 0,
     expiring: pendenciasData.packagesExpiringSoon.length,
-    notifications: pendenciasData.recentNotifications.length,
-    historico: (historico?.length || 0) + (historyNotifications?.length || 0),
+    warnings: pendenciasData.systemWarnings?.length || 0,
+    historico: pendenciasData.historicoNotifications?.length || 0,
     total: pendenciasData.studentsWithoutProfessor.length +
-      pendenciasData.studentsWithAvailableClasses.length +
       pendenciasData.packagesExpiringSoon.length +
-      pendenciasData.recentNotifications.length
-  }), [pendenciasData, historico, historyNotifications]);
+      (pendenciasData.systemWarnings?.length || 0)
+  }), [pendenciasData]);
 
-  // Carregar histórico do localStorage
-  useEffect(() => {
-    if (!isSuperadmin) return;
-    const saved = localStorage.getItem('pendencias_historico');
-    if (saved) {
-      try {
-        setHistorico(JSON.parse(saved));
-      } catch (e) {
-        console.error('Erro ao carregar histórico:', e);
+  // Handle Mark as Seen / Resolve
+  const handleMarkAsSeen = async (type, item) => {
+    setProcessingAction(`seen-${type}-${item.id || item.billing?.id}`);
+    try {
+      if (type === 'expiring') {
+        // Insert notification as 'seen'
+        const { error } = await supabase.from('admin_notifications').insert({
+          type: 'expiry_seen',
+          title: 'Alerta de Vencimento Visto',
+          message: `Pacote de ${item.student.full_name} vencendo em ${item.daysUntilExpiry} dias.`,
+          details: { billing_id: item.billing.id, student_id: item.student.id },
+          student_id: item.student.id,
+          status: 'seen',
+          resolved_at: new Date().toISOString()
+        });
+        if (error) throw error;
+
+        setPendenciasData(prev => ({
+          ...prev,
+          packagesExpiringSoon: prev.packagesExpiringSoon.filter(p => p.billing.id !== item.billing.id)
+        }));
+      } else if (type === 'warning') {
+        // Update existing notification
+        const { error } = await supabase.from('admin_notifications')
+          .update({ status: 'seen', resolved_at: new Date().toISOString() })
+          .eq('id', item.id);
+        if (error) throw error;
+
+        setPendenciasData(prev => ({
+          ...prev,
+          systemWarnings: prev.systemWarnings.filter(w => w.id !== item.id)
+        }));
       }
-    }
-  }, [isSuperadmin]);
 
-  // Salvar histórico no localStorage
-  const saveHistorico = (newHistorico) => {
-    setHistorico(newHistorico);
-    localStorage.setItem('pendencias_historico', JSON.stringify(newHistorico));
+      toast({ title: 'Marcado como visto', description: 'Item movido para o Histórico.' });
+      // Opcional: recarregar pendências ou injetar no histórico local
+      // loadPendencias();
+    } catch (err) {
+      console.error(err);
+      toast({ variant: 'destructive', title: 'Erro ao marcar como visto' });
+    } finally {
+      setProcessingAction(null);
+    }
   };
 
-  // Ignorar uma pendência (mover para histórico)
-  const handleIgnorarPendencia = (tipo, item, titulo, descricao) => {
-    setProcessingAction(`ignore-${tipo}-${item.id || item.student?.id}`);
+  // Funções legadas removidas (handleRestaurar, handleLimpar) pois agora usamos banco.
 
-    const novaPendencia = {
-      id: `${tipo}-${item.id || item.student?.id}-${Date.now()}`,
-      tipo,
-      titulo,
-      descricao,
-      dadosOriginais: item,
-      acao: 'ignorada',
-      criadoEm: getBrazilDate().toISOString()
-    };
-
-    const novoHistorico = [novaPendencia, ...historico];
-    saveHistorico(novoHistorico);
-
-    // Remover da lista de pendências atuais
-    if (tipo === 'sem_professor') {
-      setPendenciasData(prev => ({
-        ...prev,
-        studentsWithoutProfessor: prev.studentsWithoutProfessor.filter(s => s.id !== item.id)
-      }));
-    } else if (tipo === 'aulas_disponiveis') {
-      setPendenciasData(prev => ({
-        ...prev,
-        studentsWithAvailableClasses: prev.studentsWithAvailableClasses.filter(s =>
-          s.student.id !== item.student.id || s.billing.id !== item.billing.id
-        )
-      }));
-    } else if (tipo === 'pacote_vencendo') {
-      setPendenciasData(prev => ({
-        ...prev,
-        packagesExpiringSoon: prev.packagesExpiringSoon.filter(s =>
-          s.student.id !== item.student.id || s.billing.id !== item.billing.id
-        )
-      }));
-    } else if (tipo === 'notificacao') {
-      setPendenciasData(prev => ({
-        ...prev,
-        recentNotifications: prev.recentNotifications.filter(n => n.id !== item.id)
-      }));
-    }
-
-    toast({
-      title: 'Pendência ignorada',
-      description: 'Movida para o histórico.',
-    });
-
-    setProcessingAction(null);
-  };
 
   // Restaurar uma pendência do histórico
   const handleRestaurarPendencia = (pendencia) => {
@@ -812,6 +723,17 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       clearStudentPreferences();
       setMatchedProfessors([]);
 
+      // Log para histórico (Admin Notifications)
+      await supabase.from('admin_notifications').insert({
+        type: 'assignment_resolved',
+        message: `Vínculo solicitado: ${selectedStudentForVinculacao.full_name} -> ${selectedProf?.full_name}`,
+        student_id: selectedStudentForVinculacao.id,
+        professor_id: selectedProfessorId,
+        status: 'resolved',
+        created_at: new Date(),
+        resolved_at: new Date()
+      });
+
       toast({
         title: 'Solicitação enviada!',
         description: `Aguardando aprovação de ${selectedProf?.full_name || 'Professor'}. A solicitação aparecerá na tela inicial do professor.`,
@@ -896,6 +818,17 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           }
 
           const counts = rpcResult || { appointments: 0, logs: 0, blocked_slots: 0, released_slots: 0 };
+
+          // Log history
+          await supabase.from('admin_notifications').insert({
+            type: 'assignment_resolved',
+            message: `Vinculação aprovada: ${request.profile?.full_name}`,
+            student_id: studentId,
+            professor_id: professorId,
+            status: 'resolved',
+            created_at: new Date(),
+            resolved_at: new Date()
+          });
 
           toast({
             variant: 'default',
@@ -1427,514 +1360,314 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   // ==========================================
   // RENDER: Painel de Pendências para Superusuário
   // ==========================================
+  // ==========================================
+  // RENDER: Painel de Pendências para Superusuário
+  // ==========================================
   const renderPendenciasPanel = () => {
     if (!isSuperadmin) return null;
 
+    // Seções de dados
+    const withoutProfessor = pendenciasData.studentsWithoutProfessor || [];
+    const classHistory = pendenciasData.classHistory || [];
+    const expiring = pendenciasData.packagesExpiringSoon || [];
+    const warnings = pendenciasData.systemWarnings || [];
+
+    // Notifications history
+    const historyData = [...(pendenciasData.historicoNotifications || []), ...historico];
+
+    // Helper counts
+    const getCount = (arr) => arr ? arr.length : 0;
+
     return (
-      <Card className="mb-6 border-l-4 border-purple-500">
-        <CardHeader className="pb-3">
+      <Card className="mb-6 border-l-4 border-purple-500 shadow-sm">
+        <CardHeader className="pb-3 bg-slate-50/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="h-6 w-6 text-purple-600" />
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <LayoutGrid className="h-6 w-6 text-purple-600" />
+              </div>
               <div>
-                <CardTitle className="text-lg">Painel de Pendências</CardTitle>
-                <CardDescription>Central de alertas e ações pendentes</CardDescription>
+                <CardTitle className="text-lg text-slate-800">Painel Administrativo</CardTitle>
+                <CardDescription>Central de controle e monitoramento</CardDescription>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50">
-                {pendenciasCounts.total} pendência(s)
+                {getCount(withoutProfessor) + getCount(expiring) + getCount(warnings)} pendência(s)
               </Badge>
               <Button
                 variant="ghost"
-                size="sm"
-                onClick={onUpdate}
+                size="icon"
+                onClick={loadPendencias}
                 disabled={loadingPendencias}
+                className={cn("h-8 w-8 hover:bg-purple-100 text-purple-600", loadingPendencias && "animate-spin")}
               >
-                <RefreshCw className={cn("h-4 w-4", loadingPendencias && "animate-spin")} />
+                <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {/* Novo Componente: Solicitações de Agendamento Pendentes */}
-          <div className="mb-6">
-            <ScheduleRequestsPending adminId={professorId} />
-          </div>
+        <CardContent className="pt-0 px-0">
+          <Tabs defaultValue="sem_prof" className="w-full">
+            <div className="px-6 border-b bg-white sticky top-0 z-10">
+              <TabsList className="w-full justify-start h-12 bg-transparent p-0 gap-6">
+                <TabsTrigger
+                  value="sem_prof"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-purple-600 rounded-none h-full px-0 pb-0 text-slate-500 data-[state=active]:text-purple-700"
+                >
+                  <div className="flex items-center gap-2 pb-2">
+                    <UserX className="h-4 w-4" />
+                    <span>Sem Prof</span>
+                    {getCount(withoutProfessor) > 0 && (
+                      <Badge variant="secondary" className="bg-red-100 text-red-700 h-5 px-1.5 min-w-[1.25rem] text-[10px] flex justify-center items-center">
+                        {getCount(withoutProfessor)}
+                      </Badge>
+                    )}
+                  </div>
+                </TabsTrigger>
 
-          <Tabs value={pendenciasFilter} onValueChange={setPendenciasFilter} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 gap-1">
-              <TabsTrigger value="all" className="text-xs sm:text-sm">
-                Todas
-                <Badge variant="secondary" className="ml-1 text-xs">{pendenciasCounts.total}</Badge>
-              </TabsTrigger>
-              <TabsTrigger value="without_professor" className="text-xs sm:text-sm">
-                <UserX className="h-3 w-3 mr-1 hidden sm:inline" />
-                Sem Prof.
-                {pendenciasCounts.withoutProfessor > 0 && (
-                  <Badge variant="destructive" className="ml-1 text-xs">{pendenciasCounts.withoutProfessor}</Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="with_classes" className="text-xs sm:text-sm">
-                <BookOpen className="h-3 w-3 mr-1 hidden sm:inline" />
-                Aulas
-                {pendenciasCounts.withClasses > 0 && (
-                  <Badge className="ml-1 text-xs bg-blue-500">{pendenciasCounts.withClasses}</Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="expiring" className="text-xs sm:text-sm">
-                <Package className="h-3 w-3 mr-1 hidden sm:inline" />
-                Vencendo
-                {pendenciasCounts.expiring > 0 && (
-                  <Badge className="ml-1 text-xs bg-amber-500">{pendenciasCounts.expiring}</Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="notifications" className="text-xs sm:text-sm">
-                <Bell className="h-3 w-3 mr-1 hidden sm:inline" />
-                Avisos
-                {pendenciasCounts.notifications > 0 && (
-                  <Badge className="ml-1 text-xs bg-green-500">{pendenciasCounts.notifications}</Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="historico" className="text-xs sm:text-sm">
-                <History className="h-3 w-3 mr-1 hidden sm:inline" />
-                Histórico
-                {pendenciasCounts.historico > 0 && (
-                  <Badge className="ml-1 text-xs bg-slate-500">{pendenciasCounts.historico}</Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
+                <TabsTrigger
+                  value="aulas"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-purple-600 rounded-none h-full px-0 pb-0 text-slate-500 data-[state=active]:text-purple-700"
+                >
+                  <div className="flex items-center gap-2 pb-2">
+                    <History className="h-4 w-4" />
+                    <span>Aulas</span>
+                  </div>
+                </TabsTrigger>
+
+                <TabsTrigger
+                  value="vencendo"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-purple-600 rounded-none h-full px-0 pb-0 text-slate-500 data-[state=active]:text-purple-700"
+                >
+                  <div className="flex items-center gap-2 pb-2">
+                    <Clock className="h-4 w-4" />
+                    <span>Vencendo</span>
+                    {getCount(expiring) > 0 && (
+                      <Badge variant="secondary" className="bg-amber-100 text-amber-700 h-5 px-1.5 min-w-[1.25rem] text-[10px] flex justify-center items-center">
+                        {getCount(expiring)}
+                      </Badge>
+                    )}
+                  </div>
+                </TabsTrigger>
+
+                <TabsTrigger
+                  value="avisos"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-purple-600 rounded-none h-full px-0 pb-0 text-slate-500 data-[state=active]:text-purple-700"
+                >
+                  <div className="flex items-center gap-2 pb-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span>Avisos</span>
+                    {getCount(warnings) > 0 && (
+                      <Badge variant="secondary" className="bg-orange-100 text-orange-700 h-5 px-1.5 min-w-[1.25rem] text-[10px] flex justify-center items-center">
+                        {getCount(warnings)}
+                      </Badge>
+                    )}
+                  </div>
+                </TabsTrigger>
+
+                <TabsTrigger
+                  value="historico"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-purple-600 rounded-none h-full px-0 pb-0 text-slate-500 data-[state=active]:text-purple-700 ml-auto"
+                >
+                  <div className="flex items-center gap-2 pb-2">
+                    <Archive className="h-4 w-4" />
+                    <span>Histórico</span>
+                  </div>
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             {loadingPendencias ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                <span className="ml-3 text-sm text-slate-500">Atualizando painel...</span>
               </div>
             ) : (
               <>
-                {/* Alunos sem professor */}
-                <TabsContent value="all" className="mt-0">
-                  <div className="space-y-4">
-                    {/* Seção: Sem Professor */}
-                    {pendenciasData.studentsWithoutProfessor.length > 0 && (
-                      <div className="border rounded-lg p-4 bg-red-50 border-red-200">
-                        <h4 className="font-semibold text-red-800 flex items-center gap-2 mb-3">
-                          <UserX className="h-4 w-4" />
-                          Alunos sem Professor Vinculado
-                        </h4>
-                        <div className="space-y-2">
-                          {pendenciasData.studentsWithoutProfessor.slice(0, 5).map(student => {
-                            const isPending = student.pending_professor_status === 'aguardando_aprovacao';
-                            const pendingProfessorName = isPending
-                              ? professors.find(p => p.id === student.pending_professor_id)?.full_name
-                              : null;
-
-                            return (
-                              <div key={student.id} className={`flex items-center justify-between p-2 rounded border ${isPending ? 'bg-yellow-50 border-yellow-200' : 'bg-white'
-                                }`}>
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="h-8 w-8">
-                                    <AvatarFallback className={isPending ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}>
-                                      {student.full_name?.[0]}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    <p className="text-sm font-medium">{student.full_name}</p>
-                                    {isPending ? (
-                                      <div className="flex items-center gap-1 mt-0.5">
-                                        <Clock className="h-3 w-3 text-yellow-600" />
-                                        <span className="text-[10px] text-yellow-700 font-medium">
-                                          Aguardando parecer de {pendingProfessorName || 'professor'}
-                                        </span>
-                                      </div>
-                                    ) : student.preferred_schedule && Object.keys(student.preferred_schedule).length > 0 ? (
-                                      <div className="flex flex-wrap gap-1 mt-0.5">
-                                        {Object.entries(student.preferred_schedule).map(([d, t]) => (
-                                          <Badge key={d} variant="outline" className="text-[9px] py-0 px-1 h-4 bg-slate-50 border-slate-200 text-slate-500">
-                                            {daysOfWeekMap[d]} {t}
-                                          </Badge>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <p className="text-[10px] text-slate-400 italic">Agenda não definida</p>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {isPending ? (
-                                    <Badge className="bg-yellow-500 text-xs">Aguardando</Badge>
-                                  ) : (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-green-600 border-green-300 hover:bg-green-50 text-xs"
-                                      onClick={() => handleOpenVincularModal(student)}
-                                    >
-                                      <UserPlus className="h-3 w-3 mr-1" />
-                                      Vincular
-                                    </Button>
-                                  )}
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-slate-500 hover:text-slate-700 text-xs"
-                                    onClick={() => handleIgnorarPendencia('sem_professor', student, 'Aluno sem professor', student.full_name)}
-                                    disabled={processingAction === `ignore-sem_professor-${student.id}`}
-                                  >
-                                    <EyeOff className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {pendenciasData.studentsWithoutProfessor.length > 5 && (
-                            <p className="text-xs text-red-600 text-center mt-2">
-                              +{pendenciasData.studentsWithoutProfessor.length - 5} aluno(s) mais...
-                            </p>
-                          )}
+                {/* === TAB: SEM PROF === */}
+                <TabsContent value="sem_prof" className="p-0">
+                  <ScrollArea className="h-[300px] w-full">
+                    <div className="p-6">
+                      {withoutProfessor.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-center text-slate-500">
+                          <CheckCircle className="h-12 w-12 text-green-100 text-green-500 mb-2" />
+                          <p>Tudo certo! Todos os alunos têm professor.</p>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Seção: Com Aulas Disponíveis */}
-                    {pendenciasData.studentsWithAvailableClasses.length > 0 && (
-                      <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
-                        <h4 className="font-semibold text-blue-800 flex items-center gap-2 mb-3">
-                          <BookOpen className="h-4 w-4" />
-                          Alunos com Aulas Disponíveis
-                        </h4>
-                        <div className="space-y-2">
-                          {pendenciasData.studentsWithAvailableClasses.slice(0, 5).map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border">
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback className="bg-blue-100 text-blue-700">{item.student.full_name?.[0]}</AvatarFallback>
+                      ) : (
+                        <div className="space-y-3">
+                          {withoutProfessor.map(student => (
+                            <div key={student.id} className="flex items-center justify-between p-4 bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex items-center gap-4">
+                                <Avatar className="h-10 w-10 border">
+                                  <AvatarFallback className="bg-purple-100 text-purple-700 font-bold">
+                                    {student.full_name?.[0]}
+                                  </AvatarFallback>
                                 </Avatar>
                                 <div>
-                                  <p className="text-sm font-medium">{item.student.full_name}</p>
-                                  <p className="text-xs text-slate-500">{item.packageName}</p>
+                                  <p className="font-semibold text-slate-800">{student.full_name}</p>
+                                  <p className="text-sm text-slate-500">Aguardando vinculação</p>
                                 </div>
                               </div>
-                              <Badge className="bg-blue-500 text-xs">{item.availableClasses} aula(s)</Badge>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Seção: Pacotes Vencendo */}
-                    {pendenciasData.packagesExpiringSoon.length > 0 && (
-                      <div className="border rounded-lg p-4 bg-amber-50 border-amber-200">
-                        <h4 className="font-semibold text-amber-800 flex items-center gap-2 mb-3">
-                          <Package className="h-4 w-4" />
-                          Pacotes Expirando em 5 Dias
-                        </h4>
-                        <div className="space-y-2">
-                          {pendenciasData.packagesExpiringSoon.slice(0, 5).map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border">
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback className="bg-amber-100 text-amber-700">{item.student.full_name?.[0]}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="text-sm font-medium">{item.student.full_name}</p>
-                                  <p className="text-xs text-slate-500">{item.packageName}</p>
-                                </div>
-                              </div>
-                              <Badge className={cn(
-                                "text-xs",
-                                item.daysUntilExpiry <= 1 ? "bg-red-500" :
-                                  item.daysUntilExpiry <= 3 ? "bg-amber-500" : "bg-yellow-500"
-                              )}>
-                                {item.daysUntilExpiry === 0 ? 'Hoje!' :
-                                  item.daysUntilExpiry === 1 ? 'Amanhã' :
-                                    `${item.daysUntilExpiry} dias`}
-                              </Badge>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Seção: Notificações */}
-                    {pendenciasData.recentNotifications.length > 0 && (
-                      <div className="border rounded-lg p-4 bg-green-50 border-green-200">
-                        <h4 className="font-semibold text-green-800 flex items-center gap-2 mb-3">
-                          <Bell className="h-4 w-4" />
-                          Atividades Recentes (48h)
-                        </h4>
-                        <div className="space-y-2">
-                          {pendenciasData.recentNotifications.slice(0, 5).map((notif, idx) => {
-                            const NotifIcon = notif.icon || Bell;
-                            return (
-                              <div key={notif.id || idx} className="flex items-center gap-3 p-2 bg-white rounded border">
-                                <div className={cn(
-                                  "p-2 rounded-full",
-                                  notif.type === 'accepted' ? "bg-green-100" :
-                                    notif.type === 'rejected' ? "bg-red-100" : "bg-blue-100"
-                                )}>
-                                  <NotifIcon className={cn(
-                                    "h-4 w-4",
-                                    notif.type === 'accepted' ? "text-green-600" :
-                                      notif.type === 'rejected' ? "text-red-600" : "text-blue-600"
-                                  )} />
-                                </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium">{notif.title}</p>
-                                  <p className="text-xs text-slate-500">{notif.message}</p>
-                                  {notif.details && (
-                                    <p className="text-xs text-slate-400">{notif.details}</p>
-                                  )}
-                                </div>
-                                <span className="text-xs text-slate-400">
-                                  {notif.timestamp && formatDistanceToNowStrict(new Date(notif.timestamp), { locale: ptBR, addSuffix: true })}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Sem pendências */}
-                    {pendenciasCounts.total === 0 && (
-                      <div className="text-center py-8 text-slate-500">
-                        <CheckCircle className="h-12 w-12 mx-auto mb-2 text-green-400" />
-                        <p className="font-semibold">Tudo em ordem!</p>
-                        <p className="text-sm">Não há pendências no momento.</p>
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-
-                {/* Tab: Sem Professor */}
-                <TabsContent value="without_professor" className="mt-0">
-                  <ScrollArea className="h-[300px]">
-                    {pendenciasData.studentsWithoutProfessor.length > 0 ? (
-                      <div className="space-y-2">
-                        {pendenciasData.studentsWithoutProfessor.map(student => (
-                          <div key={student.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-                            <div className="flex items-center gap-3">
-                              <Avatar>
-                                <AvatarFallback className="bg-red-200 text-red-800">{student.full_name?.[0]}</AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium">{student.full_name}</p>
-                                <p className="text-sm text-slate-500">
-                                  Código: {student.student_code || 'N/A'} | Email: {student.real_email || student.email || 'N/A'}
-                                </p>
-                              </div>
-                            </div>
-                            <Badge variant="destructive">Sem Professor</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-500">
-                        <Users className="h-12 w-12 mx-auto mb-2 text-green-400" />
-                        <p>Todos os alunos têm professor vinculado.</p>
-                      </div>
-                    )}
-                  </ScrollArea>
-                </TabsContent>
-
-                {/* Tab: Com Aulas */}
-                <TabsContent value="with_classes" className="mt-0">
-                  <ScrollArea className="h-[300px]">
-                    {pendenciasData.studentsWithAvailableClasses.length > 0 ? (
-                      <div className="space-y-2">
-                        {pendenciasData.studentsWithAvailableClasses.map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="flex items-center gap-3">
-                              <Avatar>
-                                <AvatarFallback className="bg-blue-200 text-blue-800">{item.student.full_name?.[0]}</AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium">{item.student.full_name}</p>
-                                <p className="text-sm text-slate-500">{item.packageName}</p>
-                              </div>
-                            </div>
-                            <Badge className="bg-blue-600">{item.availableClasses} aulas disponíveis</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-500">
-                        <BookOpen className="h-12 w-12 mx-auto mb-2 text-slate-400" />
-                        <p>Nenhum aluno com aulas disponíveis encontrado.</p>
-                      </div>
-                    )}
-                  </ScrollArea>
-                </TabsContent>
-
-                {/* Tab: Vencendo */}
-                <TabsContent value="expiring" className="mt-0">
-                  <ScrollArea className="h-[300px]">
-                    {pendenciasData.packagesExpiringSoon.length > 0 ? (
-                      <div className="space-y-2">
-                        {pendenciasData.packagesExpiringSoon.map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
-                            <div className="flex items-center gap-3">
-                              <Avatar>
-                                <AvatarFallback className="bg-amber-200 text-amber-800">{item.student.full_name?.[0]}</AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium">{item.student.full_name}</p>
-                                <p className="text-sm text-slate-500">
-                                  {item.packageName} - Vence em {format(new Date(item.billing.end_date), 'dd/MM/yyyy')}
-                                </p>
-                              </div>
-                            </div>
-                            <Badge className={cn(
-                              item.daysUntilExpiry <= 1 ? "bg-red-500" :
-                                item.daysUntilExpiry <= 3 ? "bg-amber-500" : "bg-yellow-500"
-                            )}>
-                              {item.daysUntilExpiry === 0 ? 'Vence Hoje!' :
-                                item.daysUntilExpiry === 1 ? 'Vence Amanhã' :
-                                  `${item.daysUntilExpiry} dias restantes`}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-500">
-                        <Package className="h-12 w-12 mx-auto mb-2 text-green-400" />
-                        <p>Nenhum pacote próximo do vencimento.</p>
-                      </div>
-                    )}
-                  </ScrollArea>
-                </TabsContent>
-
-                {/* Tab: Notificações */}
-                <TabsContent value="notifications" className="mt-0">
-                  <ScrollArea className="h-[300px]">
-                    {pendenciasData.recentNotifications.length > 0 ? (
-                      <div className="space-y-2">
-                        {pendenciasData.recentNotifications.map((notif, idx) => {
-                          const NotifIcon = notif.icon || Bell;
-                          return (
-                            <div key={notif.id || idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border">
-                              <div className={cn(
-                                "p-2 rounded-full",
-                                notif.type === 'accepted' ? "bg-green-100" :
-                                  notif.type === 'rejected' ? "bg-red-100" : "bg-blue-100"
-                              )}>
-                                <NotifIcon className={cn(
-                                  "h-5 w-5",
-                                  notif.type === 'accepted' ? "text-green-600" :
-                                    notif.type === 'rejected' ? "text-red-600" : "text-blue-600"
-                                )} />
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-medium">{notif.title}</p>
-                                <p className="text-sm text-slate-600">{notif.message}</p>
-                                {notif.details && (
-                                  <p className="text-xs text-slate-400 mt-1">{notif.details}</p>
-                                )}
-                              </div>
-                              <span className="text-xs text-slate-400 whitespace-nowrap">
-                                {notif.timestamp && formatDistanceToNowStrict(new Date(notif.timestamp), { locale: ptBR, addSuffix: true })}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-500">
-                        <Bell className="h-12 w-12 mx-auto mb-2 text-slate-400" />
-                        <p>Nenhuma atividade recente nas últimas 48 horas.</p>
-                      </div>
-                    )}
-                  </ScrollArea>
-                </TabsContent>
-
-                {/* Tab: Histórico */}
-                <TabsContent value="historico" className="mt-0">
-                  <div className="flex justify-between items-center mb-4">
-                    <p className="text-sm text-slate-500">Histórico de notificações e pendências ignoradas</p>
-                    {historico.length > 0 && (
-                      <Button variant="ghost" size="sm" onClick={handleLimparHistorico} className="text-red-500 hover:text-red-700">
-                        Limpar ignorados
-                      </Button>
-                    )}
-                  </div>
-                  <ScrollArea className="h-[400px] pr-2">
-                    <div className="space-y-4">
-                      {/* Notificações Resolvidas do Banco */}
-                      {historyNotifications.length > 0 && (
-                        <div className="space-y-2">
-                          <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Notificações Processadas</h5>
-                          {historyNotifications.map(notif => (
-                            <div key={notif.id} className="p-3 border rounded-lg bg-white shadow-sm">
-                              <div className="flex items-start justify-between mb-1">
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="text-[10px] py-0 h-4">
-                                    {notif.type === 'new_student_assignment' ? 'Novo Aluno' :
-                                      notif.type === 'student_reallocation' ? 'Realocação' : 'Geral'}
-                                  </Badge>
-                                  <p className="font-semibold text-sm">{notif.title}</p>
-                                </div>
-                                <span className="text-[10px] text-slate-400">
-                                  {format(new Date(notif.created_at), "dd/MM/yy HH:mm")}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-600 line-clamp-2">{notif.description || notif.content?.message}</p>
-                              <div className="flex items-center justify-between mt-2">
-                                <Badge variant={notif.status === 'accepted' ? 'default' : notif.status === 'rejected' ? 'destructive' : 'secondary'} className="text-[9px] py-0 px-1.5 h-4">
-                                  {notif.status === 'accepted' ? 'Aceito' : notif.status === 'rejected' ? 'Rejeitado' : 'Lido'}
-                                </Badge>
-                                {notif.resolved_at && (
-                                  <span className="text-[9px] text-slate-400 italic">
-                                    Resolvido {formatDistanceToNowStrict(new Date(notif.resolved_at), { locale: ptBR, addSuffix: true })}
-                                  </span>
-                                )}
-                              </div>
+                              <Button
+                                size="sm"
+                                className="bg-purple-600 hover:bg-purple-700 text-white"
+                                onClick={() => handleOpenVincularModal(student)}
+                              >
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Vincular
+                              </Button>
                             </div>
                           ))}
                         </div>
                       )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
 
-                      {/* Pendências Ignoradas Localmente */}
-                      {historico.length > 0 && (
-                        <div className="space-y-2">
-                          <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Avisos Ignorados</h5>
-                          {historico.map((item) => (
-                            <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                {/* === TAB: AULAS === */}
+                <TabsContent value="aulas" className="p-0">
+                  <ScrollArea className="h-[300px] w-full">
+                    <div className="p-6">
+                      {/* Simply showing recent history */}
+                      {classHistory.length === 0 ? (
+                        <div className="text-center py-8 text-slate-500">Nenhuma aula recente registrada.</div>
+                      ) : (
+                        <div className="space-y-3">
+                          {classHistory.map(aula => (
+                            <div key={aula.id} className="flex items-center justify-between p-3 border rounded-lg text-sm">
                               <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-full bg-slate-200">
-                                  <EyeOff className="h-4 w-4 text-slate-500" />
+                                <div className={cn("p-1.5 rounded-full",
+                                  aula.status === 'completed' ? "bg-green-100 text-green-600" :
+                                    aula.status === 'missed' ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
+                                )}>
+                                  {aula.status === 'completed' ? <Check className="h-4 w-4" /> :
+                                    aula.status === 'missed' ? <X className="h-4 w-4" /> : <Calendar className="h-4 w-4" />}
                                 </div>
-                                <div className="flex-1">
-                                  <p className="font-medium text-sm text-slate-700">{item.titulo}</p>
-                                  <p className="text-xs text-slate-500">{item.descricao}</p>
-                                  <p className="text-[10px] text-slate-400 mt-1">
-                                    Ignorado {formatDistanceToNowStrict(new Date(item.criadoEm), { locale: ptBR, addSuffix: true })}
+                                <div>
+                                  <p className="font-medium text-slate-700">{aula.student?.full_name}</p>
+                                  <p className="text-xs text-slate-500">
+                                    {format(new Date(aula.class_datetime), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge variant="outline" className="capitalize">{aula.status}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                {/* === TAB: VENCENDO === */}
+                <TabsContent value="vencendo" className="p-0">
+                  <ScrollArea className="h-[300px] w-full">
+                    <div className="p-6">
+                      {expiring.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-center text-slate-500">
+                          <CheckCircle className="h-10 w-10 text-slate-200 mb-2" />
+                          <p>Nenhum pacote vencendo em breve.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {expiring.map(pkg => (
+                            <div key={pkg.id} className="flex items-center justify-between p-4 bg-amber-50/50 border border-amber-100 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <Package className="h-8 w-8 text-amber-500 opacity-80" />
+                                <div>
+                                  <p className="font-medium text-slate-800">{pkg.custom_package_name || pkg.package_def?.name || 'Pacote'}</p>
+                                  <p className="text-sm text-slate-600">Aluno: {pkg.student?.full_name}</p>
+                                  <p className="text-xs text-amber-600 font-medium mt-0.5">
+                                    Vence {formatDistanceToNowStrict(new Date(pkg.expiration_date), { locale: ptBR, addSuffix: true })}
                                   </p>
                                 </div>
                               </div>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleRestaurarPendencia(item)}
-                                className="text-blue-600 border-blue-200 hover:bg-white text-xs h-7 px-2"
+                                onClick={() => handleMarkAsSeen({
+                                  type: 'package_expiration',
+                                  message: `Pacote expirando visto: ${pkg.student?.full_name}`,
+                                  details: { package_id: pkg.id },
+                                  student_id: pkg.student_id
+                                })}
+                                disabled={processingAction}
+                                className="text-amber-700 border-amber-200 hover:bg-amber-100"
                               >
-                                <Eye className="h-3 w-3 mr-1" />
-                                Restaurar
+                                <Eye className="h-4 w-4 mr-2" />
+                                Marcar Visto
                               </Button>
                             </div>
                           ))}
                         </div>
                       )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
 
-                      {historyNotifications.length === 0 && historico.length === 0 && !loadingHistoryNotifs && (
-                        <div className="text-center py-12 text-slate-500">
-                          <History className="h-12 w-12 mx-auto mb-2 text-slate-300" />
-                          <p>Nenhuma notificação ou pendência no histórico.</p>
+                {/* === TAB: AVISOS === */}
+                <TabsContent value="avisos" className="p-0">
+                  <ScrollArea className="h-[300px] w-full">
+                    <div className="p-6">
+                      {warnings.length === 0 ? (
+                        <div className="text-center py-8 text-slate-500">Nenhum aviso do sistema.</div>
+                      ) : (
+                        <div className="space-y-3">
+                          {warnings.map(warning => (
+                            <div key={warning.id} className="flex items-center justify-between p-4 bg-red-50/50 border border-red-100 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <AlertTriangle className="h-5 w-5 text-red-500" />
+                                <div>
+                                  <p className="font-medium text-slate-800">{warning.message}</p>
+                                  <p className="text-xs text-slate-500">
+                                    {formatDistanceToNowStrict(new Date(warning.created_at), { locale: ptBR, addSuffix: true })}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMarkAsSeen(warning)}
+                                disabled={processingAction}
+                                className="text-red-600 hover:bg-red-100"
+                              >
+                                Resolvido
+                              </Button>
+                            </div>
+                          ))}
                         </div>
                       )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
 
-                      {loadingHistoryNotifs && (
-                        <div className="flex justify-center py-4">
-                          <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+                {/* === TAB: HISTORICO === */}
+                <TabsContent value="historico" className="p-0">
+                  <ScrollArea className="h-[300px] w-full">
+                    <div className="p-6">
+                      {historyData.length === 0 ? (
+                        <div className="text-center py-8 text-slate-500">
+                          <History className="h-8 w-8 mx-auto text-slate-300 mb-2" />
+                          <p>Histórico vazio.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {historyData.map((item, idx) => (
+                            <div key={item.id || idx} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-100 opacity-75 grayscale-[0.5] hover:opacity-100 transition-opacity">
+                              <div className="flex items-center gap-3">
+                                <div className="p-1.5 bg-slate-200 rounded-full">
+                                  <Check className="h-3 w-3 text-slate-600" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-slate-700">{item.message || item.titulo || 'Item resolvido'}</p>
+                                  <p className="text-xs text-slate-500">
+                                    Resolvido {item.resolved_at ? format(new Date(item.resolved_at), "dd/MM HH:mm") : 'Recentemente'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
