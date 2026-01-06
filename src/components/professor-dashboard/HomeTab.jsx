@@ -886,8 +886,8 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           if (vinculoError) throw vinculoError;
 
           // USAR RPC PARA TRANSFERÊNCIA SEGURA DE DADOS (APPOINTMENTS, LOGS, PROFILE)
-          // Isso garante que mesmo sem permissão de update direto (RLS), o servidor faça a troca.
-          const { error: rpcError } = await supabase.rpc('transfer_student_data', {
+          // RPC v2 retorna contadores
+          const { data: rpcResult, error: rpcError } = await supabase.rpc('transfer_student_data', {
             p_student_id: studentId,
             p_professor_id: professorId
           });
@@ -897,10 +897,12 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
             throw new Error("Falha ao transferir aulas e dados do aluno. Verifique se a função RPC existe.");
           }
 
+          const counts = rpcResult || { appointments: 0, logs: 0 };
+
           toast({
             variant: 'default',
             title: 'Vinculação Aprovada!',
-            description: `${request.profile?.full_name || 'Aluno'} vinculado e aulas transferidas com sucesso.`
+            description: `${request.profile?.full_name || 'Aluno'} vinculado com sucesso. (Aulas: ${counts.appointments}, Logs: ${counts.logs})`
           });
         } catch (e) {
           // Reverter status da solicitação

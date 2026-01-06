@@ -920,11 +920,18 @@ const AlunosTab = ({ dashboardData }) => {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                {student.is_active !== false ? (
-                                                    <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Ativo</Badge>
-                                                ) : (
-                                                    <Badge variant="destructive">Inativo</Badge>
-                                                )}
+                                                <div className="flex flex-col gap-1 items-start">
+                                                    {student.is_active !== false ? (
+                                                        <Badge className="bg-green-100 text-green-800 hover:bg-green-200">Ativo</Badge>
+                                                    ) : (
+                                                        <Badge variant="destructive">Inativo</Badge>
+                                                    )}
+                                                    {student.pending_professor_status === 'rejeitado' && (
+                                                        <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">
+                                                            Rejeitado
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                             <TableCell>{format(new Date(student.created_at), 'dd/MM/yyyy')}</TableCell>
                                             {can_manage_students && (
