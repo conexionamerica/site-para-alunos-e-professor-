@@ -31,12 +31,30 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
     const today = getBrazilDate().toISOString();
 
     // 1. Fetch del perfil del usuario (solo nombre y rol)
+    // Buscamos primeiro os campos garantidos
     const { data: userProfile, error: profProfileError } = await supabase
         .from('profiles')
-        .select('full_name, role, can_manage_classes, can_manage_students, meeting_link')
+        .select('full_name, role, can_manage_classes, can_manage_students')
         .eq('id', professorId)
         .maybeSingle();
+
     if (profProfileError) throw profProfileError;
+
+    // Tentamos buscar o meeting_link separadamente para não quebrar o dashboard caso a coluna não exista
+    let meetingLinkData = null;
+    try {
+        const { data: mLink, error: mError } = await supabase
+            .from('profiles')
+            .select('meeting_link')
+            .eq('id', professorId)
+            .maybeSingle();
+
+        if (!mError) {
+            meetingLinkData = mLink?.meeting_link;
+        }
+    } catch (e) {
+        console.warn('Campo meeting_link ainda não existe na tabela profiles');
+    }
 
     // 2. Fetch de Solicitacoes (para HomeTab)
     // Superadmin ve TODAS las solicitudes, profesor solo las suyas
@@ -172,7 +190,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         roleSettings: roleSettings || [],
         can_manage_classes,
         can_manage_students,
-        meeting_link: userProfile?.meeting_link
+        meeting_link: meetingLinkData
     };
 };
 

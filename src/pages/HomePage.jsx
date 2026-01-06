@@ -131,24 +131,54 @@ const HomePage = () => {
       if (!currentProfessorId) { setLoading(false); return; }
       setProfessorId(currentProfessorId);
 
-      const [appointmentsRes, activeBillingsRes, pastBillingsRes, assignedLogsRes, pendingReqRes, nextClassRes, feedbacksRes, chatRes, roleSettingsRes] = await Promise.all([
+      const [appointmentsRes, activeBillingsRes, pastBillingsRes, assignedLogsRes, pendingReqRes, feedbacksRes, chatRes, roleSettingsRes] = await Promise.all([
         supabase.from('appointments').select('*').eq('student_id', user.id).order('class_datetime', { ascending: true }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).gte('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).lt('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
-        supabase.from('assigned_packages_log').select('assigned_classes, package_id, status').eq('student_id', user.id), // Fetch status here
+        supabase.from('assigned_packages_log').select('assigned_classes, package_id, status').eq('student_id', user.id),
         supabase.from('solicitudes_clase').select('solicitud_id, is_recurring').eq('alumno_id', user.id).eq('status', 'Pendiente').maybeSingle(),
-        supabase.from('appointments').select(`*, student:profiles!student_id(full_name, spanish_level), professor:profiles!professor_id(meeting_link)`).eq('student_id', user.id).in('status', ['scheduled', 'rescheduled']).gte('class_datetime', today).order('class_datetime', { ascending: true }).limit(1).maybeSingle(),
         supabase.from('class_feedback').select(`*, appointment:appointments!fk_appointment(class_datetime)`).eq('student_id', user.id).order('created_at', { ascending: false }),
         supabase.from('chats').select('*').eq('alumno_id', user.id).maybeSingle(),
         supabase.from('role_settings').select('*').eq('role', 'student').maybeSingle(),
       ]);
 
-      const errors = [appointmentsRes.error, activeBillingsRes.error, pastBillingsRes.error, assignedLogsRes.error, pendingReqRes.error, nextClassRes.error].filter(Boolean).filter(e => e.code !== 'PGRST116');
+      // Fetch next class without meeting_link first to be safe
+      let nextClassData = null;
+      try {
+        const { data: ncData, error: ncError } = await supabase
+          .from('appointments')
+          .select(`*, student:profiles!student_id(full_name, spanish_level), professor:profiles!professor_id(full_name, meeting_link)`)
+          .eq('student_id', user.id)
+          .in('status', ['scheduled', 'rescheduled'])
+          .gte('class_datetime', today)
+          .order('class_datetime', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (ncError) {
+          const { data: ncDataFallback } = await supabase
+            .from('appointments')
+            .select(`*, student:profiles!student_id(full_name, spanish_level), professor:profiles!professor_id(full_name)`)
+            .eq('student_id', user.id)
+            .in('status', ['scheduled', 'rescheduled'])
+            .gte('class_datetime', today)
+            .order('class_datetime', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          nextClassData = ncDataFallback;
+        } else {
+          nextClassData = ncData;
+        }
+      } catch (e) {
+        console.warn("Erro ao buscar próxima aula com link:", e);
+      }
+
+      const errors = [appointmentsRes.error, activeBillingsRes.error, pastBillingsRes.error, assignedLogsRes.error, pendingReqRes.error].filter(Boolean).filter(e => e.code !== 'PGRST116');
       if (errors.length) throw new Error(errors.map(e => e.message).join(', '));
 
       const appointmentsData = appointmentsRes.data || [];
       setAppointments(appointmentsData);
-      setNextClass(nextClassRes.data);
+      setNextClass(nextClassData);
 
       const activeBillingsData = activeBillingsRes.data || [];
       const assignedLogsData = assignedLogsRes.data || [];
