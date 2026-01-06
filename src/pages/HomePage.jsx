@@ -86,6 +86,7 @@ const HomePage = () => {
   const [appointments, setAppointments] = useState([]);
   const [nextClass, setNextClass] = useState(null);
   const [professorId, setProfessorId] = useState(null);
+  const [assignedLogs, setAssignedLogs] = useState([]);
 
   const [schedulingStep, setSchedulingStep] = useState(1);
   const [allAvailableSlots, setAllAvailableSlots] = useState([]);
@@ -135,7 +136,7 @@ const HomePage = () => {
         supabase.from('appointments').select('*').eq('student_id', user.id).order('class_datetime', { ascending: true }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).gte('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).lt('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
-        supabase.from('assigned_packages_log').select('assigned_classes, package_id, status').eq('student_id', user.id),
+        supabase.from('assigned_packages_log').select('assigned_classes, package_id, status, custom_package_name, assigned_at').eq('student_id', user.id),
         supabase.from('solicitudes_clase').select('solicitud_id, is_recurring').eq('alumno_id', user.id).eq('status', 'Pendiente').maybeSingle(),
         supabase.from('class_feedback').select(`*, appointment:appointments!fk_appointment(class_datetime)`).eq('student_id', user.id).order('created_at', { ascending: false }),
         supabase.from('chats').select('*').eq('alumno_id', user.id).maybeSingle(),
@@ -183,6 +184,7 @@ const HomePage = () => {
       const activeBillingsData = activeBillingsRes.data || [];
       const assignedLogsData = assignedLogsRes.data || [];
       setActiveBillings(activeBillingsData);
+      setAssignedLogs(assignedLogsData);
       setPastBillings(pastBillingsRes.data || []);
       setFeedbacks(feedbacksRes.data || []);
       setRoleSettings(roleSettingsRes?.data || null);
@@ -624,13 +626,25 @@ const HomePage = () => {
             </Alert>
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <h2 className="text-xl font-bold mb-4">Contratos Ativos</h2>
-              {loading ? <p>Carregando...</p> : activeBillings.length > 0 ? activeBillings.map(billing => (
-                <div key={billing.id} className="p-4 border rounded-lg bg-sky-50 border-sky-200 mb-4">
-                  <p className="text-lg font-semibold">{billing.packages?.name} ({billing.packages?.number_of_classes} aulas/mês)</p>
-                  <p className="text-sm text-slate-600">Preço: <span className="font-semibold">R$ {billing.amount_paid}</span></p>
-                  <p className="text-sm text-slate-600">Comprado em: {format(parseISO(billing.purchase_date), 'PPP', { locale: ptBR })} | Válido até: <span className="font-semibold">{format(parseISO(billing.end_date), 'PPP', { locale: ptBR })}</span></p>
-                </div>
-              )) : <p className="text-slate-500">Nenhum contrato ativo.</p>}
+              {loading ? <p>Carregando...</p> : activeBillings.length > 0 ? activeBillings.map(billing => {
+                const matchLog = assignedLogs.find(l =>
+                  l.package_id === billing.package_id &&
+                  l.status !== 'Cancelado'
+                );
+                const displayName = matchLog?.custom_package_name || billing.packages?.name;
+                const displayClasses = matchLog?.assigned_classes || billing.packages?.number_of_classes;
+
+                return (
+                  <div key={billing.id} className="p-4 border rounded-lg bg-sky-50 border-sky-200 mb-4">
+                    <p className="text-lg font-bold text-slate-800">{displayName} <span className="font-normal text-slate-600">({displayClasses} aulas)</span></p>
+                    <div className="flex gap-4 mt-2">
+                      <p className="text-sm text-slate-600">Preço: <span className="font-semibold text-emerald-600">R$ {billing.amount_paid}</span></p>
+                      <p className="text-sm text-slate-600">Validade: <span className="font-semibold">{format(parseISO(billing.end_date), 'PPP', { locale: ptBR })}</span></p>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">Adquirido em: {format(parseISO(billing.purchase_date), 'dd/MM/yyyy')}</p>
+                  </div>
+                );
+              }) : <p className="text-slate-500">Nenhum contrato ativo.</p>}
             </div>
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <h2 className="text-xl font-bold mb-4">Histórico de Faturas</h2>
