@@ -428,50 +428,24 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
         setIsSubmitting(true);
 
         try {
+            // Salvar dados do professor antigo para o histórico da solicitação
             const oldProfessorId = student.assigned_professor_id;
             const oldProfessorName = professors.find(p => p.id === oldProfessorId)?.full_name || 'Desconhecido';
 
-            // 1. Buscar appointments do aluno que serão alterados
-            const { data: appointments, error: fetchError } = await supabase
-                .from('appointments')
-                .select('*')
-                .eq('student_id', student.id)
-                .in('status', ['scheduled', 'rescheduled', 'missed']);
+            // 2. USAR RPC V4 PARA LIMPEZA TOTAL (Desvincular e Liberar Slots e Histórico)
+            // Isso garante que os slots do professor antigo sejam liberados atomicamente
+            const { error: rpcError } = await supabase.rpc('transfer_student_data', {
+                p_student_id: student.id,
+                p_professor_id: null // NULL = Desvincular e limpar
+            });
 
-            if (fetchError) throw fetchError;
+            if (rpcError) throw rpcError;
 
-            // 2. Liberar slots antigos e desvincular appointments
-            if (appointments && appointments.length > 0) {
-                const oldSlots = appointments.map(apt => apt.class_slot_id).filter(Boolean);
-
-                if (oldSlots.length > 0) {
-                    // Liberar slots antigos
-                    await supabase
-                        .from('class_slots')
-                        .update({ status: 'active' })
-                        .in('id', oldSlots);
-                }
-
-                // Desvincular professor das aulas (ficam pendentes de aprovação pelo novo professor)
-                const { error: updateError } = await supabase
-                    .from('appointments')
-                    .update({
-                        professor_id: null,
-                        class_slot_id: null
-                    })
-                    .eq('student_id', student.id)
-                    .in('status', ['scheduled', 'rescheduled', 'missed']);
-
-                if (updateError) throw updateError;
-            }
-
-            // 3. Atualizar perfil do aluno:
-            //    - Remove vínculo atual (assigned_professor_id = NULL)
-            //    - Define professor pendente de aprovação
+            // 3. Atualizar perfil do aluno para definir o NOVO professor como PENDENTE
             const { error: profileError } = await supabase
                 .from('profiles')
                 .update({
-                    assigned_professor_id: null,
+                    // assigned_professor_id já é null pela RPC
                     pending_professor_id: selectedProfessor.id,
                     pending_professor_status: 'aguardando_aprovacao',
                     pending_professor_requested_at: new Date().toISOString()
