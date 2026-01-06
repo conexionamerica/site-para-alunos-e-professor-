@@ -3,11 +3,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History, Megaphone } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History, Megaphone, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import HomeTab from '@/components/professor-dashboard/HomeTab';
@@ -32,7 +33,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
     // 1. Fetch del perfil del usuario (solo nombre y rol)
     const { data: userProfile, error: profProfileError } = await supabase
         .from('profiles')
-        .select('full_name, role, can_manage_classes, can_manage_students')
+        .select('full_name, role, can_manage_classes, can_manage_students, meeting_link')
         .eq('id', professorId)
         .maybeSingle();
     if (profProfileError) throw profProfileError;
@@ -171,6 +172,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         roleSettings: roleSettings || [],
         can_manage_classes,
         can_manage_students,
+        meeting_link: userProfile?.meeting_link
     };
 };
 
@@ -196,6 +198,48 @@ const ProfessorDashboardPage = () => {
 
     // NOVO: Estado para filtro global de professor (para superusuários)
     const [globalProfessorFilter, setGlobalProfessorFilter] = useState('all');
+    const [showProfileSettings, setShowProfileSettings] = useState(false);
+    const [meetingLink, setMeetingLink] = useState('');
+    const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+    useEffect(() => {
+        if (dashboardData?.meeting_link) {
+            setMeetingLink(dashboardData.meeting_link);
+        }
+    }, [dashboardData?.meeting_link]);
+
+    const handleSaveProfileSettings = async () => {
+        if (!user?.id) return;
+        setIsSavingSettings(true);
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ meeting_link: meetingLink })
+                .eq('id', user.id);
+
+            if (error) throw error;
+
+            toast({
+                title: "Configurações salvas",
+                description: "Seu link de reunião foi atualizado com sucesso.",
+            });
+            setShowProfileSettings(false);
+            // Atualizar dados localmente
+            setDashboardData(prev => ({
+                ...prev,
+                meeting_link: meetingLink
+            }));
+        } catch (error) {
+            console.error('Erro ao salvar configurações:', error);
+            toast({
+                title: "Erro ao salvar",
+                description: error.message,
+                variant: "destructive"
+            });
+        } finally {
+            setIsSavingSettings(false);
+        }
+    };
 
     const handleLogout = async () => {
         await signOut();
@@ -234,6 +278,7 @@ const ProfessorDashboardPage = () => {
                 professorName: data.professorName,
                 userRole: data.userRole,
                 isSuperadmin: data.isSuperadmin,
+                meeting_link: data.meeting_link,
                 loading: false,
                 onUpdate: fetchData
             });
@@ -646,6 +691,11 @@ const ProfessorDashboardPage = () => {
                                         </div>
                                     </DropdownMenuLabel>
                                     <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => setShowProfileSettings(true)}>
+                                        <Settings className="mr-2 h-4 w-4" />
+                                        Configurações
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
 
                                     {/* Botão Sair com LogOut Icone */}
                                     <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-700">
@@ -730,6 +780,9 @@ const ProfessorDashboardPage = () => {
                                     </div>
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setShowProfileSettings(true)}>
+                                    Configurações
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => setActiveTab('preferencias')}>
                                     Preferências
                                 </DropdownMenuItem>
@@ -761,6 +814,7 @@ const ProfessorDashboardPage = () => {
                                         setActiveTab={setActiveTab}
                                         dashboardData={{
                                             ...filteredDashboardData,
+                                            meeting_link: dashboardData.meeting_link,
                                             // Indicar se é a aba "Painel" (para o HomeTab mostrar pendências)
                                             showPainelView: item.isPainelTab === true,
                                             // Indicar se é a aba "Início" normal
@@ -772,6 +826,47 @@ const ProfessorDashboardPage = () => {
                         </Tabs>
                     </div>
                 </main>
+
+                {/* Modal de Configurações do Perfil */}
+                <Dialog open={showProfileSettings} onOpenChange={setShowProfileSettings}>
+                    <DialogContent className="sm:max-w-[425px]">
+                        <DialogHeader>
+                            <DialogTitle>Configurações do Perfil</DialogTitle>
+                            <DialogDescription>
+                                Personalize suas informações. O link de aula será compartilhado com seus alunos.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid gap-2">
+                                <label htmlFor="meeting_link" className="text-sm font-medium leading-none">
+                                    Link do Google Meet / Zoom
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2 bg-slate-100 rounded border">
+                                        <ExternalLink className="h-4 w-4 text-slate-500" />
+                                    </div>
+                                    <input
+                                        id="meeting_link"
+                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                        placeholder="https://meet.google.com/xxx-xxxx-xxx"
+                                        value={meetingLink}
+                                        onChange={(e) => setMeetingLink(e.target.value)}
+                                    />
+                                </div>
+                                <p className="text-[10px] text-slate-500">
+                                    Este é el link que seus alunos verão ao clicar em "Iniciar Aula".
+                                </p>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowProfileSettings(false)}>Cancelar</Button>
+                            <Button onClick={handleSaveProfileSettings} disabled={isSavingSettings}>
+                                {isSavingSettings ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                Salvar alterações
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </div>
     );

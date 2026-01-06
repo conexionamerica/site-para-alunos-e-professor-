@@ -2145,7 +2145,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                         PDF Aulas
                       </Button>
                       <Button asChild className="flex-1 bg-emerald-500 hover:bg-emerald-600">
-                        <a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">
+                        <a href={dashboardData?.meeting_link || "https://meet.google.com/tmi-xwmg-kua"} target="_blank" rel="noopener noreferrer">
                           Iniciar Aula
                         </a>
                       </Button>

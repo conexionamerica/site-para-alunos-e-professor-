@@ -58,7 +58,7 @@ const NextClassWidget = ({ nextClass }) => {
         <p className="text-sm"><strong>Nível:</strong> {student?.spanish_level || 'Não definido'}</p>
       </div>
       <Button asChild className="w-full mt-3 bg-sky-600 hover:bg-sky-700">
-        <a href="https://meet.google.com/tmi-xwmg-kua" target="_blank" rel="noopener noreferrer">Iniciar Agora</a>
+        <a href={nextClass.professor?.meeting_link || "https://meet.google.com/tmi-xwmg-kua"} target="_blank" rel="noopener noreferrer">Iniciar Agora</a>
       </Button>
     </div>
   );
@@ -137,7 +137,7 @@ const HomePage = () => {
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).lt('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
         supabase.from('assigned_packages_log').select('assigned_classes, package_id, status').eq('student_id', user.id), // Fetch status here
         supabase.from('solicitudes_clase').select('solicitud_id, is_recurring').eq('alumno_id', user.id).eq('status', 'Pendiente').maybeSingle(),
-        supabase.from('appointments').select(`*, student:profiles!student_id(full_name, spanish_level)`).eq('student_id', user.id).in('status', ['scheduled', 'rescheduled']).gte('class_datetime', today).order('class_datetime', { ascending: true }).limit(1).maybeSingle(),
+        supabase.from('appointments').select(`*, student:profiles!student_id(full_name, spanish_level), professor:profiles!professor_id(meeting_link)`).eq('student_id', user.id).in('status', ['scheduled', 'rescheduled']).gte('class_datetime', today).order('class_datetime', { ascending: true }).limit(1).maybeSingle(),
         supabase.from('class_feedback').select(`*, appointment:appointments!fk_appointment(class_datetime)`).eq('student_id', user.id).order('created_at', { ascending: false }),
         supabase.from('chats').select('*').eq('alumno_id', user.id).maybeSingle(),
         supabase.from('role_settings').select('*').eq('role', 'student').maybeSingle(),
