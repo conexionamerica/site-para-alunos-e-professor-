@@ -349,7 +349,8 @@ const AdminTab = ({ dashboardData }) => {
                     address_city: formData.address_city || null,
                     address_state: formData.address_state || null,
                     address_zip_code: cleanCEP(formData.address_zip_code) || null,
-                    registration_status: formData.registration_status || 'pre_registered'
+                    registration_status: formData.registration_status || 'pre_registered',
+                    is_active: formData.is_active // Persistir estado activo/inativo
                 };
 
                 const { error: updateError } = await supabase
