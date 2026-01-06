@@ -43,27 +43,12 @@ const AdminTab = ({ dashboardData }) => {
     const [professorAvailability, setProfessorAvailability] = useState(null);
     const [availabilityWarning, setAvailabilityWarning] = useState(null);
 
-    // Form state with persistence
+    // Form state with persistence - SIMPLIFICADO: apenas campos essenciais
     const [formData, setFormData, clearFormData] = useFormPersistence('admin_user_form', {
         full_name: '',
-        username: '',
         email: '',
-        password: '', // NOVO: Senha manual
-        phone: '',
+        password: '',
         role: 'student',
-        student_code: '',
-        assigned_professor_id: '',
-        cpf: '',
-        birth_date: '',
-        gender: '',
-        address_street: '',
-        address_number: '',
-        address_complement: '',
-        address_neighborhood: '',
-        address_city: '',
-        address_state: '',
-        address_zip_code: '',
-        registration_status: 'pre_registered',
         is_active: true
     });
     const [generatedPassword, setGeneratedPassword] = useState('');
@@ -196,22 +181,6 @@ const AdminTab = ({ dashboardData }) => {
     //     return `${capitalizedFirstName}${year}`;
     // };
 
-    const generateUsername = (fullName) => {
-        if (!fullName || !fullName.trim()) return '';
-
-        const nameParts = fullName.trim().split(' ').filter(part => part.length > 0);
-
-        if (nameParts.length === 0) return '';
-        if (nameParts.length === 1) return nameParts[0].toLowerCase();
-
-        // Pegar primeiro nome + último sobrenome
-        const firstName = nameParts[0];
-        const lastName = nameParts[nameParts.length - 1];
-
-        // Formato: nome.sobrenome (tudo em minúsculas)
-        return `${firstName}.${lastName}`.toLowerCase();
-    };
-
     const getNextStudentCode = () => {
         // Usar allProfiles para garantir que pegamos o maior código de ALL os perfis do sistema,
         // e não apenas dos alunos visíveis no filtro atual.
@@ -226,30 +195,14 @@ const AdminTab = ({ dashboardData }) => {
         return nextCode.toString().padStart(7, '0');
     };
 
-    // Open dialog for new user
+    // Open dialog for new user - SIMPLIFICADO
     const handleNewUser = () => {
-        const nextCode = getNextStudentCode();
         setEditingUser(null);
         setFormData({
             full_name: '',
-            username: '',
             email: '',
-            password: '', // Reset senha
-            phone: '',
+            password: '',
             role: 'student',
-            student_code: nextCode,
-            assigned_professor_id: '',
-            cpf: '',
-            birth_date: '',
-            gender: '',
-            address_street: '',
-            address_number: '',
-            address_complement: '',
-            address_neighborhood: '',
-            address_city: '',
-            address_state: '',
-            address_zip_code: '',
-            registration_status: 'pre_registered',
             is_active: true
         });
         setIsUserDialogOpen(true);
@@ -325,38 +278,26 @@ const AdminTab = ({ dashboardData }) => {
         }
     };
 
-    // Save user (create or update)
+    // Save user (create or update) - SIMPLIFICADO
     const handleSaveUser = async () => {
-        // Validações básicas
-        if (!formData.full_name.trim() || !formData.email.trim() || !formData.phone.trim()) {
+        // Validações básicas - apenas Nome e E-mail são obrigatórios
+        if (!formData.full_name.trim() || !formData.email.trim()) {
             toast({
                 title: 'Erro',
-                description: 'Nome, E-mail e Telefone são obrigatórios.',
+                description: 'Nome e E-mail são obrigatórios.',
                 variant: 'destructive'
             });
             return;
         }
 
-        // Validar telefone
-        if (!validatePhone(formData.phone)) {
+        // Validar senha apenas para novos usuários
+        if (!editingUser && !formData.password) {
             toast({
                 title: 'Erro',
-                description: 'Telefone inválido. Deve ter pelo menos 8 dígitos.',
+                description: 'Senha é obrigatória para novos usuários.',
                 variant: 'destructive'
             });
             return;
-        }
-
-        // Validar CPF se fornecido
-        if (formData.cpf && formData.cpf.trim() !== '') {
-            if (!validateCPF(formData.cpf)) {
-                toast({
-                    title: 'Erro',
-                    description: 'CPF inválido. Verifique os dígitos.',
-                    variant: 'destructive'
-                });
-                return;
-            }
         }
 
         setIsSubmitting(true);
@@ -505,49 +446,24 @@ const AdminTab = ({ dashboardData }) => {
                     });
                 }
             } else {
-                // For new users, create via the new admin_create_user RPC
-                // This prevents session switching issues and centralizes creation
+                // Criar novo usuário via RPC - SIMPLIFICADO
                 try {
-                    // Removida validação de 6 caracteres a pedido do usuário
-                    if (!formData.password) {
-                        toast({
-                            title: 'Erro de validação',
-                            description: 'A senha é obrigatória para novos usuários.',
-                            variant: 'destructive'
-                        });
-                        setIsSubmitting(false);
-                        return;
-                    }
-
+                    // A senha é passada exatamente como digitada (respeitando símbolos, maiúsculas, minúsculas)
                     const { data: newUserId, error: rpcError } = await supabase.rpc('admin_create_user', {
                         p_email: formData.email.trim().toLowerCase(),
-                        p_password: formData.password,
+                        p_password: formData.password, // Senha exatamente como digitada
                         p_full_name: (formData.full_name || '').trim(),
-                        p_role: formData.role,
-                        p_username: (formData.username || '').trim(),
-                        p_student_code: formData.role === 'student' ? (formData.student_code || null) : null,
-                        p_assigned_professor_id: null,
-                        p_phone: cleanPhone(formData.phone || ''),
-                        p_cpf: formData.cpf ? cleanCPF(formData.cpf) : null,
-                        p_birth_date: formData.birth_date || null,
-                        p_gender: formData.gender || null,
-                        p_address_street: formData.address_street?.trim() || null,
-                        p_address_number: formData.address_number?.trim() || null,
-                        p_address_complement: formData.address_complement?.trim() || null,
-                        p_address_neighborhood: formData.address_neighborhood?.trim() || null,
-                        p_address_city: formData.address_city?.trim() || null,
-                        p_address_state: formData.address_state || null,
-                        p_address_zip_code: formData.address_zip_code ? cleanCEP(formData.address_zip_code) : null
+                        p_role: formData.role
+                        // Demais parâmetros são opcionais (usam DEFAULT no SQL)
                     });
 
                     if (rpcError) {
-                        // ... (lógica de erro permanece igual)
                         throw new Error(rpcError.message);
                     }
 
                     toast({
                         title: 'Sucesso!',
-                        description: `Usuário criado com sucesso. Senha configurada: ${formData.password}`,
+                        description: `Usuário criado com sucesso. Senha: ${formData.password}`,
                         duration: 10000,
                     });
                 } catch (rpcException) {
@@ -1036,68 +952,59 @@ const AdminTab = ({ dashboardData }) => {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                        {/* Solo mostrar campos de nombre/email/etc cuando es NUEVO usuario */}
+                        {/* FORMULÁRIO SIMPLIFICADO PARA NOVO USUÁRIO */}
                         {!editingUser && (
                             <>
+                                {/* 1. Nome Completo */}
                                 <div className="grid gap-2">
                                     <Label htmlFor="full_name">Nome completo *</Label>
                                     <Input
                                         id="full_name"
                                         value={formData.full_name}
-                                        onChange={(e) => {
-                                            const newName = e.target.value;
-                                            // Gerar username automaticamente
-                                            const newUsername = generateUsername(newName);
-                                            setFormData({ ...formData, full_name: newName, username: newUsername });
-                                        }}
+                                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                                         placeholder="Nome completo do usuário"
+                                        autoFocus
                                     />
-                                    <p className="text-xs text-slate-500">Username: <strong>{formData.username || '(aguardando nome)'}</strong></p>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="email">Email *</Label>
-                                        <Input
-                                            id="email"
-                                            type="email"
-                                            value={formData.email}
-                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                            placeholder="seu@email.com"
-                                        />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="phone">Telefone *</Label>
-                                        <Input
-                                            id="phone"
-                                            value={formatPhone(formData.phone)}
-                                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                            placeholder="(00) 00000-0000"
-                                            maxLength={15}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-purple-50 rounded-lg space-y-2 border border-purple-100">
-                                    <Label htmlFor="password_new" className="text-xs text-purple-700 uppercase font-bold">Definir Senha Inicial *</Label>
-                                    <div className="flex items-center gap-2">
-                                        <Input
-                                            id="password_new"
-                                            type="text"
-                                            value={formData.password}
-                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                            placeholder="Digite a senha para o novo usuário"
-                                            className="font-mono text-sm bg-white border-purple-200"
-                                        />
-                                    </div>
-                                    <p className="text-[10px] text-purple-400">Esta será a senha que o usuário usará para o primeiro acesso.</p>
-                                </div>
+
+                                {/* 2. E-mail */}
                                 <div className="grid gap-2">
-                                    <Label htmlFor="role">Tipo de usuário</Label>
+                                    <Label htmlFor="email">E-mail *</Label>
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        placeholder="usuario@email.com"
+                                    />
+                                    <p className="text-xs text-slate-500">Este será o e-mail de login do usuário.</p>
+                                </div>
+
+                                {/* 3. Senha */}
+                                <div className="p-4 bg-purple-50 rounded-lg space-y-2 border border-purple-200">
+                                    <Label htmlFor="password_new" className="text-sm text-purple-700 font-semibold">Senha *</Label>
+                                    <Input
+                                        id="password_new"
+                                        type="text"
+                                        value={formData.password}
+                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                        placeholder="Digite a senha (letras, números, símbolos)"
+                                        className="font-mono text-base bg-white border-purple-300"
+                                    />
+                                    <p className="text-xs text-purple-600">
+                                        A senha será salva exatamente como digitada, respeitando maiúsculas, minúsculas e símbolos.
+                                    </p>
+                                </div>
+
+                                {/* 4. Perfil/Role */}
+                                <div className="grid gap-2">
+                                    <Label htmlFor="role">Perfil de Usuário *</Label>
                                     <Select
                                         value={formData.role}
                                         onValueChange={(value) => setFormData({ ...formData, role: value })}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Selecione o tipo" />
+                                            <SelectValue placeholder="Selecione o perfil" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="student">Aluno</SelectItem>
@@ -1106,193 +1013,6 @@ const AdminTab = ({ dashboardData }) => {
                                         </SelectContent>
                                     </Select>
                                 </div>
-
-                                {/* Campos obrigatórios para geração de senha */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="birth_date_main">Data de Nascimento *</Label>
-                                        <Input
-                                            id="birth_date_main"
-                                            type="date"
-                                            value={formData.birth_date}
-                                            onChange={(e) => {
-                                                setFormData({ ...formData, birth_date: e.target.value });
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="gender_main">Gênero</Label>
-                                        <Select
-                                            value={formData.gender}
-                                            onValueChange={(value) => setFormData({ ...formData, gender: value })}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecione" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="masculino">Masculino</SelectItem>
-                                                <SelectItem value="feminino">Feminino</SelectItem>
-                                                <SelectItem value="outro">Outro</SelectItem>
-                                                <SelectItem value="prefiro_nao_informar">Prefiro não informar</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-
-                                {formData.role === 'student' && (
-                                    <div className="grid gap-2">
-                                        <div className="flex items-center justify-between">
-                                            <Label htmlFor="student_code">Código do Aluno</Label>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-6 text-xs text-purple-600 hover:text-purple-700"
-                                                onClick={() => setFormData({ ...formData, student_code: getNextStudentCode() })}
-                                                type="button"
-                                            >
-                                                Regerar Código
-                                            </Button>
-                                        </div>
-                                        <Input
-                                            id="student_code"
-                                            value={formData.student_code || ''}
-                                            onChange={(e) => setFormData({ ...formData, student_code: e.target.value })}
-                                            placeholder="EX: 0101010"
-                                        />
-                                    </div>
-                                )}
-
-                                {/* Seção de Dados Complementares (opcional para pré-cadastro) */}
-                                {!editingUser && (
-                                    <div className="border-t pt-4 mt-4">
-                                        <h4 className="font-semibold text-sm text-slate-700 mb-3">
-                                            Dados Complementares (Opcional)
-                                        </h4>
-                                        <p className="text-xs text-slate-500 mb-4">
-                                            Preencha para cadastro completo. Necessário para gerar contratos e títulos financeiros.
-                                        </p>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="cpf">CPF</Label>
-                                                <Input
-                                                    id="cpf"
-                                                    value={formatCPF(formData.cpf)}
-                                                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                                                    placeholder="000.000.000-00"
-                                                    maxLength={14}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-4">
-                                            <h5 className="font-medium text-sm text-slate-700 mb-3">Endereço</h5>
-                                            <div className="grid gap-3">
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    <div className="col-span-2 grid gap-2">
-                                                        <Label htmlFor="address_street">Rua</Label>
-                                                        <Input
-                                                            id="address_street"
-                                                            value={formData.address_street}
-                                                            onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
-                                                            placeholder="Nome da rua"
-                                                        />
-                                                    </div>
-                                                    <div className="grid gap-2">
-                                                        <Label htmlFor="address_number">Número</Label>
-                                                        <Input
-                                                            id="address_number"
-                                                            value={formData.address_number}
-                                                            onChange={(e) => setFormData({ ...formData, address_number: e.target.value })}
-                                                            placeholder="123"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div className="grid gap-2">
-                                                        <Label htmlFor="address_complement">Complemento</Label>
-                                                        <Input
-                                                            id="address_complement"
-                                                            value={formData.address_complement}
-                                                            onChange={(e) => setFormData({ ...formData, address_complement: e.target.value })}
-                                                            placeholder="Apto, bloco..."
-                                                        />
-                                                    </div>
-                                                    <div className="grid gap-2">
-                                                        <Label htmlFor="address_neighborhood">Bairro</Label>
-                                                        <Input
-                                                            id="address_neighborhood"
-                                                            value={formData.address_neighborhood}
-                                                            onChange={(e) => setFormData({ ...formData, address_neighborhood: e.target.value })}
-                                                            placeholder="Nome do bairro"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    <div className="grid gap-2">
-                                                        <Label htmlFor="address_city">Cidade</Label>
-                                                        <Input
-                                                            id="address_city"
-                                                            value={formData.address_city}
-                                                            onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
-                                                            placeholder="Cidade"
-                                                        />
-                                                    </div>
-                                                    <div className="grid gap-2">
-                                                        <Label htmlFor="address_state">Estado</Label>
-                                                        <Select
-                                                            value={formData.address_state}
-                                                            onValueChange={(value) => setFormData({ ...formData, address_state: value })}
-                                                        >
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="UF" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="AC">AC</SelectItem>
-                                                                <SelectItem value="AL">AL</SelectItem>
-                                                                <SelectItem value="AP">AP</SelectItem>
-                                                                <SelectItem value="AM">AM</SelectItem>
-                                                                <SelectItem value="BA">BA</SelectItem>
-                                                                <SelectItem value="CE">CE</SelectItem>
-                                                                <SelectItem value="DF">DF</SelectItem>
-                                                                <SelectItem value="ES">ES</SelectItem>
-                                                                <SelectItem value="GO">GO</SelectItem>
-                                                                <SelectItem value="MA">MA</SelectItem>
-                                                                <SelectItem value="MT">MT</SelectItem>
-                                                                <SelectItem value="MS">MS</SelectItem>
-                                                                <SelectItem value="MG">MG</SelectItem>
-                                                                <SelectItem value="PA">PA</SelectItem>
-                                                                <SelectItem value="PB">PB</SelectItem>
-                                                                <SelectItem value="PR">PR</SelectItem>
-                                                                <SelectItem value="PE">PE</SelectItem>
-                                                                <SelectItem value="PI">PI</SelectItem>
-                                                                <SelectItem value="RJ">RJ</SelectItem>
-                                                                <SelectItem value="RN">RN</SelectItem>
-                                                                <SelectItem value="RS">RS</SelectItem>
-                                                                <SelectItem value="RO">RO</SelectItem>
-                                                                <SelectItem value="RR">RR</SelectItem>
-                                                                <SelectItem value="SC">SC</SelectItem>
-                                                                <SelectItem value="SP">SP</SelectItem>
-                                                                <SelectItem value="SE">SE</SelectItem>
-                                                                <SelectItem value="TO">TO</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                    <div className="grid gap-2">
-                                                        <Label htmlFor="address_zip_code">CEP</Label>
-                                                        <Input
-                                                            id="address_zip_code"
-                                                            value={formatCEP(formData.address_zip_code)}
-                                                            onChange={(e) => setFormData({ ...formData, address_zip_code: e.target.value })}
-                                                            placeholder="00000-000"
-                                                            maxLength={9}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                             </>
                         )}
 
