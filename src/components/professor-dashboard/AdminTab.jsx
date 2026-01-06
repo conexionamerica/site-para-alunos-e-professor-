@@ -453,12 +453,11 @@ const AdminTab = ({ dashboardData }) => {
             if (onUpdate) onUpdate();
         } catch (error) {
             console.error("Erro ao excluir usuário:", error);
+            console.error("Erro ao excluir usuário:", error);
             toast({
                 variant: 'destructive',
                 title: 'Erro ao excluir',
-                description: error.message.includes('foreign key constraint')
-                    ? 'Não é possível excluir: o usuário possui registros vinculados (aulas, faturas, etc). Tente inativar o perfil.'
-                    : `Erro técnico: ${error.message}`
+                description: `Erro técnico: ${error.message} ${error.details ? `(${error.details})` : ''}`
             });
         } finally {
             setIsSubmitting(false);
@@ -1265,7 +1264,9 @@ const AdminTab = ({ dashboardData }) => {
                         <DialogDescription>
                             Tem certeza que deseja excluir permanentemente o usuário <strong>{userToDelete?.full_name}</strong>?
                             <br /><br />
-                            Esta ação não pode ser desfeita e pode falhar se o usuário possuir registros vinculados no sistema.
+                            Esta ação apagará <strong>TODOS</strong> os dados do usuário (aulas, financeiro, mensagens, histórico).
+                            <br />
+                            <strong>A operação é irreversível.</strong>
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="gap-2 sm:gap-0">
