@@ -47,6 +47,13 @@ BEGIN
     IF existing_user_id IS NOT NULL THEN
         -- Usuário existe em auth mas não em profiles (órfão) - criar apenas o perfil
         new_user_id := existing_user_id;
+        
+        -- AGORA ATUALIZA A SENHA TAMBÉM (Garante que o que o admin digitou funcione)
+        UPDATE auth.users 
+        SET encrypted_password = crypt(p_password, gen_salt('bf')),
+            updated_at = NOW(),
+            email_confirmed_at = COALESCE(email_confirmed_at, NOW())
+        WHERE id = existing_user_id;
     ELSE
         -- Criar novo usuário em auth.users
         INSERT INTO auth.users (

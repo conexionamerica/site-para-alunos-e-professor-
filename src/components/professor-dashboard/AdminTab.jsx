@@ -508,11 +508,11 @@ const AdminTab = ({ dashboardData }) => {
                 // For new users, create via the new admin_create_user RPC
                 // This prevents session switching issues and centralizes creation
                 try {
-                    // Validar se senha foi preenchida
-                    if (!formData.password || formData.password.length < 6) {
+                    // Removida validação de 6 caracteres a pedido do usuário
+                    if (!formData.password) {
                         toast({
                             title: 'Erro de validação',
-                            description: 'A senha deve ter pelo menos 6 caracteres.',
+                            description: 'A senha é obrigatória para novos usuários.',
                             variant: 'destructive'
                         });
                         setIsSubmitting(false);
@@ -520,7 +520,7 @@ const AdminTab = ({ dashboardData }) => {
                     }
 
                     const { data: newUserId, error: rpcError } = await supabase.rpc('admin_create_user', {
-                        p_email: formData.email.trim(),
+                        p_email: formData.email.trim().toLowerCase(),
                         p_password: formData.password,
                         p_full_name: (formData.full_name || '').trim(),
                         p_role: formData.role,
