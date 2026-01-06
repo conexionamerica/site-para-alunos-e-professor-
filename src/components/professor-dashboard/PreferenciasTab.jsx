@@ -260,8 +260,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   }, [professorIdFromProps]);
 
   // ID do professor que será usado efetivamente nas ações
-  // Forçado a null para que todos os pacotes sejam criados como pendência.
-  const effectiveProfessorId = null;
+  const effectiveProfessorId = localProfessorId;
 
   const [slots, setSlots] = useState([]);
   const [isSavingSlots, setIsSavingSlots] = useState(false);

@@ -376,6 +376,8 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
         selectedProfessor: professorId || ''
     });
 
+    const [files, setFiles] = useState([]); // New state for files
+
     const { type, priority, initialMessage, selectedProfessor } = ticketDraft;
 
     const setField = (field, value) => setTicketDraft(prev => ({ ...prev, [field]: value }));
@@ -506,12 +508,40 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
 
             if (messageError) throw messageError;
 
+            // Upload Attachments
+            if (files.length > 0) {
+                const uploadPromises = files.map(async (file) => {
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${ticket.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+                    const { data: uploadData, error: uploadError } = await supabase.storage
+                        .from('ticket-attachments')
+                        .upload(fileName, file);
+
+                    if (uploadError) throw uploadError;
+
+                    return supabase
+                        .from('ticket_attachments')
+                        .insert({
+                            ticket_id: ticket.id,
+                            file_name: file.name,
+                            file_path: uploadData.path,
+                            file_size: file.size,
+                            file_type: file.type,
+                            uploaded_by: selectedProfessor || professorId
+                        });
+                });
+
+                await Promise.all(uploadPromises);
+            }
+
             toast({
                 title: 'Ticket criado!',
                 description: `Seu ticket ${ticket.ticket_number} foi criado com sucesso`
             });
 
             clearTicketDraft();
+            setFiles([]); // Clear files
             onCreated();
             onClose();
         } catch (error) {
@@ -611,6 +641,39 @@ const CreateTicketDialog = ({ isOpen, onClose, onCreated, professorId, isSuperad
                         <p className="text-xs text-slate-500 mt-1">
                             {initialMessage.length}/500 caracteres
                         </p>
+                    </div>
+
+                    <div>
+                        <Label>Anexos</Label>
+                        <div className="space-y-2 mt-1">
+                            <Input
+                                type="file"
+                                multiple
+                                onChange={(e) => {
+                                    if (e.target.files) {
+                                        setFiles(prev => [...prev, ...Array.from(e.target.files)]);
+                                    }
+                                }}
+                                className="cursor-pointer"
+                            />
+                            {files.length > 0 && (
+                                <div className="space-y-1">
+                                    {files.map((file, idx) => (
+                                        <div key={idx} className="flex items-center justify-between text-sm bg-slate-50 p-2 rounded">
+                                            <span className="truncate max-w-[200px]">{file.name}</span>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setFiles(files.filter((_, i) => i !== idx))}
+                                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
