@@ -636,7 +636,7 @@ const HomePage = () => {
                     const diffB = Math.abs(new Date(b.assigned_at).getTime() - billingDate);
                     return diffA - diffB;
                   })[0];
-                const displayName = matchLog?.custom_package_name || billing.packages?.name;
+                const displayName = billing.custom_package_name || matchLog?.custom_package_name || billing.packages?.name;
                 const displayClasses = matchLog?.assigned_classes || billing.packages?.number_of_classes;
 
                 return (
