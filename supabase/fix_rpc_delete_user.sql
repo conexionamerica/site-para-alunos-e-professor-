@@ -1,6 +1,5 @@
--- RPC PARA EXCLUSÃO TOTAL (V4)
--- Inclui tabelas críticas encontradas: billing, class_feedback, class_materials
--- Ignora erros se tabela não existir (para compatibilidade histórica) mas tenta limpar tudo.
+-- RPC PARA EXCLUSÃO TOTAL (V5)
+-- Adicionado: Limpeza de 'audit_logs' que bloqueava a exclusão (FK audit_logs_changed_by_fkey)
 
 CREATE OR REPLACE FUNCTION delete_user_complete(p_user_id UUID)
 RETURNS void
@@ -20,17 +19,17 @@ BEGIN
   EXCEPTION WHEN undefined_table THEN NULL; END;
 
   -- 3. AULAS (Appointments) - Liberação de slots
-  WITH student_future_classes AS (
+  WITH student_classes AS (
       SELECT class_datetime, professor_id
       FROM appointments 
       WHERE student_id = p_user_id 
-        AND status IN ('scheduled', 'pending', 'confirmed') 
+        AND status IN ('scheduled', 'pending', 'confirmed')
         AND professor_id IS NOT NULL
   ),
   slots_to_release AS (
       SELECT cs.id
       FROM class_slots cs
-      JOIN student_future_classes sc 
+      JOIN student_classes sc 
         ON cs.professor_id = sc.professor_id 
         AND cs.day_of_week = CAST(EXTRACT(DOW FROM (sc.class_datetime AT TIME ZONE 'America/Sao_Paulo')) AS INTEGER)
         AND cs.start_time = (sc.class_datetime AT TIME ZONE 'America/Sao_Paulo')::time
@@ -40,12 +39,13 @@ BEGIN
   SET status = 'active'
   WHERE id IN (SELECT id FROM slots_to_release);
 
-  -- 4. MATERIAIS E FEEDBACKS (Novos campos identificados)
+  -- 4. MATERIAIS E FEEDBACKS
   DELETE FROM class_feedback WHERE student_id = p_user_id;
   DELETE FROM class_materials WHERE student_id = p_user_id;
 
-  -- 5. FINANCEIRO E PACOTES
-  DELETE FROM billing WHERE user_id = p_user_id; -- Billing real
+  -- 5. FINANCEIRO E AUDITORIA (Correção do erro atual)
+  DELETE FROM billing WHERE user_id = p_user_id; 
+  DELETE FROM audit_logs WHERE changed_by = p_user_id; -- Remove logs gerados por este usuário
   
   BEGIN
     DELETE FROM financial_titles WHERE student_id = p_user_id; 
@@ -55,7 +55,7 @@ BEGIN
     DELETE FROM invoices WHERE user_id = p_user_id; 
   EXCEPTION WHEN OTHERS THEN NULL; END;
 
-  -- 6. AULAS E SOLICITAÇÕES
+  -- 6. AULAS, SOLICITAÇÕES
   DELETE FROM appointments WHERE student_id = p_user_id OR professor_id = p_user_id;
   DELETE FROM solicitudes_clase WHERE alumno_id = p_user_id OR profesor_id = p_user_id;
 
