@@ -1,5 +1,7 @@
 -- FUNÇÃO RPC V3 (Transferência + Bloqueio de Slots)
--- Além de transferir aulas e logs, busca e bloqueia (status='filled') os slots correspondentes na agenda do professor.
+-- CORREÇÃO: Adicionado DROP FUNCTION para permitir mudança de tipo de retorno (void -> json)
+
+DROP FUNCTION IF EXISTS transfer_student_data(uuid, uuid);
 
 CREATE OR REPLACE FUNCTION transfer_student_data(
   p_student_id UUID,
@@ -13,7 +15,7 @@ DECLARE
   v_logs_count INT;
   v_blocked_slots_count INT;
 BEGIN
-  -- 1. appointments (Transferir aulas)
+  -- 1. Transferir Aulas
   WITH updated_rows AS (
     UPDATE appointments
     SET professor_id = p_professor_id
@@ -24,7 +26,7 @@ BEGIN
   )
   SELECT count(*) INTO v_appointments_count FROM updated_rows;
 
-  -- 2. logs (Transferir histórico)
+  -- 2. Transferir Logs
   WITH updated_logs AS (
     UPDATE assigned_packages_log
     SET professor_id = p_professor_id
@@ -34,7 +36,7 @@ BEGIN
   )
   SELECT count(*) INTO v_logs_count FROM updated_logs;
 
-  -- 3. profiles (Vínculo)
+  -- 3. Atualizar Vínculo no Perfil
   UPDATE profiles
   SET assigned_professor_id = p_professor_id,
       pending_professor_id = NULL,
@@ -42,9 +44,8 @@ BEGIN
       pending_professor_requested_at = NULL
   WHERE id = p_student_id;
 
-  -- 4. BLOQUEIO DE AGENDA (class_slots)
-  -- Busca aulas do aluno (agora já transferidas ou não) e marca slots do professor como 'filled'
-  -- ATENÇÃO: Converte para horário de São Paulo para bater com os slots definidos localmente (ex: 08:00)
+  -- 4. BLOQUEAR SLOTS NA AGENDA DO PROFESSOR
+  -- Usa horário de SP para garantir match correto com os slots definidos
   WITH student_classes AS (
       SELECT class_datetime 
       FROM appointments 
@@ -55,12 +56,10 @@ BEGIN
       SELECT cs.id
       FROM class_slots cs
       JOIN student_classes sc 
-        -- Extrai dia da semana (0-6) corrigido para SP
         ON cs.day_of_week = CAST(EXTRACT(DOW FROM (sc.class_datetime AT TIME ZONE 'America/Sao_Paulo')) AS INTEGER)
-        -- Extrai hora (HH:MM:00) corrigida para SP e compara com start_time
         AND cs.start_time = (sc.class_datetime AT TIME ZONE 'America/Sao_Paulo')::time
       WHERE cs.professor_id = p_professor_id
-        AND cs.status = 'active' -- Só bloqueia se estiver livre
+        AND cs.status = 'active'
   ),
   blocked_rows AS (
       UPDATE class_slots
@@ -70,10 +69,9 @@ BEGIN
   )
   SELECT count(*) INTO v_blocked_slots_count FROM blocked_rows;
 
-  -- Retorna resumo completo
   RETURN json_build_object(
-    'appointments', COALESCE(v_appointments_count, 0),
-    'logs', COALESCE(v_logs_count, 0),
+    'appointments', COALESCE(v_appointments_count, 0), 
+    'logs', COALESCE(v_logs_count, 0), 
     'blocked_slots', COALESCE(v_blocked_slots_count, 0)
   );
 END;
