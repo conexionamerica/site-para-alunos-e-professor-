@@ -323,6 +323,11 @@ const AdminTab = ({ dashboardData }) => {
             }
 
             if (editingUser) {
+                // Verificar se é uma nova atribuição de professor (mudança de professor)
+                const oldProfessorId = editingUser.assigned_professor_id;
+                const newProfessorId = formData.role === 'student' ? (formData.assigned_professor_id || null) : null;
+                const isProfessorChange = formData.role === 'student' && newProfessorId && newProfessorId !== oldProfessorId;
+
                 // Update existing user
                 const updateData = {
                     full_name: (formData.full_name || '').trim(),
@@ -331,7 +336,12 @@ const AdminTab = ({ dashboardData }) => {
                     phone: cleanPhone(formData.phone || ''), // NOVO
                     role: formData.role,
                     student_code: formData.role === 'student' ? (formData.student_code?.trim() || null) : null,
-                    assigned_professor_id: formData.role === 'student' ? (formData.assigned_professor_id || null) : null,
+                    // NÃO vincula diretamente, cria solicitação para aprovação
+                    assigned_professor_id: isProfessorChange ? null : (oldProfessorId || null),
+                    // Define campos de pendência se houver mudança de professor
+                    pending_professor_id: isProfessorChange ? newProfessorId : null,
+                    pending_professor_status: isProfessorChange ? 'aguardando_aprovacao' : null,
+                    pending_professor_requested_at: isProfessorChange ? new Date().toISOString() : null,
                     cpf: formData.cpf ? cleanCPF(formData.cpf) : null, // NOVO
                     birth_date: formData.birth_date || null, // NOVO
                     gender: formData.gender || null, // NOVO
@@ -346,12 +356,37 @@ const AdminTab = ({ dashboardData }) => {
                 };
 
 
-                // 1. Atualizar o vínculo do professor via RPC (Garante o salvamento saltando RLS)
-                if (formData.role === 'student' && updateData.assigned_professor_id) {
-                    await supabase.rpc('admin_link_professor', {
-                        p_student_id: editingUser.id,
-                        p_professor_id: updateData.assigned_professor_id
+                // 1. Se houver mudança de professor, criar solicitação em solicitudes_clase
+                if (isProfessorChange) {
+                    const oldProfessorName = professors.find(p => p.id === oldProfessorId)?.full_name || null;
+
+                    const solicitacaoData = {
+                        type: 'vinculacao',
+                        is_recurring: false,
+                        student_name: formData.full_name,
+                        old_professor_id: oldProfessorId,
+                        old_professor_name: oldProfessorName,
+                        preferred_schedule: editingUser.preferred_schedule || {},
+                        days: Object.keys(editingUser.preferred_schedule || {}).map(Number),
+                        time: Object.values(editingUser.preferred_schedule || {})[0] || '08:00'
+                    };
+
+                    const { error: solicitacaoError } = await supabase.from('solicitudes_clase').insert({
+                        alumno_id: editingUser.id,
+                        profesor_id: newProfessorId,
+                        horarios_propuestos: JSON.stringify(solicitacaoData),
+                        status: 'Pendiente',
+                        is_recurring: false
                     });
+
+                    if (solicitacaoError) {
+                        console.error('Erro ao criar solicitação de vinculação:', solicitacaoError);
+                        toast({
+                            title: 'Aviso',
+                            description: 'Erro ao criar solicitação de vinculação para o professor.',
+                            variant: 'warning'
+                        });
+                    }
                 }
 
                 // 2. Atualizar o status via RPC (Especialmente importante para inativação funcional)
@@ -440,10 +475,19 @@ const AdminTab = ({ dashboardData }) => {
                         });
                     }
                 } else {
-                    toast({
-                        title: 'Sucesso',
-                        description: 'Dados do usuário (incluindo e-mail) atualizados com sucesso.',
-                    });
+                    // Verificar se foi criada solicitação de vinculação
+                    if (isProfessorChange) {
+                        const newProfessorName = professors.find(p => p.id === newProfessorId)?.full_name || 'professor';
+                        toast({
+                            title: 'Solicitação Enviada!',
+                            description: `Os dados foram atualizados e uma solicitação de vinculação foi enviada para ${newProfessorName}. O professor precisa aprovar na tela inicial.`,
+                        });
+                    } else {
+                        toast({
+                            title: 'Sucesso',
+                            description: 'Dados do usuário (incluindo e-mail) atualizados com sucesso.',
+                        });
+                    }
                 }
             } else {
                 // Criar novo usuário via RPC - SIMPLIFICADO
