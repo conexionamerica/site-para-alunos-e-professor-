@@ -136,7 +136,7 @@ const HomePage = () => {
         supabase.from('appointments').select('*').eq('student_id', user.id).order('class_datetime', { ascending: true }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).gte('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
         supabase.from('billing').select(`*, packages ( * )`).eq('user_id', user.id).lt('end_date', today.split('T')[0]).order('purchase_date', { ascending: false }),
-        supabase.from('assigned_packages_log').select('assigned_classes, package_id, status, custom_package_name, assigned_at').eq('student_id', user.id),
+        supabase.from('assigned_packages_log').select('assigned_classes, package_id, status, custom_package_name, assigned_at').eq('student_id', user.id).order('assigned_at', { ascending: false }),
         supabase.from('solicitudes_clase').select('solicitud_id, is_recurring').eq('alumno_id', user.id).eq('status', 'Pendiente').maybeSingle(),
         supabase.from('class_feedback').select(`*, appointment:appointments!fk_appointment(class_datetime)`).eq('student_id', user.id).order('created_at', { ascending: false }),
         supabase.from('chats').select('*').eq('alumno_id', user.id).maybeSingle(),
@@ -627,10 +627,15 @@ const HomePage = () => {
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <h2 className="text-xl font-bold mb-4">Contratos Ativos</h2>
               {loading ? <p>Carregando...</p> : activeBillings.length > 0 ? activeBillings.map(billing => {
-                const matchLog = assignedLogs.find(l =>
-                  l.package_id === billing.package_id &&
-                  l.status !== 'Cancelado'
-                );
+                // Match Robust: Find closest log by date
+                const billingDate = new Date(billing.purchase_date).getTime();
+                const matchLog = assignedLogs
+                  .filter(l => l.package_id == billing.package_id && l.status !== 'Cancelado')
+                  .sort((a, b) => {
+                    const diffA = Math.abs(new Date(a.assigned_at).getTime() - billingDate);
+                    const diffB = Math.abs(new Date(b.assigned_at).getTime() - billingDate);
+                    return diffA - diffB;
+                  })[0];
                 const displayName = matchLog?.custom_package_name || billing.packages?.name;
                 const displayClasses = matchLog?.assigned_classes || billing.packages?.number_of_classes;
 
