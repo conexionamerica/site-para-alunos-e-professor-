@@ -702,6 +702,8 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
     try {
       // Buscar dados do professor
       const selectedProf = professors.find(p => p.id === selectedProfessorId);
+      const oldProfessorId = selectedStudentForVinculacao.assigned_professor_id;
+      const oldProfessorName = professors.find(p => p.id === oldProfessorId)?.full_name;
 
       // Converter preferências para o formato do banco de dados (object { dayIndex: time })
       const preferredScheduleObj = {};
@@ -709,45 +711,52 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         preferredScheduleObj[d] = studentPreferences.time;
       });
 
-      // 1. Apenas salvar as preferências no perfil do aluno. 
-      // O assigned_professor_id permanece NULL aguardando aprovação do professor.
+      // 1. Atualizar o perfil do aluno: 
+      //    - Remove o vínculo atual (assigned_professor_id = NULL)
+      //    - Define o professor pendente de aprovação
+      //    - Salva as preferências de horário
       const { data: updateData, error: updateError } = await supabase
         .from('profiles')
         .update({
-          assigned_professor_id: null,
+          assigned_professor_id: null, // Remove vínculo atual
+          pending_professor_id: selectedProfessorId, // Professor aguardando aprovação
+          pending_professor_status: 'aguardando_aprovacao',
+          pending_professor_requested_at: new Date().toISOString(),
           preferred_schedule: preferredScheduleObj
         })
         .eq('id', selectedStudentForVinculacao.id)
         .select();
 
       if (updateError || !updateData || updateData.length === 0) {
-        throw updateError || new Error('Falha ao salvar preferências do aluno.');
+        throw updateError || new Error('Falha ao atualizar perfil do aluno.');
       }
 
-
-      // 2. Criar notificação manual para o professor solicitando aceite do novo aluno
+      // 2. Criar notificação para o NOVO professor solicitando aprovação
       const { error: notifError } = await supabase.from('notifications').insert({
         user_id: selectedProfessorId,
-        type: 'new_student_assignment',
-        title: 'Novo Aluno Vinculado a Você',
-        description: `O aluno ${selectedStudentForVinculacao.full_name} foi vinculado a você. Aceite para confirmar.`,
+        type: 'student_assignment_request',
+        title: 'Solicitação de Novo Aluno',
+        description: `O aluno ${selectedStudentForVinculacao.full_name} solicita ser vinculado a você. Por favor, aprove ou reprove esta solicitação.`,
         related_user_id: selectedStudentForVinculacao.id,
         metadata: {
+          action_required: true,
           student_id: selectedStudentForVinculacao.id,
           student_name: selectedStudentForVinculacao.full_name,
-          old_professor_id: selectedStudentForVinculacao.assigned_professor_id,
-          old_professor_name: professors.find(p => p.id === selectedStudentForVinculacao.assigned_professor_id)?.full_name,
+          old_professor_id: oldProfessorId,
+          old_professor_name: oldProfessorName,
           preferred_schedule: preferredScheduleObj
         }
       });
 
       if (notifError) console.warn('Notification error (non-critical):', notifError);
 
-      // 3. Remover o aluno da lista de pendências localmente
+      // 3. Atualizar a lista de pendências para refletir o novo status
       setPendenciasData(prev => ({
         ...prev,
-        studentsWithoutProfessor: prev.studentsWithoutProfessor.filter(
-          s => s.id !== selectedStudentForVinculacao.id
+        studentsWithoutProfessor: prev.studentsWithoutProfessor.map(s =>
+          s.id === selectedStudentForVinculacao.id
+            ? { ...s, pending_professor_id: selectedProfessorId, pending_professor_status: 'aguardando_aprovacao' }
+            : s
         )
       }));
 
@@ -761,8 +770,8 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       setMatchedProfessors([]);
 
       toast({
-        title: 'Professor vinculado!',
-        description: `${selectedStudentForVinculacao.full_name} foi vinculado(a) a ${selectedProf?.full_name || 'Professor'}.`,
+        title: 'Solicitação enviada!',
+        description: `Aguardando aprovação de ${selectedProf?.full_name || 'Professor'}. O aluno aparecerá como "Aguardando parecer" no painel de pendências.`,
       });
 
       onUpdate?.();
@@ -1231,49 +1240,70 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                           Alunos sem Professor Vinculado
                         </h4>
                         <div className="space-y-2">
-                          {pendenciasData.studentsWithoutProfessor.slice(0, 5).map(student => (
-                            <div key={student.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback className="bg-red-100 text-red-700">{student.full_name?.[0]}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="text-sm font-medium">{student.full_name}</p>
-                                  {student.preferred_schedule && Object.keys(student.preferred_schedule).length > 0 ? (
-                                    <div className="flex flex-wrap gap-1 mt-0.5">
-                                      {Object.entries(student.preferred_schedule).map(([d, t]) => (
-                                        <Badge key={d} variant="outline" className="text-[9px] py-0 px-1 h-4 bg-slate-50 border-slate-200 text-slate-500">
-                                          {daysOfWeekMap[d]} {t}
-                                        </Badge>
-                                      ))}
-                                    </div>
+                          {pendenciasData.studentsWithoutProfessor.slice(0, 5).map(student => {
+                            const isPending = student.pending_professor_status === 'aguardando_aprovacao';
+                            const pendingProfessorName = isPending
+                              ? professors.find(p => p.id === student.pending_professor_id)?.full_name
+                              : null;
+
+                            return (
+                              <div key={student.id} className={`flex items-center justify-between p-2 rounded border ${isPending ? 'bg-yellow-50 border-yellow-200' : 'bg-white'
+                                }`}>
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-8 w-8">
+                                    <AvatarFallback className={isPending ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}>
+                                      {student.full_name?.[0]}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div>
+                                    <p className="text-sm font-medium">{student.full_name}</p>
+                                    {isPending ? (
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <Clock className="h-3 w-3 text-yellow-600" />
+                                        <span className="text-[10px] text-yellow-700 font-medium">
+                                          Aguardando parecer de {pendingProfessorName || 'professor'}
+                                        </span>
+                                      </div>
+                                    ) : student.preferred_schedule && Object.keys(student.preferred_schedule).length > 0 ? (
+                                      <div className="flex flex-wrap gap-1 mt-0.5">
+                                        {Object.entries(student.preferred_schedule).map(([d, t]) => (
+                                          <Badge key={d} variant="outline" className="text-[9px] py-0 px-1 h-4 bg-slate-50 border-slate-200 text-slate-500">
+                                            {daysOfWeekMap[d]} {t}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-[10px] text-slate-400 italic">Agenda não definida</p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {isPending ? (
+                                    <Badge className="bg-yellow-500 text-xs">Aguardando</Badge>
                                   ) : (
-                                    <p className="text-[10px] text-slate-400 italic">Agenda não definida</p>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-green-600 border-green-300 hover:bg-green-50 text-xs"
+                                      onClick={() => handleOpenVincularModal(student)}
+                                    >
+                                      <UserPlus className="h-3 w-3 mr-1" />
+                                      Vincular
+                                    </Button>
                                   )}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-slate-500 hover:text-slate-700 text-xs"
+                                    onClick={() => handleIgnorarPendencia('sem_professor', student, 'Aluno sem professor', student.full_name)}
+                                    disabled={processingAction === `ignore-sem_professor-${student.id}`}
+                                  >
+                                    <EyeOff className="h-3 w-3" />
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-green-600 border-green-300 hover:bg-green-50 text-xs"
-                                  onClick={() => handleOpenVincularModal(student)}
-                                >
-                                  <UserPlus className="h-3 w-3 mr-1" />
-                                  Vincular
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-slate-500 hover:text-slate-700 text-xs"
-                                  onClick={() => handleIgnorarPendencia('sem_professor', student, 'Aluno sem professor', student.full_name)}
-                                  disabled={processingAction === `ignore-sem_professor-${student.id}`}
-                                >
-                                  <EyeOff className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                           {pendenciasData.studentsWithoutProfessor.length > 5 && (
                             <p className="text-xs text-red-600 text-center mt-2">
                               +{pendenciasData.studentsWithoutProfessor.length - 5} aluno(s) mais...

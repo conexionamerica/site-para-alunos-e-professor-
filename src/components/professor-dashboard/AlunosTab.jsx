@@ -418,7 +418,8 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
         if (!selectedProfessor || !student) return;
 
         const confirmation = window.confirm(
-            `Tem certeza que deseja transferir ${student.full_name} para ${selectedProfessor.full_name}?\n\n` +
+            `Tem certeza que deseja iniciar a transferência de ${student.full_name} para ${selectedProfessor.full_name}?\n\n` +
+            `O aluno perderá o vínculo atual e o novo professor precisará APROVAR a transferência.\n\n` +
             `Isso afetará todas as aulas agendadas, remarcadas e com falta do aluno.`
         );
 
@@ -427,6 +428,9 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
         setIsSubmitting(true);
 
         try {
+            const oldProfessorId = student.assigned_professor_id;
+            const oldProfessorName = professors.find(p => p.id === oldProfessorId)?.full_name || 'Desconhecido';
+
             // 1. Buscar appointments do aluno que serão alterados
             const { data: appointments, error: fetchError } = await supabase
                 .from('appointments')
@@ -461,26 +465,34 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
                 if (updateError) throw updateError;
             }
 
-            // 3. Desvincular professor no perfil do aluno (gera pendência no painel)
+            // 3. Atualizar perfil do aluno:
+            //    - Remove vínculo atual (assigned_professor_id = NULL)
+            //    - Define professor pendente de aprovação
             const { error: profileError } = await supabase
                 .from('profiles')
-                .update({ assigned_professor_id: null })
+                .update({
+                    assigned_professor_id: null,
+                    pending_professor_id: selectedProfessor.id,
+                    pending_professor_status: 'aguardando_aprovacao',
+                    pending_professor_requested_at: new Date().toISOString()
+                })
                 .eq('id', student.id);
 
             if (profileError) throw profileError;
 
-            // 4. Criar notificação manual para o novo professor solicitando aprovação da transferência
+            // 4. Criar notificação para o novo professor solicitando aprovação
             const { error: notifError } = await supabase.from('notifications').insert({
                 user_id: selectedProfessor.id,
-                type: 'student_reallocation',
+                type: 'student_assignment_request',
                 title: 'Solicitação de Transferência de Aluno',
-                description: `O aluno ${student.full_name} foi transferido para você. Aceite para confirmar o vínculo.`,
+                description: `O aluno ${student.full_name} (anteriormente com ${oldProfessorName}) solicita ser vinculado a você. Aprove ou reprove.`,
                 related_user_id: student.id,
                 metadata: {
+                    action_required: true,
                     student_id: student.id,
                     student_name: student.full_name,
-                    old_professor_id: student.assigned_professor_id,
-                    old_professor_name: professors.find(p => p.id === student.assigned_professor_id)?.full_name || 'Desconhecido',
+                    old_professor_id: oldProfessorId,
+                    old_professor_name: oldProfessorName,
                     new_professor_id: selectedProfessor.id,
                     preferred_schedule: student.preferred_schedule
                 }
@@ -490,7 +502,7 @@ const ChangeProfessorDialog = ({ student, isOpen, onClose, onUpdate, professors,
 
             toast({
                 title: 'Solicitação de transferência enviada!',
-                description: `${student.full_name} agora está aguardando a aprovação de ${selectedProfessor.full_name}.`
+                description: `${student.full_name} agora está aguardando a aprovação de ${selectedProfessor.full_name}. O aluno aparecerá como "Aguardando parecer" no painel de pendências.`
             });
 
             onUpdate();
