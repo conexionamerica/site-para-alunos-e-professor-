@@ -48,7 +48,10 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
     studentsWithoutProfessor: [],
     studentsWithAvailableClasses: [],
     packagesExpiringSoon: [],
-    recentNotifications: []
+    recentNotifications: [],
+    classHistory: [],
+    systemWarnings: [],
+    historicoNotifications: []
   });
   const [loadingPendencias, setLoadingPendencias] = useState(false);
   const [historico, setHistorico] = useState([]);
@@ -207,110 +210,112 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   // ==========================================
   // NOVA LÓGICA: Carregar pendências para superusuário
   // ==========================================
-  useEffect(() => {
+  // ==========================================
+  // NOVA LÓGICA: Carregar pendências para superusuário
+  // ==========================================
+  const loadPendencias = useCallback(async () => {
     if (!isSuperadmin) return;
+    setLoadingPendencias(true);
+    try {
+      const today = getBrazilDate();
 
-    const loadPendencias = async () => {
-      setLoadingPendencias(true);
-      try {
-        const today = getBrazilDate();
+      // 1. Alunos sem professor vinculado
+      const studentsWithoutProf = students.filter(s =>
+        s.is_active !== false && !s.assigned_professor_id
+      );
 
-        // 1. Alunos sem professor vinculado
-        const studentsWithoutProf = students.filter(s =>
-          s.is_active !== false && !s.assigned_professor_id
-        );
+      // 2. ABA AULAS: Histórico Geral de Aulas (limitado a 50 ou 100 mais recentes)
+      // Buscamos appointments com status 'completed', 'missed', 'rescheduled'
+      const { data: classHistoryData, error: classHistError } = await supabase
+        .from('appointments')
+        .select(`
+            *,
+            student:profiles!student_id(full_name),
+            professor:profiles!professor_id(full_name)
+          `)
+        .in('status', ['completed', 'missed', 'rescheduled'])
+        .order('class_datetime', { ascending: false })
+        .limit(50);
 
-        // 2. ABA AULAS: Histórico Geral de Aulas (limitado a 50 ou 100 mais recentes)
-        // Buscamos appointments com status 'completed', 'missed', 'rescheduled'
-        const { data: classHistoryData, error: classHistError } = await supabase
-          .from('appointments')
-          .select(`
-             *,
-             student:profiles!student_id(full_name),
-             professor:profiles!professor_id(full_name)
-           `)
-          .in('status', ['completed', 'missed', 'rescheduled'])
-          .order('class_datetime', { ascending: false })
-          .limit(50);
+      if (classHistError) console.error("Erro classHistory:", classHistError);
 
-        if (classHistError) console.error("Erro classHistory:", classHistError);
+      // 3. ABA AVISOS: Erros do Sistema (tabela admin_notifications)
+      const { data: systemWarningsData, error: warnError } = await supabase
+        .from('admin_notifications')
+        .select('*')
+        .in('type', ['error', 'alert', 'system_failure'])
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
 
-        // 3. ABA AVISOS: Erros do Sistema (tabela admin_notifications)
-        const { data: systemWarningsData, error: warnError } = await supabase
-          .from('admin_notifications')
-          .select('*')
-          .in('type', ['error', 'alert', 'system_failure'])
-          .eq('status', 'active')
-          .order('created_at', { ascending: false });
+      if (warnError) console.error("Erro warnings:", warnError);
 
-        if (warnError) console.error("Erro warnings:", warnError);
+      // 4. ABA VENCENDO: Pacotes expirando em 5 dias (Excluir os já "Vistos")
+      // Primeiro buscamos os IDs de notificações 'expiry_seen' para filtrar
+      const { data: seenExpiryNotifs } = await supabase
+        .from('admin_notifications')
+        .select('details')
+        .eq('type', 'expiry_seen');
 
-        // 4. ABA VENCENDO: Pacotes expirando em 5 dias (Excluir os já "Vistos")
-        // Primeiro buscamos os IDs de notificações 'expiry_seen' para filtrar
-        const { data: seenExpiryNotifs } = await supabase
-          .from('admin_notifications')
-          .select('details')
-          .eq('type', 'expiry_seen');
+      const seenBillingIds = new Set();
+      seenExpiryNotifs?.forEach(n => {
+        if (n.details?.billing_id) seenBillingIds.add(n.details.billing_id);
+      });
 
-        const seenBillingIds = new Set();
-        seenExpiryNotifs?.forEach(n => {
-          if (n.details?.billing_id) seenBillingIds.add(n.details.billing_id);
-        });
+      const expiringPackages = [];
+      for (const billing of allBillings) {
+        const endDate = new Date(billing.end_date);
+        const daysUntilExpiry = differenceInDays(endDate, today);
 
-        const expiringPackages = [];
-        for (const billing of allBillings) {
-          const endDate = new Date(billing.end_date);
-          const daysUntilExpiry = differenceInDays(endDate, today);
+        if (daysUntilExpiry >= 0 && daysUntilExpiry <= 5) {
+          // Se já foi marcado como visto, ignora
+          if (seenBillingIds.has(billing.id)) continue;
 
-          if (daysUntilExpiry >= 0 && daysUntilExpiry <= 5) {
-            // Se já foi marcado como visto, ignora
-            if (seenBillingIds.has(billing.id)) continue;
-
-            const student = students.find(s => s.id === billing.user_id);
-            if (student && student.is_active !== false) {
-              expiringPackages.push({
-                student,
-                billing,
-                daysUntilExpiry,
-                packageName: billing.packages?.name || 'Pacote'
-              });
-            }
+          const student = students.find(s => s.id === billing.user_id);
+          if (student && student.is_active !== false) {
+            expiringPackages.push({
+              student,
+              billing,
+              daysUntilExpiry,
+              packageName: billing.packages?.name || 'Pacote'
+            });
           }
         }
-
-        // 5. ABA HISTÓRICO: Busca geral de notificações resolvidas/vistas
-        // Inclui: assignment_resolved, expiry_seen, warning_seen, etc.
-        const { data: historyData, error: histError } = await supabase
-          .from('admin_notifications')
-          .select('*')
-          .in('status', ['seen', 'resolved', 'archived'])
-          .order('resolved_at', { ascending: false, nullsFirst: false }) // ou created_at desc
-          .limit(50);
-
-        if (histError) console.error("Erro history:", histError);
-
-        setPendenciasData({
-          studentsWithoutProfessor: studentsWithoutProf,
-          classHistory: classHistoryData || [],
-          systemWarnings: systemWarningsData || [],
-          packagesExpiringSoon: expiringPackages.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry),
-          historicoNotifications: historyData || []
-        });
-
-      } catch (error) {
-        console.error('Erro ao carregar pendências:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Erro ao carregar pendências',
-          description: error.message
-        });
-      } finally {
-        setLoadingPendencias(false);
       }
-    };
 
+      // 5. ABA HISTÓRICO: Busca geral de notificações resolvidas/vistas
+      // Inclui: assignment_resolved, expiry_seen, warning_seen, etc.
+      const { data: historyData, error: histError } = await supabase
+        .from('admin_notifications')
+        .select('*')
+        .in('status', ['seen', 'resolved', 'archived'])
+        .order('resolved_at', { ascending: false, nullsFirst: false }) // ou created_at desc
+        .limit(50);
+
+      if (histError) console.error("Erro history:", histError);
+
+      setPendenciasData({
+        studentsWithoutProfessor: studentsWithoutProf,
+        classHistory: classHistoryData || [],
+        systemWarnings: systemWarningsData || [],
+        packagesExpiringSoon: expiringPackages.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry),
+        historicoNotifications: historyData || []
+      });
+
+    } catch (error) {
+      console.error('Erro ao carregar pendências:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao carregar pendências',
+        description: error.message
+      });
+    } finally {
+      setLoadingPendencias(false);
+    }
+  }, [isSuperadmin, students, allBillings, allAppointments, classSlots, toast]);
+
+  useEffect(() => {
     loadPendencias();
-  }, [isSuperadmin, students, allBillings, allAppointments, classSlots]);
+  }, [loadPendencias]);
 
   // Contar totais de pendências
   const pendenciasCounts = useMemo(() => ({
@@ -1982,6 +1987,9 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
           {/* ===== COLUNA ESQUERDA ===== */}
           <div className="space-y-6">
+
+            {/* PAINEL ADMINISTRATIVO (Novo) - Apenas Superadmin */}
+            {renderPendenciasPanel()}
 
             {/* Card: Solicitações Pendentes */}
             <Card className="shadow-sm h-[400px] flex flex-col border-l-4 border-l-sky-500">
