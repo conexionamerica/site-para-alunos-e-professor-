@@ -451,10 +451,10 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
     // Usamos prioritariamente os dias selecionados no Step 1 do modal
     studentPreferences.days.forEach(d => {
-      // Se o aluno já tiver um horário específico para este dia no perfil/agendamentos, usamos ele.
-      // Caso contrário, usamos o horário selecionado no dropdown do modal.
-      if (selectedStudentForVinculacao?.preferred_schedule && selectedStudentForVinculacao.preferred_schedule[d]) {
-        preferredSchedule[d] = selectedStudentForVinculacao.preferred_schedule[d];
+      // Suporte a chaves vindo do JSONB (string) ou do estado (number)
+      const sched = selectedStudentForVinculacao?.preferred_schedule;
+      if (sched && (sched[d] || sched[String(d)])) {
+        preferredSchedule[d] = sched[d] || sched[String(d)];
       } else {
         preferredSchedule[d] = studentPreferences.time;
       }
@@ -494,7 +494,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       // Usar a data formatada com offset -03:00 para garantir exatidão no banco
       const { data: busyApps } = await supabase
         .from('appointments')
-        .select('professor_id, class_datetime, duration_minutes')
+        .select('professor_id, student_id, class_datetime, duration_minutes')
         .in('professor_id', professorIds)
         .gte('class_datetime', toBrazilISOString(today))
         .lte('class_datetime', toBrazilISOString(nextWeek))
@@ -549,7 +549,11 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           // Verificação de conflito real baseada em minutos do dia (Brasil)
           const hasConflict = processedBusyApps.some(apt => {
             if (String(apt.professor_id) !== String(profId)) return false;
-            if (apt.day !== slot.day_of_week) return false;
+            // Se a aula ocupada for do PRÓPRIO aluno que estamos vinculando, não conta como conflito
+            // (Isso permite que o sistema sugira o professor mesmo se o aluno já tiver aulas agendadas com ele/outro)
+            if (String(apt.student_id) === String(selectedStudentForVinculacao?.id)) return false;
+
+            if (Number(apt.day) !== Number(slot.day_of_week)) return false;
 
             const aptEnd = apt.minutes + (apt.duration_minutes || 30);
             // Interseção clássica de intervalos
