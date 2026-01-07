@@ -1,0 +1,1 @@
+Teste de acesso ao sistema de arquivos via ferramenta direta.

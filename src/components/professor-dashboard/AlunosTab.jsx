@@ -1329,7 +1329,7 @@ const AlunosTab = ({ dashboardData }) => {
                         isOpen={isScheduleDialogOpen}
                         onClose={() => setIsScheduleDialogOpen(false)}
                         onUpdate={onUpdate}
-                        professorId={professorId}
+                        professorId={selectedStudent?.assigned_professor_id || professorId}
                         scheduledAppointments={selectedStudent?.scheduledAppointments || []}
                     />
 
