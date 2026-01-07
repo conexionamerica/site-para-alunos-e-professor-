@@ -506,7 +506,15 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         const targetTime = preferredSchedule[slot.day_of_week]; // "HH:mm"
 
         // Verifica se o slot do professor bate com o horário desejado (ou é próximo ±1h)
-        if (slot.start_time.substring(0, 5) === targetTime) {
+        const [slotH, slotM] = slot.start_time.split(':').map(Number);
+        const slotMinutes = slotH * 60 + slotM;
+        const [targetH, targetM] = targetTime.split(':').map(Number);
+        const targetMinutes = targetH * 60 + targetM;
+
+        const diffMinutes = Math.abs(slotMinutes - targetMinutes);
+
+        // Aceita slots com diferença de até 60 minutos (antes era exato)
+        if (diffMinutes <= 60) {
           // VERIFICAÇÃO DE CONFLITO COM AGENDA REAL
           // Calcula a data específica desse slot na próxima semana para checar colisão
           const slotDayIndex = slot.day_of_week;
@@ -516,9 +524,8 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
           // Data exata do slot nesta semana
           const slotDate = add(today, { days: daysUntilSlot });
-          // Ajustar hora
-          const [h, m] = slot.start_time.split(':').map(Number);
-          const slotDateTime = new Date(slotDate.getFullYear(), slotDate.getMonth(), slotDate.getDate(), h, m, 0);
+          // Ajustar hora para a hora do SLOT (não a hora alvo)
+          const slotDateTime = new Date(slotDate.getFullYear(), slotDate.getMonth(), slotDate.getDate(), slotH, slotM, 0);
 
           // Verificar se existe appointment colidindo
           const hasConflict = busyAppointments.some(apt => {
@@ -540,8 +547,11 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                 totalDaysRequested: preferredDays.length
               };
             }
-            professorMatches[profId].matchedDays.add(slot.day_of_week);
-            professorMatches[profId].matchedSlots.push(slot);
+            // Só adiciona se ainda não tiver adicionado este dia (para evitar duplicidade se tiver 2 slots próximos)
+            if (!professorMatches[profId].matchedDays.has(slot.day_of_week)) {
+              professorMatches[profId].matchedDays.add(slot.day_of_week);
+              professorMatches[profId].matchedSlots.push(slot);
+            }
           }
         }
       });
@@ -553,7 +563,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           matchedDaysCount: match.matchedDays.size,
           matchPercentage: Math.round((match.matchedDays.size / match.totalDaysRequested) * 100)
         }))
-        .filter(match => match.matchPercentage === 100) // FILTRO ESTRITO: Apenas 100% compatível
+        .filter(match => match.matchPercentage >= 50) // FILTRO RELAXADO: Pelo menos 50% compatível (mostra mais opções)
         .sort((a, b) => b.matchPercentage - a.matchPercentage);
 
       setMatchedProfessors(matchResults);
