@@ -126,9 +126,13 @@ const LogsTab = ({ dashboardData }) => {
 
             // 1. Horários (class_slots)
             if (table === 'class_slots') {
-                const dayRaw = newData.day_of_week || oldData.day_of_week;
-                const day = dayRaw ? translateField(dayRaw) : '';
-                const time = newData.time || oldData.time || '';
+                // day_of_week é 0-6 (Domingo-Sábado)
+                const dayRaw = newData.day_of_week !== undefined ? newData.day_of_week : oldData.day_of_week;
+
+                const daysMap = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+                const day = (dayRaw !== undefined && dayRaw !== null) ? daysMap[dayRaw] : '(Dia desconhecido)';
+
+                const time = newData.start_time || oldData.start_time || '(Sem horário)';
 
                 if (action === 'INSERT') return `Novo horário disponível: ${day} às ${time}`;
                 if (action === 'UPDATE') {
@@ -136,8 +140,8 @@ const LogsTab = ({ dashboardData }) => {
                     if (newData.is_available !== undefined && newData.is_available !== oldData.is_available) {
                         return `Horário de ${day} às ${time} marcado como ${newData.is_available ? 'Disponível' : 'Indisponível'}`;
                     }
-                    if (newData.time && newData.time !== oldData.time) {
-                        return `Horário de ${day} alterado de ${oldData.time} para ${newData.time}`;
+                    if (newData.start_time && newData.start_time !== oldData.start_time) {
+                        return `Horário de ${day} alterado de ${oldData.start_time} para ${newData.start_time}`;
                     }
                     return `Atualização no horário de ${day} às ${time}`;
                 }
