@@ -193,6 +193,47 @@ const LogsTab = ({ dashboardData }) => {
                 if (action === 'DELETE') return `Usuário removido: ${name}`;
             }
 
+            // 5. Financeiro (billing)
+            if (table === 'billing') {
+                const amount = newData.amount || oldData.amount;
+                const fmtAmount = amount ? `R$ ${amount}` : '';
+
+                if (action === 'INSERT') return `Nova fatura gerada ${fmtAmount ? `(${fmtAmount})` : ''}`;
+                if (action === 'UPDATE') {
+                    if (newData.status && newData.status !== oldData.status) {
+                        const statusMap = { 'pending': 'Pendente', 'paid': 'Pago', 'cancelled': 'Cancelado', 'overdue': 'Vencido' };
+                        return `Status da fatura alterado para ${statusMap[newData.status] || newData.status}`;
+                    }
+                    return `Atualização na fatura ${fmtAmount ? `(${fmtAmount})` : ''}`;
+                }
+                if (action === 'DELETE') return `Fatura removida`;
+            }
+
+            // 6. Pacotes e Atribuições
+            if (table === 'packages') {
+                const pkgName = newData.name || oldData.name || 'Pacote';
+                if (action === 'INSERT') return `Novo pacote criado: ${pkgName}`;
+                if (action === 'UPDATE') return `Alteração no pacote: ${pkgName}`;
+                if (action === 'DELETE') return `Pacote removido: ${pkgName}`;
+            }
+
+            if (table === 'assigned_packages_log') {
+                if (action === 'INSERT') return `Pacote atribuído a um aluno`;
+                if (action === 'DELETE') return `Atribuição de pacote removida`;
+            }
+
+            // 7. Comunicação (chats, messages, notifications)
+            if (['chats', 'mensajes', 'messages'].includes(table)) {
+                if (action === 'INSERT') return `Nova mensagem enviada`;
+                if (action === 'UPDATE') return `Status da mensagem atualizado`;
+                if (action === 'DELETE') return `Mensagem excluída`;
+            }
+
+            if (table === 'notifications') {
+                if (action === 'INSERT') return `Nova notificação do sistema`;
+                if (action === 'UPDATE') return `Notificação marcada como lida/alterada`;
+            }
+
             // 4. Avisos (professor_announcements)
             if (table === 'professor_announcements') {
                 const title = newData.title || oldData.title || 'Comunicado';
