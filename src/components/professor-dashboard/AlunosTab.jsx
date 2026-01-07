@@ -113,15 +113,15 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
             const conflicts = [];
 
             try {
-                // 1. Buscar slots do professor para verificar disponibilidade
+                // 1. Buscar slots do professor COM informação de quem está ocupando
                 const { data: professorSlots, error: slotsError } = await supabase
                     .from('class_slots')
-                    .select('day_of_week, start_time, status')
+                    .select('day_of_week, start_time, status, student_id')
                     .eq('professor_id', professorId);
 
                 if (slotsError) throw slotsError;
 
-                // 2. Buscar todas as aulas do professor (excluindo as do aluno atual)
+                // 2. Buscar appointments de OUTROS alunos (já exclui o atual)
                 const { data: professorAppointments, error: aptsError } = await supabase
                     .from('appointments')
                     .select('class_datetime, duration_minutes, student:profiles!student_id(full_name)')
@@ -138,25 +138,57 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                     const [hours, minutes] = schedule.time.split(':').map(Number);
                     const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
 
-                    // === VERIFICAÇÃO 1: Slot está ATIVO? ===
+                    // === VERIFICAÇÃO 1: Slot existe e está disponível? ===
                     const matchingSlot = (professorSlots || []).find(slot =>
                         slot.day_of_week === dayNum && slot.start_time === timeStr
                     );
 
-                    // Se o slot não existe ou não está ativo, é um conflito
-                    if (!matchingSlot || matchingSlot.status !== 'active') {
-                        const statusMsg = !matchingSlot ? 'não disponível' :
-                            matchingSlot.status === 'filled' ? 'ocupado por outro aluno' :
-                                matchingSlot.status === 'inactive' ? 'inativo' : matchingSlot.status;
+                    // NOVA LÓGICA: 
+                    // - Se não existe slot → conflito
+                    // - Se slot está 'inactive' → conflito
+                    // - Se slot está 'filled' MAS é do MESMO aluno → NÃO é conflito (permitir)
+                    // - Se slot está 'filled' e é de OUTRO aluno → conflito
+                    // - Se slot está 'active' → sem conflito
 
+                    if (!matchingSlot) {
                         conflicts.push({
                             day: daysOfWeekFull[dayNum],
                             time: schedule.time,
                             reason: 'slot_unavailable',
-                            existingStudent: `Horário ${statusMsg}`
+                            existingStudent: 'Horário não disponível'
                         });
-                        continue; // Não precisa verificar appointments se slot não está disponível
+                        continue;
                     }
+
+                    if (matchingSlot.status === 'inactive') {
+                        conflicts.push({
+                            day: daysOfWeekFull[dayNum],
+                            time: schedule.time,
+                            reason: 'slot_inactive',
+                            existingStudent: 'Horário inativo'
+                        });
+                        continue;
+                    }
+
+                    // Se está 'filled', verificar SE é do mesmo aluno
+                    if (matchingSlot.status === 'filled') {
+                        // Se o slot está ocupado PELO MESMO aluno, não é conflito!
+                        if (matchingSlot.student_id === student?.id) {
+                            // Tudo OK - é o próprio aluno, pode manter ou alterar
+                            continue;
+                        } else {
+                            // Ocupado por OUTRO aluno - é conflito
+                            conflicts.push({
+                                day: daysOfWeekFull[dayNum],
+                                time: schedule.time,
+                                reason: 'slot_filled_other',
+                                existingStudent: 'Ocupado por outro aluno'
+                            });
+                            continue;
+                        }
+                    }
+
+                    // Se chegou aqui, slot está 'active' - verificar appointments de outros
 
                     // === VERIFICAÇÃO 2: Já existe appointment neste horário? ===
                     const conflictingApts = (professorAppointments || []).filter(apt => {
