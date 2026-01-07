@@ -242,7 +242,9 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   // Extração segura das propriedades
   const data = dashboardData?.data || {};
   const loading = dashboardData?.loading || false;
-  const professorIdFromProps = dashboardData?.professorId;
+  // CORREÇÃO: Usar filteredProfessorId da dashboardData se disponível (filtro global), 
+  // caso contrário usa o ID do usuário (professor logado)
+  const professorIdFromProps = dashboardData?.filteredProfessorId || dashboardData?.professorId;
   const professors = data.professors || [];
   const students = data.students || [];
   const packages = data.packages || [];
@@ -397,8 +399,8 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   useEffect(() => {
     if (!Array.isArray(classSlots)) return;
 
-    // Se o filtro global for 'all', filtramos localmente pelo professor selecionado no dropdown
-    const filteredClassSlots = (professorIdFromProps === 'all' && effectiveProfessorId)
+    // CORREÇÃO: Filtragem robusta para evitar corrupção de dados entre professores
+    const filteredClassSlots = (effectiveProfessorId && effectiveProfessorId !== 'all')
       ? classSlots.filter(s => s.professor_id === effectiveProfessorId)
       : classSlots;
 
