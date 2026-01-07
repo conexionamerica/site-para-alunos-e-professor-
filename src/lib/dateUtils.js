@@ -110,14 +110,21 @@ export const toBrazilISOString = (date) => {
 
     const dateObj = date instanceof Date ? date : new Date(date);
 
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const hours = String(dateObj.getHours()).padStart(2, '0');
-    const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-    const seconds = String(dateObj.getSeconds()).padStart(2, '0');
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: BRAZIL_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
 
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
+    const parts = formatter.formatToParts(dateObj);
+    const getPart = (type) => parts.find(p => p.type === type)?.value;
+
+    return `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}:${getPart('second')}-03:00`;
 };
 
 /**

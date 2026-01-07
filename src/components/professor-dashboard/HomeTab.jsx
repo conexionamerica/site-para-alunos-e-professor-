@@ -416,10 +416,25 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
     if (studentApts.length > 0) {
       const deducedPrefs = { ...profilePrefs };
       studentApts.forEach(apt => {
-        const aptDate = parseISO(apt.class_datetime);
-        const dayOfWeek = getDay(aptDate);
-        const time = format(aptDate, 'HH:mm');
-        if (!deducedPrefs[dayOfWeek]) {
+        const d = new Date(apt.class_datetime);
+        const f = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Sao_Paulo',
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          weekday: 'long'
+        });
+        const pts = f.formatToParts(d);
+        const getV = (t) => pts.find(p => p.type === t)?.value;
+        const h = getV('hour');
+        const m = getV('minute');
+        const wStr = getV('weekday').toLowerCase();
+
+        const wMap = { 'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6 };
+        const dayOfWeek = wMap[wStr];
+        const time = `${h}:${m}`;
+
+        if (dayOfWeek !== undefined && !deducedPrefs[dayOfWeek]) {
           deducedPrefs[dayOfWeek] = time;
         }
       });
@@ -585,7 +600,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           matchedDaysCount: match.matchedDays.size,
           matchPercentage: Math.round((match.matchedDays.size / match.totalDaysRequested) * 100)
         }))
-        .filter(match => match.matchPercentage > 0) // MOSTRAR TODOS QUE TÊM ALGUMA DISPONIBILIDADE (> 0%)
+        .filter(match => match.matchPercentage === 100) // EXIBIR APENAS PROFESSORES COM 100% DE DISPONIBILIDADE
         .sort((a, b) => b.matchPercentage - a.matchPercentage);
 
       setMatchedProfessors(matchResults);
