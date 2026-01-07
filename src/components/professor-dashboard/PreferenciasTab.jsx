@@ -393,53 +393,76 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
     };
   }, [isAutomaticScheduling, days, totalClasses, pckStartDate, pckEndDate]);
 
+  // Estado para loading dos slots
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  // Estado para forçar refetch após salvar
+  const [refetchCounter, setRefetchCounter] = useState(0);
 
-  // CORREÇÃO FINAL: Carregar slots do professor selecionado
+  // NOVA LÓGICA: Buscar slots DIRETAMENTE do Supabase para o professor selecionado
+  // Isso garante isolamento total - não depende de props que podem estar mixados
   useEffect(() => {
-    // 1. Limpar estado anterior imediatamente para evitar contaminação entre professores
-    setSlots([]);
+    const fetchSlotsForProfessor = async () => {
+      // 1. Limpar estado anterior imediatamente
+      setSlots([]);
 
-    if (!Array.isArray(classSlots)) return;
-    if (!effectiveProfessorId) return; // Sem professor, não carrega nada
+      if (!effectiveProfessorId || effectiveProfessorId === 'all') {
+        return; // Sem professor, não carrega nada
+      }
 
-    // 2. Converter ID para String para comparação segura (evita '5' !== 5)
-    const targetProfIdStr = String(effectiveProfessorId);
+      setLoadingSlots(true);
 
-    // 3. Filtrar APENAS os slots do professor selecionado
-    const filteredClassSlots = classSlots.filter(s =>
-      String(s.professor_id) === targetProfIdStr
-    );
+      try {
+        // 2. Buscar DIRETAMENTE do banco apenas os slots DESTE professor
+        const { data: professorSlots, error } = await supabase
+          .from('class_slots')
+          .select('*')
+          .eq('professor_id', effectiveProfessorId);
 
-    // 4. Criar mapa para merge eficiente
-    const existingSlotsMap = new Map();
-    filteredClassSlots.forEach(slot => {
-      const startTime = slot.start_time.length === 5 ? `${slot.start_time}:00` : slot.start_time;
-      existingSlotsMap.set(`${slot.day_of_week}-${startTime}`, slot);
-    });
+        if (error) {
+          console.error('Erro ao buscar slots do professor:', error);
+          toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar os horários.' });
+          setLoadingSlots(false);
+          return;
+        }
 
-    // 5. Gerar grade completa (7 dias x todos os horários)
-    const mergedSlots = [];
-    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
-      ALL_TIMES.forEach(time => {
-        const key = `${dayIndex}-${time}`;
-        const existing = existingSlotsMap.get(key);
+        // 3. Criar mapa para merge eficiente
+        const existingSlotsMap = new Map();
+        (professorSlots || []).forEach(slot => {
+          const startTime = slot.start_time?.length === 5 ? `${slot.start_time}:00` : slot.start_time;
+          existingSlotsMap.set(`${slot.day_of_week}-${startTime}`, slot);
+        });
 
-        if (existing) {
-          mergedSlots.push({ ...existing }); // Clone para evitar mutação
-        } else {
-          // Novo slot (ainda não existe no banco)
-          mergedSlots.push({
-            professor_id: effectiveProfessorId,
-            day_of_week: dayIndex,
-            start_time: time,
-            status: 'inactive',
+        // 4. Gerar grade completa (7 dias x todos os horários)
+        const mergedSlots = [];
+        for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+          ALL_TIMES.forEach(time => {
+            const key = `${dayIndex}-${time}`;
+            const existing = existingSlotsMap.get(key);
+
+            if (existing) {
+              mergedSlots.push({ ...existing }); // Clone para evitar mutação
+            } else {
+              // Novo slot (ainda não existe no banco)
+              mergedSlots.push({
+                professor_id: effectiveProfessorId,
+                day_of_week: dayIndex,
+                start_time: time,
+                status: 'inactive',
+              });
+            }
           });
         }
-      });
-    }
 
-    setSlots(mergedSlots);
-  }, [classSlots, effectiveProfessorId, loading]);
+        setSlots(mergedSlots);
+      } catch (err) {
+        console.error('Exceção ao buscar slots:', err);
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+
+    fetchSlotsForProfessor();
+  }, [effectiveProfessorId, refetchCounter]); // Depende do ID e do contador de refetch
   // Buscar appointments futuros para marcar slots ocupados
   useEffect(() => {
     const fetchFutureAppointments = async () => {
@@ -522,8 +545,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   };
 
   const handleSaveChanges = async () => {
-    // CORREÇÃO: Verificar se há professor selecionado antes de salvar
-    if (!effectiveProfessorId) {
+    if (!effectiveProfessorId || effectiveProfessorId === 'all') {
       toast({
         variant: 'destructive',
         title: 'Professor não selecionado',
@@ -534,42 +556,12 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
     setIsSavingSlots(true);
 
-    // CORREÇÃO: Converter para String para garantir comparação segura (evita problema de '5' !== 5)
-    const targetProfIdStr = String(effectiveProfessorId);
-
-    // 1. Tentar filtrar slots que JÁ pertencem ao professor (comparação segura)
-    let slotsToUpsert = slots
-      .filter(s => String(s.professor_id) === targetProfIdStr)
-      .map(s => {
-        // Remove campos desnecessários
-        const { id, created_at, ...rest } = s;
-        // Normaliza o ID para o valor efetivo (preserva o tipo original se possível, senão usa o do scope)
-        return { ...rest, professor_id: effectiveProfessorId };
-      });
-
-    // 2. Se o filtro retornou vazio, pode ser que estamos salvando pela PRIMEIRA vez
-    // (slots foram criados na memória com ID null ou indefinido)
-    // Nesse caso, assumimos que TODOS os slots da tela pertencem a este professor
-    if (slotsToUpsert.length === 0 && slots.length > 0) {
-      // Dupla verificação: Só faz isso se os slots NÃO tiverem ID de outro professor
-      const hasOtherProfessorData = slots.some(s => s.professor_id && String(s.professor_id) !== targetProfIdStr);
-
-      if (!hasOtherProfessorData) {
-        slotsToUpsert = slots.map(s => {
-          const { id, created_at, ...rest } = s;
-          return { ...rest, professor_id: effectiveProfessorId };
-        });
-      } else {
-        console.warn("Tentativa de salvar slots misturados abortada por segurança.");
-        toast({
-          variant: 'destructive',
-          title: 'Erro de integridade',
-          description: 'Os dados parecerem pertencer a outro professor. Recarregue a página.'
-        });
-        setIsSavingSlots(false);
-        return;
-      }
-    }
+    // Preparar slots para upsert - todos já pertencem ao professor correto
+    // pois foram buscados diretamente do banco para este professor
+    const slotsToUpsert = slots.map(s => {
+      const { id, created_at, ...rest } = s;
+      return { ...rest, professor_id: effectiveProfessorId };
+    });
 
     try {
       const { error } = await supabase.from('class_slots').upsert(slotsToUpsert, {
@@ -577,14 +569,18 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
       });
 
       if (error) throw error;
-      toast({ variant: 'default', title: 'Sucesso!', description: 'Suas preferências de horário foram salvas.' });
 
-      // Chama onUpdate para recarregar os dados no Dashboard principal
+      toast({ variant: 'default', title: 'Sucesso!', description: 'Preferências de horário salvas com sucesso.' });
+
+      // Forçar refetch dos dados atualizados
+      setRefetchCounter(prev => prev + 1);
+
+      // Também notifica o pai se necessário
       if (onUpdate) onUpdate();
 
     } catch (error) {
       console.error("Error saving slots:", error);
-      toast({ variant: 'destructive', title: 'Erro ao salvar', description: `Não foi possível salvar as alterações: ${error.message}` });
+      toast({ variant: 'destructive', title: 'Erro ao salvar', description: `Não foi possível salvar: ${error.message}` });
     } finally {
       setIsSavingSlots(false);
     }
