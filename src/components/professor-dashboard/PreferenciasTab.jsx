@@ -531,40 +531,41 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
     setIsSavingSlots(true);
 
-    // CORREÇÃO CRÍTICA: Só processar slots que REALMENTE pertencem ao professor efetivo atual
-    // Isso evita que slots de outros professores sejam sobrescritos acidentalmente
-    const slotsToUpsert = slots
-      .filter(s => s.professor_id === effectiveProfessorId) // Só slots do professor atual
+    // CORREÇÃO: Converter para String para garantir comparação segura (evita problema de '5' !== 5)
+    const targetProfIdStr = String(effectiveProfessorId);
+
+    // 1. Tentar filtrar slots que JÁ pertencem ao professor (comparação segura)
+    let slotsToUpsert = slots
+      .filter(s => String(s.professor_id) === targetProfIdStr)
       .map(s => {
-        // Remove campos desnecessários ou que causam conflito
+        // Remove campos desnecessários
         const { id, created_at, ...rest } = s;
+        // Normaliza o ID para o valor efetivo (preserva o tipo original se possível, senão usa o do scope)
         return { ...rest, professor_id: effectiveProfessorId };
       });
 
-    // Se não há slots a salvar (pode acontecer se os slots foram criados localmente mas ainda não têm ID)
-    // Nesse caso, salvamos todos os slots inativos que foram criados para este professor
-    if (slotsToUpsert.length === 0) {
-      const newSlotsToUpsert = slots.map(s => {
-        const { id, created_at, ...rest } = s;
-        return { ...rest, professor_id: effectiveProfessorId };
-      });
+    // 2. Se o filtro retornou vazio, pode ser que estamos salvando pela PRIMEIRA vez
+    // (slots foram criados na memória com ID null ou indefinido)
+    // Nesse caso, assumimos que TODOS os slots da tela pertencem a este professor
+    if (slotsToUpsert.length === 0 && slots.length > 0) {
+      // Dupla verificação: Só faz isso se os slots NÃO tiverem ID de outro professor
+      const hasOtherProfessorData = slots.some(s => s.professor_id && String(s.professor_id) !== targetProfIdStr);
 
-      try {
-        const { error } = await supabase.from('class_slots').upsert(newSlotsToUpsert, {
-          onConflict: 'professor_id, day_of_week, start_time'
+      if (!hasOtherProfessorData) {
+        slotsToUpsert = slots.map(s => {
+          const { id, created_at, ...rest } = s;
+          return { ...rest, professor_id: effectiveProfessorId };
         });
-
-        if (error) throw error;
-        toast({ variant: 'default', title: 'Sucesso!', description: 'Suas preferências de horário foram salvas.' });
-
-        if (onUpdate) onUpdate();
-      } catch (error) {
-        console.error("Error saving slots:", error);
-        toast({ variant: 'destructive', title: 'Erro ao salvar', description: `Não foi possível salvar as alterações: ${error.message}` });
-      } finally {
+      } else {
+        console.warn("Tentativa de salvar slots misturados abortada por segurança.");
+        toast({
+          variant: 'destructive',
+          title: 'Erro de integridade',
+          description: 'Os dados parecerem pertencer a outro professor. Recarregue a página.'
+        });
         setIsSavingSlots(false);
+        return;
       }
-      return;
     }
 
     try {
