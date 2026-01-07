@@ -1131,22 +1131,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Seleção de Professor (visível APENAS para Superadmin) */}
                 {/* Agora usando o estado local, totalmente desconectado do filtro global */}
-                {isSuperadmin && (
-                  <div className="space-y-2">
-                    <Label>Professor (Filtro Local da Aba)</Label>
-                    <Select value={effectiveProfessorId || 'none'} onValueChange={(v) => setLocalProfessorId(v === 'none' ? null : v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o professor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Selecione um professor...</SelectItem>
-                        {professors.map(prof => (
-                          <SelectItem key={prof.id} value={prof.id}>{prof.full_name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                {/* Seleção de Professor removida - Utilizar filtro global */}
 
                 {/* Seleção de Aluno */}
                 <div className="space-y-2">
