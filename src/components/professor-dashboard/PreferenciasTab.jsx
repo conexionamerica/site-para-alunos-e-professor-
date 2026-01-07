@@ -254,9 +254,14 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   const [localProfessorId, setLocalProfessorId] = useState(null);
 
   // Efeito para sincronizar o professor local com o global
+  // CORREÇÃO: Também limpa quando muda de professor, garantindo dados isolados
   useEffect(() => {
     if (professorIdFromProps && professorIdFromProps !== 'all') {
+      // Quando um professor específico é selecionado no filtro global
       setLocalProfessorId(professorIdFromProps);
+    } else if (professorIdFromProps === 'all') {
+      // Quando volta para "Todos", limpa o professor local para evitar dados misturados
+      setLocalProfessorId(null);
     }
   }, [professorIdFromProps]);
 
@@ -508,19 +513,55 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   };
 
   const handleSaveChanges = async () => {
+    // CORREÇÃO: Verificar se há professor selecionado antes de salvar
+    if (!effectiveProfessorId) {
+      toast({
+        variant: 'destructive',
+        title: 'Professor não selecionado',
+        description: 'Selecione um professor antes de salvar as alterações.'
+      });
+      return;
+    }
+
     setIsSavingSlots(true);
 
-    const slotsToUpsert = slots.map(s => {
-      // Remove campos desnecessários ou que causam conflito
-      const { id, created_at, ...rest } = s;
-      return { ...rest, professor_id: effectiveProfessorId };
-    });
+    // CORREÇÃO CRÍTICA: Só processar slots que REALMENTE pertencem ao professor efetivo atual
+    // Isso evita que slots de outros professores sejam sobrescritos acidentalmente
+    const slotsToUpsert = slots
+      .filter(s => s.professor_id === effectiveProfessorId) // Só slots do professor atual
+      .map(s => {
+        // Remove campos desnecessários ou que causam conflito
+        const { id, created_at, ...rest } = s;
+        return { ...rest, professor_id: effectiveProfessorId };
+      });
+
+    // Se não há slots a salvar (pode acontecer se os slots foram criados localmente mas ainda não têm ID)
+    // Nesse caso, salvamos todos os slots inativos que foram criados para este professor
+    if (slotsToUpsert.length === 0) {
+      const newSlotsToUpsert = slots.map(s => {
+        const { id, created_at, ...rest } = s;
+        return { ...rest, professor_id: effectiveProfessorId };
+      });
+
+      try {
+        const { error } = await supabase.from('class_slots').upsert(newSlotsToUpsert, {
+          onConflict: 'professor_id, day_of_week, start_time'
+        });
+
+        if (error) throw error;
+        toast({ variant: 'default', title: 'Sucesso!', description: 'Suas preferências de horário foram salvas.' });
+
+        if (onUpdate) onUpdate();
+      } catch (error) {
+        console.error("Error saving slots:", error);
+        toast({ variant: 'destructive', title: 'Erro ao salvar', description: `Não foi possível salvar as alterações: ${error.message}` });
+      } finally {
+        setIsSavingSlots(false);
+      }
+      return;
+    }
 
     try {
-      // CORREÇÃO: Verifica se effectiveProfessorId existe antes de chamar a API
-      // Removido o check, pois effectiveProfessorId é sempre null agora.
-      // if (!effectiveProfessorId) throw new Error("ID do Professor não está disponível.");
-
       const { error } = await supabase.from('class_slots').upsert(slotsToUpsert, {
         onConflict: 'professor_id, day_of_week, start_time'
       });
