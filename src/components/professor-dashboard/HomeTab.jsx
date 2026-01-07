@@ -531,8 +531,12 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
             // Se não é no mesmo dia da semana, não há conflito
             if (aptDayIndex !== slotDayIndex) return false;
 
-            // Converter tudo para minutos desde o início do dia
-            const aptStartMinutes = aptDate.getHours() * 60 + aptDate.getMinutes();
+            // Converter tudo para minutos usando o fuso horário correto (Brasília)
+            // Isso evita que o navegador em UTC ou outro fuso calcule as horas erradas (ex: 14:00 virando 17:00 ou 11:00)
+            const brazilTimeStr = aptDate.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false });
+            const [aptH, aptM] = brazilTimeStr.split(':').map(Number);
+
+            const aptStartMinutes = aptH * 60 + aptM;
             const aptDuration = apt.duration_minutes || 30;
             const aptEndMinutes = aptStartMinutes + aptDuration;
 
