@@ -242,9 +242,9 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   // Extração segura das propriedades
   const data = dashboardData?.data || {};
   const loading = dashboardData?.loading || false;
-  // CORREÇÃO: Ignorar filtro global (filteredProfessorId) para garantir que
-  // a "Preferencias" tenha seu próprio controle isolado
-  const loggedInProfessorId = dashboardData?.professorId; // ID do usuário logado
+  // CORREÇÃO: Aceitar professorId da prop (dashboardData) pois o AdminTab
+  // passa explicitamente o professor selecionado por lá.
+  const professorIdFromProps = dashboardData?.professorId;
   const professors = data.professors || [];
   const students = data.students || [];
   const packages = data.packages || [];
@@ -252,16 +252,19 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   const onUpdate = dashboardData?.onUpdate; // Para forçar a recarga no pai
   const isSuperadmin = dashboardData?.isSuperadmin || false;
 
-  // Estado para o professor selecionado no formulário
-  // Se não for superadmin, já inicia com o próprio ID. Se for admin, inicia null.
-  const [localProfessorId, setLocalProfessorId] = useState(isSuperadmin ? null : loggedInProfessorId);
+  // Estado para o professor selecionado.
+  // Se vier uma prop definida (ex: do AdminTab), usa ela. Se não, usa null (aguarda seleção).
+  const [localProfessorId, setLocalProfessorId] = useState(professorIdFromProps || null);
 
-  // Efeito para garantir que se o usuário não for admin, o ID esteja correto
+  // Efeito para sincronizar quando a prop muda (ex: AdminTab muda o filtro)
   useEffect(() => {
-    if (!isSuperadmin && loggedInProfessorId) {
-      setLocalProfessorId(loggedInProfessorId);
+    if (professorIdFromProps && professorIdFromProps !== 'all') {
+      setLocalProfessorId(professorIdFromProps);
+    } else if (professorIdFromProps === 'all' || (professorIdFromProps === null && isSuperadmin)) {
+      // Se a prop virar 'all' ou null explícito e for admin, limpa.
+      setLocalProfessorId(null);
     }
-  }, [isSuperadmin, loggedInProfessorId]);
+  }, [professorIdFromProps, isSuperadmin]);
 
   // ID do professor que será usado efetivamente nas ações
   const effectiveProfessorId = localProfessorId;
