@@ -1713,67 +1713,52 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
               </DialogHeader>
 
               <div className="space-y-4 py-4">
-                {/* Info do Aluno */}
-                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-blue-100 text-blue-700">
-                      {selectedStudentForVinculacao?.full_name?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{selectedStudentForVinculacao?.full_name}</p>
-                    <p className="text-sm text-slate-500">
-                      Código: {selectedStudentForVinculacao?.student_code || 'N/A'}
-                    </p>
+                {/* Info completa do Aluno */}
+                <div className="p-4 bg-slate-50 rounded-lg border space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarFallback className="bg-blue-100 text-blue-700 text-lg font-bold">
+                        {selectedStudentForVinculacao?.full_name?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-semibold text-lg">{selectedStudentForVinculacao?.full_name}</p>
+                      <p className="text-sm text-slate-500">
+                        Código: {selectedStudentForVinculacao?.student_code || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                    <div>
+                      <p className="text-xs text-slate-500">Idioma</p>
+                      <p className="font-medium text-slate-800">Español</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Nível</p>
+                      <p className="font-medium text-slate-800">{selectedStudentForVinculacao?.spanish_level || 'A definir'}</p>
+                    </div>
+                    {selectedStudentForVinculacao?.phone && (
+                      <div>
+                        <p className="text-xs text-slate-500">Telefone</p>
+                        <p className="font-medium text-slate-800">{selectedStudentForVinculacao?.phone}</p>
+                      </div>
+                    )}
+                    {selectedStudentForVinculacao?.email && (
+                      <div>
+                        <p className="text-xs text-slate-500">E-mail</p>
+                        <p className="font-medium text-slate-800">{selectedStudentForVinculacao?.email}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* PASO 1: Seleccionar Preferencias */}
+                {/* PASO 1: Mensaje informativo (sin selección de días/horarios) */}
                 {matchingStep === 1 && (
-                  <div className="space-y-4">
-                    <div className="space-y-3">
-                      <Label className="text-base font-semibold">Dias da Semana Preferidos</Label>
-                      <div className="grid grid-cols-7 gap-2">
-                        {daysOfWeek.map((day, idx) => (
-                          <div
-                            key={idx}
-                            onClick={() => togglePreferenceDay(idx)}
-                            className={cn(
-                              "p-2 text-center rounded-lg cursor-pointer border-2 transition-all",
-                              studentPreferences.days.includes(idx)
-                                ? "bg-green-100 border-green-500 text-green-800"
-                                : "bg-slate-50 border-slate-200 hover:border-slate-400"
-                            )}
-                          >
-                            <span className="text-xs font-semibold">{day.substring(0, 3)}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        {studentPreferences.days.length} dia(s) selecionado(s)
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="preferred-time">Horário Preferido</Label>
-                      <Select
-                        value={studentPreferences.time}
-                        onValueChange={(time) => setStudentPreferences(prev => ({ ...prev, time }))}
-                      >
-                        <SelectTrigger id="preferred-time">
-                          <Clock className="h-4 w-4 mr-2 text-slate-500" />
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60">
-                          {TIME_OPTIONS.map(time => (
-                            <SelectItem key={time} value={time}>{time}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-slate-500">
-                        Professores com horários próximos (±1 hora) também serão sugeridos
-                      </p>
-                    </div>
+                  <div className="text-center py-4 text-slate-600">
+                    <p className="text-sm">
+                      Clique em "Buscar Professores" para ver os professores disponíveis para este aluno.
+                    </p>
                   </div>
                 )}
 
@@ -2084,7 +2069,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <p className="font-bold text-sky-700">
-                                {apt.student?.spanish_level ? 'Espanhol' : 'Inglês'} - {apt.student?.spanish_level || 'Básico'}
+                                Español - {apt.student?.spanish_level || 'Básico'}
                               </p>
                               <p className="text-sm text-slate-600 mt-1">
                                 <span className="font-medium">Aluno:</span> {apt.student?.full_name || 'N/A'}
@@ -2159,7 +2144,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                 ) : nextClass ? (
                   <div className="space-y-4">
                     <h3 className="text-xl font-bold text-sky-700">
-                      {nextClass.student?.spanish_level ? 'Espanhol' : 'Inglês'}
+                      Español - {nextClass.student?.spanish_level || 'Básico'}
                     </h3>
 
                     <div className="grid grid-cols-2 gap-4 text-sm">
