@@ -152,7 +152,7 @@ const AssignedPackagesHistory = ({ professorId, onDelete, isSuperadmin }) => {
   };
 
   return (
-    <DialogContent className="max-w-5xl"> {/* Aumentado o max-w para caber as novas colunas */}
+    <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto"> {/* Aumentado o max-w para caber as novas colunas */}
       <DialogHeader>
         <DialogTitle>Histórico de Pacotes Incluídos</DialogTitle>
       </DialogHeader>
@@ -1314,7 +1314,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
                               <SelectTrigger className="h-8">
                                 <SelectValue />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="max-h-60">
                                 {ALL_TIMES.filter((_, i) => i % 2 === 0).map(t => (
                                   <SelectItem key={t.substring(0, 5)} value={t.substring(0, 5)}>{t.substring(0, 5)}</SelectItem>
                                 ))}

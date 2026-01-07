@@ -418,7 +418,7 @@ const ConversasTab = ({ dashboardData }) => {
                   Nova Conversa
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
+              <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Iniciar Nova Conversa</DialogTitle>
                   <DialogDescription>

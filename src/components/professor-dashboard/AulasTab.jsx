@@ -123,7 +123,7 @@ const FeedbackDialog = ({ appointment, isOpen, onClose, onFeedbackSent }) => {
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Avaliar Aluno</DialogTitle>
                     <DialogDescription className="flex items-center gap-4 pt-2">
@@ -391,7 +391,7 @@ const RescheduleDialog = ({ appointment, isOpen, onClose, onReschedule }) => {
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[480px]">
+            <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Reagendar Aula</DialogTitle>
                     <DialogDescription className="pt-2">
@@ -995,7 +995,7 @@ const AulasTab = ({ dashboardData }) => {
                 </div>
             )}
             <Dialog open={isFiltersModalOpen} onOpenChange={setIsFiltersModalOpen}>
-                <DialogContent className="sm:max-w-[450px]">
+                <DialogContent className="sm:max-w-[450px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Filtros</DialogTitle>
                         <DialogDescription>

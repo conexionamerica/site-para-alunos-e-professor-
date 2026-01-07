@@ -72,7 +72,7 @@ const CreateAnnouncementDialog = ({ isOpen, onClose, onCreated, professorName })
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Novo Comunicado</DialogTitle>
                     <DialogDescription>

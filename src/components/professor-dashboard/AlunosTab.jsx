@@ -1001,7 +1001,7 @@ const AlunosTab = ({ dashboardData }) => {
 
                     {/* Dialog de Mensaje */}
                     <Dialog open={isMessageDialogOpen} onOpenChange={setIsMessageDialogOpen}>
-                        <DialogContent className="sm:max-w-[500px]">
+                        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>Enviar Mensagem para {selectedStudent?.full_name}</DialogTitle>
                                 <DialogDescription>

@@ -1157,7 +1157,7 @@ const AdminTab = ({ dashboardData }) => {
             </Dialog>
             {/* Dialog para editar permissões de perfil */}
             <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
-                <DialogContent className="sm:max-w-[500px]">
+                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Editar Permissões - {editingRole}</DialogTitle>
                         <DialogDescription>
@@ -1255,7 +1255,7 @@ const AdminTab = ({ dashboardData }) => {
 
             {/* Diálogo de Confirmação de Exclusão */}
             <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <DialogContent className="sm:max-w-[400px]">
+                <DialogContent className="sm:max-w-[400px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-red-600">
                             <Trash2 className="h-5 w-5" />
