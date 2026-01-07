@@ -242,9 +242,9 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   // Extração segura das propriedades
   const data = dashboardData?.data || {};
   const loading = dashboardData?.loading || false;
-  // CORREÇÃO: Usar filteredProfessorId da dashboardData se disponível (filtro global), 
-  // caso contrário usa o ID do usuário (professor logado)
-  const professorIdFromProps = dashboardData?.filteredProfessorId || dashboardData?.professorId;
+  // CORREÇÃO: Ignorar filtro global (filteredProfessorId) para garantir que
+  // a "Preferencias" tenha seu próprio controle isolado
+  const loggedInProfessorId = dashboardData?.professorId; // ID do usuário logado
   const professors = data.professors || [];
   const students = data.students || [];
   const packages = data.packages || [];
@@ -252,20 +252,16 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   const onUpdate = dashboardData?.onUpdate; // Para forçar a recarga no pai
   const isSuperadmin = dashboardData?.isSuperadmin || false;
 
-  // Estado para o professor selecionado no formulário (se o global for 'all')
-  const [localProfessorId, setLocalProfessorId] = useState(null);
+  // Estado para o professor selecionado no formulário
+  // Se não for superadmin, já inicia com o próprio ID. Se for admin, inicia null.
+  const [localProfessorId, setLocalProfessorId] = useState(isSuperadmin ? null : loggedInProfessorId);
 
-  // Efeito para sincronizar o professor local com o global
-  // CORREÇÃO: Também limpa quando muda de professor, garantindo dados isolados
+  // Efeito para garantir que se o usuário não for admin, o ID esteja correto
   useEffect(() => {
-    if (professorIdFromProps && professorIdFromProps !== 'all') {
-      // Quando um professor específico é selecionado no filtro global
-      setLocalProfessorId(professorIdFromProps);
-    } else if (professorIdFromProps === 'all') {
-      // Quando volta para "Todos", limpa o professor local para evitar dados misturados
-      setLocalProfessorId(null);
+    if (!isSuperadmin && loggedInProfessorId) {
+      setLocalProfessorId(loggedInProfessorId);
     }
-  }, [professorIdFromProps]);
+  }, [isSuperadmin, loggedInProfessorId]);
 
   // ID do professor que será usado efetivamente nas ações
   const effectiveProfessorId = localProfessorId;
@@ -396,13 +392,19 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
 
   // CORREÇÃO: Usa 'classSlots' extraído do dashboardData e FILTRA pelo professor efetivo
+  // A chave aqui é que effectiveProfessorId agora vem apenas do seletor local (ou login),
+  // ignorando totalmente o filtro global do dashboard.
+  const filteredClassSlots = (effectiveProfessorId)
+  // CORREÇÃO: Usa 'classSlots' extraído do dashboardData e FILTRA pelo professor efetivo
   useEffect(() => {
     if (!Array.isArray(classSlots)) return;
 
-    // CORREÇÃO: Filtragem robusta para evitar corrupção de dados entre professores
-    const filteredClassSlots = (effectiveProfessorId && effectiveProfessorId !== 'all')
+    // CORREÇÃO: Usa 'classSlots' extraído do dashboardData e FILTRA pelo professor efetivo
+    // A chave aqui é que effectiveProfessorId agora vem apenas do seletor local (ou login),
+    // ignorando totalmente o filtro global do dashboard.
+    const filteredClassSlots = (effectiveProfessorId)
       ? classSlots.filter(s => s.professor_id === effectiveProfessorId)
-      : classSlots;
+      : []; // Se não tem professor selecionado, não mostra nada (evita misturar)
 
     const existingSlotsMap = new Map();
     filteredClassSlots.forEach(slot => {
@@ -431,8 +433,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
     }
 
     setSlots(mergedSlots);
-  }, [classSlots, effectiveProfessorId, loading, professorIdFromProps]); // Depende do ID global e local
-
+  }, [classSlots, effectiveProfessorId, loading]); // Depende do ID global e local
   // Buscar appointments futuros para marcar slots ocupados
   useEffect(() => {
     const fetchFutureAppointments = async () => {
@@ -1125,24 +1126,24 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
             <form onSubmit={handleAssignPackage} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Seleção de Professor (visível apenas se o global for 'all') */}
-                {/* REMOVIDO: O Select de professor foi removido conforme a instrução. */}
-                {/* {professorIdFromProps === 'all' && (
+                {/* Seleção de Professor (visível APENAS para Superadmin) */}
+                {/* Agora usando o estado local, totalmente desconectado do filtro global */}
+                {isSuperadmin && (
                   <div className="space-y-2">
-                    <Label>Professor Titular das Aulas</Label>
+                    <Label>Professor (Filtro Local da Aba)</Label>
                     <Select value={effectiveProfessorId || 'none'} onValueChange={(v) => setLocalProfessorId(v === 'none' ? null : v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o professor" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Sem Professor (Gerar Pendência)</SelectItem>
+                        <SelectItem value="none">Selecione um professor...</SelectItem>
                         {professors.map(prof => (
                           <SelectItem key={prof.id} value={prof.id}>{prof.full_name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                )} */}
+                )}
 
                 {/* Seleção de Aluno */}
                 <div className="space-y-2">
