@@ -522,21 +522,27 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
           // Verificar se existe appointment colidindo (Lógica Simplificada: Dia da Semana + Intervalo de Minutos)
           // Isso evita erros de timezone/data específica ao criar objetos Date manuais
+          // Verificar se existe appointment colidindo (Lógica Simplificada: Dia da Semana + Intervalo de Minutos)
+          // Isso evita erros de timezone/data específica ao criar objetos Date manuais
           const hasConflict = busyAppointments.some(apt => {
             if (apt.professor_id !== profId) return false;
 
-            const aptDate = parseISO(apt.class_datetime);
-            const aptDayIndex = getDay(aptDate); // 0-6
+            // Converter a data do appointment para o objeto Date (UTC/ISO)
+            const aptDateObj = new Date(apt.class_datetime);
+
+            // Criar uma representação dessa data no fuso BRASIL
+            // A string gerada será algo como "1/9/2026, 2:00:00 PM" (dependendo do locale en-US)
+            // Ao criar um novo Date com essa string, o JS assume a data/hora literal (o que precisamos para extrair dia/hora corretos visualmente)
+            const brazilDateStr = aptDateObj.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
+            const brazilDate = new Date(brazilDateStr);
+
+            const aptDayIndex = brazilDate.getDay(); // 0-6 (Baseado no fuso Brasil)
 
             // Se não é no mesmo dia da semana, não há conflito
             if (aptDayIndex !== slotDayIndex) return false;
 
-            // Converter tudo para minutos usando o fuso horário correto (Brasília)
-            // Isso evita que o navegador em UTC ou outro fuso calcule as horas erradas (ex: 14:00 virando 17:00 ou 11:00)
-            const brazilTimeStr = aptDate.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour12: false });
-            const [aptH, aptM] = brazilTimeStr.split(':').map(Number);
-
-            const aptStartMinutes = aptH * 60 + aptM;
+            // Se é no mesmo dia, verificar colisão de horários
+            const aptStartMinutes = brazilDate.getHours() * 60 + brazilDate.getMinutes();
             const aptDuration = apt.duration_minutes || 30;
             const aptEndMinutes = aptStartMinutes + aptDuration;
 
