@@ -87,7 +87,9 @@ const LogsTab = ({ dashboardData }) => {
             'notifications': 'Notificações',
             'assigned_packages_log': 'Atribuições de Pacotes',
             'audit_logs': 'Auditoria',
-            'professor_announcements': 'Avisos'
+            'professor_announcements': 'Avisos',
+            'financial_titles': 'Títulos Financeiros',
+            'student_messages': 'Mensagens de Alunos'
         };
         return translations[tableName] || tableName;
     };
@@ -197,20 +199,21 @@ const LogsTab = ({ dashboardData }) => {
                 if (action === 'DELETE') return `Usuário removido: ${name}`;
             }
 
-            // 5. Financeiro (billing)
-            if (table === 'billing') {
+            // 5. Financeiro (billing e financial_titles)
+            if (table === 'billing' || table === 'financial_titles') {
                 const amount = newData.amount || oldData.amount;
                 const fmtAmount = amount ? `R$ ${amount}` : '';
+                const titleNum = newData.title_number || oldData.title_number || '';
 
-                if (action === 'INSERT') return `Nova fatura gerada ${fmtAmount ? `(${fmtAmount})` : ''}`;
+                if (action === 'INSERT') return `Novo título financeiro gerado ${titleNum ? `#${titleNum} ` : ''}${fmtAmount ? `(${fmtAmount})` : ''}`;
                 if (action === 'UPDATE') {
                     if (newData.status && newData.status !== oldData.status) {
-                        const statusMap = { 'pending': 'Pendente', 'paid': 'Pago', 'cancelled': 'Cancelado', 'overdue': 'Vencido' };
-                        return `Status da fatura alterado para ${statusMap[newData.status] || newData.status}`;
+                        const statusMap = { 'pending': 'Pendente', 'effective': 'Efetivado', 'paid': 'Pago', 'cancelled': 'Cancelado', 'overdue': 'Vencido', 'closed': 'Encerrado' };
+                        return `Status do título ${titleNum} alterado para ${statusMap[newData.status] || newData.status}`;
                     }
-                    return `Atualização na fatura ${fmtAmount ? `(${fmtAmount})` : ''}`;
+                    return `Atualização no título ${titleNum} ${fmtAmount ? `(${fmtAmount})` : ''}`;
                 }
-                if (action === 'DELETE') return `Fatura removida`;
+                if (action === 'DELETE') return `Título financeiro removido`;
             }
 
             // 6. Pacotes e Atribuições
@@ -227,7 +230,11 @@ const LogsTab = ({ dashboardData }) => {
             }
 
             // 7. Comunicação (chats, messages, notifications)
-            if (['chats', 'mensajes', 'messages'].includes(table)) {
+            if (['chats', 'mensajes', 'messages', 'student_messages', 'class_feedback'].includes(table)) {
+                if (table === 'class_feedback') {
+                    if (action === 'INSERT') return `Novo feedback de aula enviado`;
+                    if (action === 'UPDATE') return `Feedback de aula alterado`;
+                }
                 if (action === 'INSERT') return `Nova mensagem enviada`;
                 if (action === 'UPDATE') return `Status da mensagem atualizado`;
                 if (action === 'DELETE') return `Mensagem excluída`;
