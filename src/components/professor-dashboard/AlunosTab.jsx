@@ -113,49 +113,67 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
             const conflicts = [];
 
             try {
-                // 1. Buscar slots do professor COM informação de quem está ocupando
+                // 1. Buscar slots do professor (SEM student_id - essa coluna não existe)
                 const { data: professorSlots, error: slotsError } = await supabase
                     .from('class_slots')
-                    .select('day_of_week, start_time, status, student_id')
+                    .select('day_of_week, start_time, status')
                     .eq('professor_id', professorId);
 
                 if (slotsError) throw slotsError;
 
-                // 2. Buscar appointments de OUTROS alunos (já exclui o atual)
-                const { data: professorAppointments, error: aptsError } = await supabase
+                // 2. Buscar appointments de OUTROS alunos
+                const { data: otherAppointments, error: otherAptsError } = await supabase
                     .from('appointments')
-                    .select('class_datetime, duration_minutes, student:profiles!student_id(full_name)')
+                    .select('class_datetime, duration_minutes, student_id, student:profiles!student_id(full_name)')
                     .eq('professor_id', professorId)
                     .neq('student_id', student?.id)
                     .in('status', ['scheduled', 'rescheduled'])
                     .gte('class_datetime', getBrazilDate().toISOString());
 
-                if (aptsError) throw aptsError;
+                if (otherAptsError) throw otherAptsError;
+
+                // 3. Buscar appointments do PRÓPRIO aluno (para saber quais slots ele já ocupa)
+                const { data: studentAppointments, error: studentAptsError } = await supabase
+                    .from('appointments')
+                    .select('class_datetime')
+                    .eq('professor_id', professorId)
+                    .eq('student_id', student?.id)
+                    .in('status', ['scheduled', 'rescheduled'])
+                    .gte('class_datetime', getBrazilDate().toISOString());
+
+                if (studentAptsError) throw studentAptsError;
+
+                // Criar set de slots que o PRÓPRIO aluno já ocupa (dia-HH:mm)
+                const studentOccupiedSlots = new Set();
+                (studentAppointments || []).forEach(apt => {
+                    const aptDate = parseISO(apt.class_datetime);
+                    const dayOfWeek = getDay(aptDate);
+                    const timeStr = `${String(aptDate.getHours()).padStart(2, '0')}:${String(aptDate.getMinutes()).padStart(2, '0')}`;
+                    studentOccupiedSlots.add(`${dayOfWeek}-${timeStr}`);
+                });
 
                 // Verificar conflitos para cada dia/horário selecionado
                 for (const [dayIndex, schedule] of enabledDays) {
                     const dayNum = parseInt(dayIndex);
                     const [hours, minutes] = schedule.time.split(':').map(Number);
-                    // Formatos possíveis: "HH:mm:00" ou "HH:mm"
-                    const timeStrFull = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
                     const timeStrShort = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                    const slotKey = `${dayNum}-${timeStrShort}`;
 
                     // === VERIFICAÇÃO 1: Slot existe e está disponível? ===
-                    // Comparar com ambos os formatos possíveis de tempo
                     const matchingSlot = (professorSlots || []).find(slot => {
                         if (slot.day_of_week !== dayNum) return false;
-                        // Normalizar o formato do start_time do banco
-                        const slotTime = slot.start_time?.substring(0, 5); // Pega "HH:mm"
+                        const slotTime = slot.start_time?.substring(0, 5);
                         return slotTime === timeStrShort;
                     });
 
-                    // DEBUG: Log para diagnóstico (remover depois)
+                    // DEBUG: Log para diagnóstico
                     console.log(`[ConflictCheck] Dia ${dayNum}, Horário ${schedule.time}:`, {
-                        matchingSlot: matchingSlot ? { status: matchingSlot.status, student_id: matchingSlot.student_id } : 'NÃO ENCONTRADO',
+                        matchingSlot: matchingSlot ? { status: matchingSlot.status } : 'NÃO ENCONTRADO',
+                        isOwnSlot: studentOccupiedSlots.has(slotKey),
                         totalSlots: (professorSlots || []).length
                     });
 
-                    // REGRA 1: Se não existe slot para esse horário → conflito (professor não disponibilizou)
+                    // REGRA 1: Se não existe slot → conflito
                     if (!matchingSlot) {
                         conflicts.push({
                             day: daysOfWeekFull[dayNum],
@@ -166,7 +184,7 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         continue;
                     }
 
-                    // REGRA 2: Se slot está 'inactive' → conflito (professor desativou)
+                    // REGRA 2: Se slot está 'inactive' → conflito
                     if (matchingSlot.status === 'inactive') {
                         conflicts.push({
                             day: daysOfWeekFull[dayNum],
@@ -177,14 +195,14 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         continue;
                     }
 
-                    // REGRA 3: Se está 'filled', verificar POR QUEM
+                    // REGRA 3: Se slot está 'filled', verificar SE o próprio aluno já ocupa esse slot
                     if (matchingSlot.status === 'filled') {
-                        // Se o slot está ocupado PELO MESMO aluno, NÃO é conflito (pode manter ou alterar)
-                        if (String(matchingSlot.student_id) === String(student?.id)) {
-                            // Tudo OK - é o próprio aluno
+                        // Verificar se É o próprio aluno que ocupa (usando appointments)
+                        if (studentOccupiedSlots.has(slotKey)) {
+                            // Tudo OK - é o próprio aluno, pode manter ou alterar
                             continue;
                         } else {
-                            // Ocupado por OUTRO aluno - é conflito
+                            // Ocupado por OUTRO aluno
                             conflicts.push({
                                 day: daysOfWeekFull[dayNum],
                                 time: schedule.time,
@@ -195,26 +213,23 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         }
                     }
 
-                    // Se chegou aqui, slot está 'active' - verificar appointments futuros de outros alunos
+                    // Se chegou aqui, slot está 'active' - verificar appointments de outros alunos
 
-                    // === VERIFICAÇÃO 2: Já existe appointment neste horário? ===
-                    const conflictingApts = (professorAppointments || []).filter(apt => {
+                    // === VERIFICAÇÃO 4: Appointments de outros alunos neste horário ===
+                    const conflictingApts = (otherAppointments || []).filter(apt => {
                         const aptDate = parseISO(apt.class_datetime);
                         const aptDay = getDay(aptDate);
                         const aptHour = aptDate.getHours();
                         const aptMinute = aptDate.getMinutes();
                         const aptDuration = apt.duration_minutes || 30;
 
-                        // Mesmo dia da semana
                         if (aptDay !== dayNum) return false;
 
-                        // Verificar sobreposição de horário
                         const newStartMinutes = hours * 60 + minutes;
-                        const newEndMinutes = newStartMinutes + 30; // Assume 30min duration
+                        const newEndMinutes = newStartMinutes + 30;
                         const aptStartMinutes = aptHour * 60 + aptMinute;
                         const aptEndMinutes = aptStartMinutes + aptDuration;
 
-                        // Há conflito se os intervalos se sobrepõem
                         return (newStartMinutes < aptEndMinutes && newEndMinutes > aptStartMinutes);
                     });
 
