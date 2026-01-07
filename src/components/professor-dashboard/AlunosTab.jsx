@@ -17,8 +17,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Loader2, MoreVertical, UserCheck, UserX, MessageSquare, Send, Calendar, Clock, Filter, RefreshCw } from 'lucide-react';
+import { Search, Package, Loader2, MoreVertical, UserCheck, UserX, MessageSquare, Send, Calendar, Clock, Filter, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const daysOfWeekMap = {
     0: 'Dom',
@@ -58,6 +59,9 @@ const TIME_OPTIONS = generateTimeOptions();
 const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId, scheduledAppointments }) => {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
+    const [scheduleConflicts, setScheduleConflicts] = useState([]);
+
     // Estructura: { dayIndex: { enabled: boolean, time: string } }
     const [daySchedules, setDaySchedules] = useState({
         0: { enabled: false, time: '08:00' },
@@ -94,6 +98,80 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
         }
     }, [scheduledAppointments]);
 
+    // === VERIFICAÇÃO DE CONFLITOS EM TEMPO REAL ===
+    useEffect(() => {
+        const checkConflicts = async () => {
+            if (!professorId || !isOpen) return;
+
+            const enabledDays = Object.entries(daySchedules).filter(([_, schedule]) => schedule.enabled);
+            if (enabledDays.length === 0) {
+                setScheduleConflicts([]);
+                return;
+            }
+
+            setIsCheckingConflicts(true);
+            const conflicts = [];
+
+            try {
+                // Buscar todas as aulas do professor (excluindo as do aluno atual)
+                const { data: professorAppointments, error } = await supabase
+                    .from('appointments')
+                    .select('class_datetime, duration_minutes, student:profiles!student_id(full_name)')
+                    .eq('professor_id', professorId)
+                    .neq('student_id', student?.id)
+                    .in('status', ['scheduled', 'rescheduled'])
+                    .gte('class_datetime', getBrazilDate().toISOString());
+
+                if (error) throw error;
+
+                // Verificar conflitos para cada dia/horário selecionado
+                for (const [dayIndex, schedule] of enabledDays) {
+                    const dayNum = parseInt(dayIndex);
+                    const [hours, minutes] = schedule.time.split(':').map(Number);
+
+                    // Verificar se algum appointment existente conflita com este horário
+                    const conflictingApts = (professorAppointments || []).filter(apt => {
+                        const aptDate = parseISO(apt.class_datetime);
+                        const aptDay = getDay(aptDate);
+                        const aptHour = aptDate.getHours();
+                        const aptMinute = aptDate.getMinutes();
+                        const aptDuration = apt.duration_minutes || 30;
+
+                        // Mesmo dia da semana
+                        if (aptDay !== dayNum) return false;
+
+                        // Verificar sobreposição de horário
+                        const newStartMinutes = hours * 60 + minutes;
+                        const newEndMinutes = newStartMinutes + 30; // Assume 30min duration
+                        const aptStartMinutes = aptHour * 60 + aptMinute;
+                        const aptEndMinutes = aptStartMinutes + aptDuration;
+
+                        // Há conflito se os intervalos se sobrepõem
+                        return (newStartMinutes < aptEndMinutes && newEndMinutes > aptStartMinutes);
+                    });
+
+                    if (conflictingApts.length > 0) {
+                        conflicts.push({
+                            day: daysOfWeekFull[dayNum],
+                            time: schedule.time,
+                            existingStudent: conflictingApts[0]?.student?.full_name || 'Outro aluno'
+                        });
+                    }
+                }
+
+                setScheduleConflicts(conflicts);
+            } catch (err) {
+                console.error('Erro ao verificar conflitos:', err);
+            } finally {
+                setIsCheckingConflicts(false);
+            }
+        };
+
+        // Debounce para não fazer muitas requisições
+        const timeoutId = setTimeout(checkConflicts, 500);
+        return () => clearTimeout(timeoutId);
+    }, [daySchedules, professorId, student?.id, isOpen]);
+
     const handleDayToggle = (dayIndex) => {
         setDaySchedules(prev => ({
             ...prev,
@@ -123,6 +201,16 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                 variant: 'destructive',
                 title: 'Campos obrigatórios',
                 description: 'Selecione pelo menos um dia da semana.'
+            });
+            return;
+        }
+
+        // === VALIDAÇÃO DE CONFLITOS ===
+        if (scheduleConflicts.length > 0) {
+            toast({
+                variant: 'destructive',
+                title: 'Conflitos detectados',
+                description: `Existem ${scheduleConflicts.length} conflito(s) de horário com a agenda do professor. Escolha horários diferentes para continuar.`
             });
             return;
         }
@@ -313,13 +401,44 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         </div>
                     </div>
 
+                    {/* === ALERTA DE CONFLITOS === */}
+                    {isCheckingConflicts && (
+                        <div className="flex items-center gap-2 py-2 text-slate-500">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm">Verificando disponibilidade do professor...</span>
+                        </div>
+                    )}
+
+                    {!isCheckingConflicts && scheduleConflicts.length > 0 && (
+                        <Alert variant="destructive" className="border-red-300 bg-red-50">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle className="text-red-800">Conflitos de Agenda Detectados</AlertTitle>
+                            <AlertDescription className="text-red-700">
+                                <p className="mb-2">
+                                    Os seguintes horários já estão ocupados na agenda do professor:
+                                </p>
+                                <ul className="space-y-1">
+                                    {scheduleConflicts.map((conflict, idx) => (
+                                        <li key={idx} className="flex items-center gap-2">
+                                            <span className="font-bold">• {conflict.day} às {conflict.time}</span>
+                                            <span className="text-xs">— ocupado por: {conflict.existingStudent}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <p className="mt-3 text-sm font-medium">
+                                    💡 Escolha horários diferentes para continuar.
+                                </p>
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
                     {/* Preview */}
-                    {enabledDays.length > 0 && (
-                        <div className="bg-blue-50 p-4 rounded-lg">
-                            <p className="text-sm font-medium text-blue-900 mb-2">Novos horários:</p>
+                    {enabledDays.length > 0 && scheduleConflicts.length === 0 && !isCheckingConflicts && (
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                            <p className="text-sm font-medium text-green-900 mb-2">✅ Novos horários (sem conflitos):</p>
                             <div className="space-y-1">
                                 {enabledDays.map(([day, schedule]) => (
-                                    <p key={day} className="text-sm text-blue-700">
+                                    <p key={day} className="text-sm text-green-700">
                                         • {daysOfWeekFull[day]} às {schedule.time}
                                     </p>
                                 ))}
@@ -334,11 +453,13 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                     </Button>
                     <Button
                         onClick={handleSubmit}
-                        disabled={isSubmitting || enabledDays.length === 0}
+                        disabled={isSubmitting || enabledDays.length === 0 || scheduleConflicts.length > 0 || isCheckingConflicts}
                         className="bg-sky-600 hover:bg-sky-700"
                     >
                         {isSubmitting ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...</>
+                        ) : isCheckingConflicts ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verificando...</>
                         ) : (
                             'Salvar Alterações'
                         )}
