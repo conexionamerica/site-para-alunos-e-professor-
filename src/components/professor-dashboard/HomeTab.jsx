@@ -6,7 +6,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { format, formatDistanceToNowStrict, parseISO, getDay, add, parse, addHours, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getBrazilDate } from '@/lib/dateUtils';
+import { getBrazilDate, toBrazilISOString } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check, X, Loader2, CalendarHeart, Clock, CalendarDays, AlertTriangle, Users, BookOpen, Package, Bell, Filter, UserX, Calendar, CheckCircle, XCircle, RefreshCw, History, Eye, EyeOff, ExternalLink, UserPlus, Search, FileText, Upload, Trash2, DollarSign, Megaphone, LayoutGrid } from 'lucide-react';
@@ -491,15 +491,48 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       const today = getBrazilDate();
       const nextWeek = add(today, { days: 7 });
 
+      // Usar a data formatada com offset -03:00 para garantir exatidão no banco
       const { data: busyApps } = await supabase
         .from('appointments')
         .select('professor_id, class_datetime, duration_minutes')
         .in('professor_id', professorIds)
-        .gte('class_datetime', today.toISOString())
-        .lte('class_datetime', nextWeek.toISOString())
+        .gte('class_datetime', toBrazilISOString(today))
+        .lte('class_datetime', toBrazilISOString(nextWeek))
         .neq('status', 'cancelled');
 
       const busyAppointments = busyApps || [];
+
+      // Helper para converter ISO para componentes de Brasil de forma robusta e independente do fuso local
+      const getAptBrParts = (isoString) => {
+        const d = new Date(isoString);
+        const f = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Sao_Paulo',
+          hour12: false,
+          hour: 'numeric',
+          minute: 'numeric',
+          weekday: 'long'
+        });
+        const parts = f.formatToParts(d);
+        const getV = (t) => parts.find(p => p.type === t)?.value;
+        const h = parseInt(getV('hour'), 10);
+        const m = parseInt(getV('minute'), 10);
+        const wStr = getV('weekday').toLowerCase();
+
+        const wMap = {
+          'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+          'thursday': 4, 'friday': 5, 'saturday': 6
+        };
+        return {
+          day: wMap[wStr],
+          minutes: h * 60 + m
+        };
+      };
+
+      // Pré-processar apps para evitar recálculo no loop
+      const processedBusyApps = busyAppointments.map(apt => ({
+        ...apt,
+        ...getAptBrParts(apt.class_datetime)
+      }));
 
       (allSlots || []).forEach(slot => {
         const profId = slot.professor_id;
@@ -510,47 +543,17 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         const [targetH, targetM] = targetTime.split(':').map(Number);
 
         if (slotH === targetH && slotM === targetM) {
-          // VERIFICAÇÃO DE CONFLITO COM AGENDA REAL
-          // Calcula a data específica desse slot na próxima semana para checar colisão
-          const slotDayIndex = slot.day_of_week;
-          const currentDayIndex = getDay(today);
-          let daysUntilSlot = slotDayIndex - currentDayIndex;
-          if (daysUntilSlot < 0) daysUntilSlot += 7;
+          const slotStart = slotH * 60 + slotM;
+          const slotEnd = slotStart + 30; // Janela base para match
 
-          // Data exata do slot nesta semana (para referência, mas validação será por Dia da Semana + Minutos)
-          const slotDate = add(today, { days: daysUntilSlot });
+          // Verificação de conflito real baseada em minutos do dia (Brasil)
+          const hasConflict = processedBusyApps.some(apt => {
+            if (String(apt.professor_id) !== String(profId)) return false;
+            if (apt.day !== slot.day_of_week) return false;
 
-          // Verificar se existe appointment colidindo (Lógica Simplificada: Dia da Semana + Intervalo de Minutos)
-          // Isso evita erros de timezone/data específica ao criar objetos Date manuais
-          // Verificar se existe appointment colidindo (Lógica Simplificada: Dia da Semana + Intervalo de Minutos)
-          // Isso evita erros de timezone/data específica ao criar objetos Date manuais
-          const hasConflict = busyAppointments.some(apt => {
-            if (apt.professor_id !== profId) return false;
-
-            // Converter a data do appointment para o objeto Date (UTC/ISO)
-            const aptDateObj = new Date(apt.class_datetime);
-
-            // Criar uma representação dessa data no fuso BRASIL
-            // A string gerada será algo como "1/9/2026, 2:00:00 PM" (dependendo do locale en-US)
-            // Ao criar um novo Date com essa string, o JS assume a data/hora literal (o que precisamos para extrair dia/hora corretos visualmente)
-            const brazilDateStr = aptDateObj.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });
-            const brazilDate = new Date(brazilDateStr);
-
-            const aptDayIndex = brazilDate.getDay(); // 0-6 (Baseado no fuso Brasil)
-
-            // Se não é no mesmo dia da semana, não há conflito
-            if (aptDayIndex !== slotDayIndex) return false;
-
-            // Se é no mesmo dia, verificar colisão de horários
-            const aptStartMinutes = brazilDate.getHours() * 60 + brazilDate.getMinutes();
-            const aptDuration = apt.duration_minutes || 30;
-            const aptEndMinutes = aptStartMinutes + aptDuration;
-
-            const slotStartMinutes = slotH * 60 + slotM;
-            const slotEndMinutes = slotStartMinutes + 30; // Assumindo 30min slot
-
-            // Interseção de horários simples
-            return (slotStartMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes);
+            const aptEnd = apt.minutes + (apt.duration_minutes || 30);
+            // Interseção clássica de intervalos
+            return (slotStart < aptEnd && slotEnd > apt.minutes);
           });
 
           if (!hasConflict) {
@@ -588,7 +591,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         toast({
           variant: 'destructive',
           title: 'Nenhum professor disponível',
-          description: `Nenhum professor possui horários próximos aos desejados.`
+          description: `Nenhum professor possui horários exatamente iguais aos solicitados.`
         });
       }
 
