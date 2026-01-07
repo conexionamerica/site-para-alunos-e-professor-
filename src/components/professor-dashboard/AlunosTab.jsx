@@ -136,20 +136,26 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                 for (const [dayIndex, schedule] of enabledDays) {
                     const dayNum = parseInt(dayIndex);
                     const [hours, minutes] = schedule.time.split(':').map(Number);
-                    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+                    // Formatos possíveis: "HH:mm:00" ou "HH:mm"
+                    const timeStrFull = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+                    const timeStrShort = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 
                     // === VERIFICAÇÃO 1: Slot existe e está disponível? ===
-                    const matchingSlot = (professorSlots || []).find(slot =>
-                        slot.day_of_week === dayNum && slot.start_time === timeStr
-                    );
+                    // Comparar com ambos os formatos possíveis de tempo
+                    const matchingSlot = (professorSlots || []).find(slot => {
+                        if (slot.day_of_week !== dayNum) return false;
+                        // Normalizar o formato do start_time do banco
+                        const slotTime = slot.start_time?.substring(0, 5); // Pega "HH:mm"
+                        return slotTime === timeStrShort;
+                    });
 
-                    // NOVA LÓGICA: 
-                    // - Se não existe slot → conflito
-                    // - Se slot está 'inactive' → conflito
-                    // - Se slot está 'filled' MAS é do MESMO aluno → NÃO é conflito (permitir)
-                    // - Se slot está 'filled' e é de OUTRO aluno → conflito
-                    // - Se slot está 'active' → sem conflito
+                    // DEBUG: Log para diagnóstico (remover depois)
+                    console.log(`[ConflictCheck] Dia ${dayNum}, Horário ${schedule.time}:`, {
+                        matchingSlot: matchingSlot ? { status: matchingSlot.status, student_id: matchingSlot.student_id } : 'NÃO ENCONTRADO',
+                        totalSlots: (professorSlots || []).length
+                    });
 
+                    // REGRA 1: Se não existe slot para esse horário → conflito (professor não disponibilizou)
                     if (!matchingSlot) {
                         conflicts.push({
                             day: daysOfWeekFull[dayNum],
@@ -160,21 +166,22 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         continue;
                     }
 
+                    // REGRA 2: Se slot está 'inactive' → conflito (professor desativou)
                     if (matchingSlot.status === 'inactive') {
                         conflicts.push({
                             day: daysOfWeekFull[dayNum],
                             time: schedule.time,
                             reason: 'slot_inactive',
-                            existingStudent: 'Horário inativo'
+                            existingStudent: 'Horário desativado pelo professor'
                         });
                         continue;
                     }
 
-                    // Se está 'filled', verificar SE é do mesmo aluno
+                    // REGRA 3: Se está 'filled', verificar POR QUEM
                     if (matchingSlot.status === 'filled') {
-                        // Se o slot está ocupado PELO MESMO aluno, não é conflito!
-                        if (matchingSlot.student_id === student?.id) {
-                            // Tudo OK - é o próprio aluno, pode manter ou alterar
+                        // Se o slot está ocupado PELO MESMO aluno, NÃO é conflito (pode manter ou alterar)
+                        if (String(matchingSlot.student_id) === String(student?.id)) {
+                            // Tudo OK - é o próprio aluno
                             continue;
                         } else {
                             // Ocupado por OUTRO aluno - é conflito
@@ -188,7 +195,7 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         }
                     }
 
-                    // Se chegou aqui, slot está 'active' - verificar appointments de outros
+                    // Se chegou aqui, slot está 'active' - verificar appointments futuros de outros alunos
 
                     // === VERIFICAÇÃO 2: Já existe appointment neste horário? ===
                     const conflictingApts = (professorAppointments || []).filter(apt => {
