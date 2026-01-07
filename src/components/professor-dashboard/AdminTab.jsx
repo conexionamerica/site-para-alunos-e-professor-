@@ -141,10 +141,10 @@ const AdminTab = ({ dashboardData }) => {
     // Use o ID filtrado globalmente (ou 'all' se não houver seleção)
     const activeFilter = dashboardData?.filteredProfessorId || 'all';
 
-    // Filter class slots for preferences based on GLOBAL filter
+    // Filter class slots for preferences based on GLOBAL filter (comparação segura com String)
     const filteredClassSlots = activeFilter === 'all'
         ? data.classSlots || []
-        : (data.classSlots || []).filter(slot => slot.professor_id === activeFilter);
+        : (data.classSlots || []).filter(slot => String(slot.professor_id) === String(activeFilter));
 
     // REMOVIDO: generatePasswordFromNameAndBirthdate não é mais usada
     // const generatePasswordFromNameAndBirthdate = (fullName, birthDate) => {

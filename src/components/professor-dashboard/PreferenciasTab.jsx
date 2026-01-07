@@ -394,28 +394,30 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   }, [isAutomaticScheduling, days, totalClasses, pckStartDate, pckEndDate]);
 
 
-  // CORREÇÃO: Usa 'classSlots' extraído do dashboardData e FILTRA pelo professor efetivo
-  // A chave aqui é que effectiveProfessorId agora vem apenas do seletor local (ou login),
-  // ignorando totalmente o filtro global do dashboard.
-  const filteredClassSlots = (effectiveProfessorId)
-  // CORREÇÃO: Usa 'classSlots' extraído do dashboardData e FILTRA pelo professor efetivo
+  // CORREÇÃO FINAL: Carregar slots do professor selecionado
   useEffect(() => {
+    // 1. Limpar estado anterior imediatamente para evitar contaminação entre professores
+    setSlots([]);
+
     if (!Array.isArray(classSlots)) return;
+    if (!effectiveProfessorId) return; // Sem professor, não carrega nada
 
-    // CORREÇÃO: Usa 'classSlots' extraído do dashboardData e FILTRA pelo professor efetivo
-    // A chave aqui é que effectiveProfessorId agora vem apenas do seletor local (ou login),
-    // ignorando totalmente o filtro global do dashboard.
-    const filteredClassSlots = (effectiveProfessorId)
-      ? classSlots.filter(s => s.professor_id === effectiveProfessorId)
-      : []; // Se não tem professor selecionado, não mostra nada (evita misturar)
+    // 2. Converter ID para String para comparação segura (evita '5' !== 5)
+    const targetProfIdStr = String(effectiveProfessorId);
 
+    // 3. Filtrar APENAS os slots do professor selecionado
+    const filteredClassSlots = classSlots.filter(s =>
+      String(s.professor_id) === targetProfIdStr
+    );
+
+    // 4. Criar mapa para merge eficiente
     const existingSlotsMap = new Map();
     filteredClassSlots.forEach(slot => {
-      // Garante que o formato seja HH:mm:ss
       const startTime = slot.start_time.length === 5 ? `${slot.start_time}:00` : slot.start_time;
       existingSlotsMap.set(`${slot.day_of_week}-${startTime}`, slot);
     });
 
+    // 5. Gerar grade completa (7 dias x todos os horários)
     const mergedSlots = [];
     for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
       ALL_TIMES.forEach(time => {
@@ -423,8 +425,9 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
         const existing = existingSlotsMap.get(key);
 
         if (existing) {
-          mergedSlots.push({ ...existing }); // Clone para evitar mutação indesejada
+          mergedSlots.push({ ...existing }); // Clone para evitar mutação
         } else {
+          // Novo slot (ainda não existe no banco)
           mergedSlots.push({
             professor_id: effectiveProfessorId,
             day_of_week: dayIndex,
@@ -436,7 +439,7 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
     }
 
     setSlots(mergedSlots);
-  }, [classSlots, effectiveProfessorId, loading]); // Depende do ID global e local
+  }, [classSlots, effectiveProfessorId, loading]);
   // Buscar appointments futuros para marcar slots ocupados
   useEffect(() => {
     const fetchFutureAppointments = async () => {
