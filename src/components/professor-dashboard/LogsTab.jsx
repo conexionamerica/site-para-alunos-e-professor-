@@ -116,7 +116,7 @@ const LogsTab = ({ dashboardData }) => {
         return translations[field] || field;
     };
 
-    // Helper para gerar descrição humana
+    // Helper para gerar descrição humana detalhada
     const generateHumanDescription = (log) => {
         try {
             const table = log.table_name;
@@ -130,9 +130,18 @@ const LogsTab = ({ dashboardData }) => {
                 const day = dayRaw ? translateField(dayRaw) : '';
                 const time = newData.time || oldData.time || '';
 
-                if (action === 'INSERT') return `Novo horário disponível criado ${day ? `(${day} ${time})` : ''}`;
-                if (action === 'UPDATE') return `Alteração em horário de aula ${day ? `(${day})` : ''}`;
-                if (action === 'DELETE') return `Remoção de horário disponível`;
+                if (action === 'INSERT') return `Novo horário disponível: ${day} às ${time}`;
+                if (action === 'UPDATE') {
+                    // Detalhar o que mudou no horário
+                    if (newData.is_available !== undefined && newData.is_available !== oldData.is_available) {
+                        return `Horário de ${day} às ${time} marcado como ${newData.is_available ? 'Disponível' : 'Indisponível'}`;
+                    }
+                    if (newData.time && newData.time !== oldData.time) {
+                        return `Horário de ${day} alterado de ${oldData.time} para ${newData.time}`;
+                    }
+                    return `Atualização no horário de ${day} às ${time}`;
+                }
+                if (action === 'DELETE') return `Remoção do horário: ${day} às ${time}`;
             }
 
             // 2. Aulas (appointments)
@@ -141,56 +150,74 @@ const LogsTab = ({ dashboardData }) => {
                 let fmtDate = '';
                 if (dateStart) {
                     try {
-                        // Proteção extra para datas inválidas
                         const d = new Date(dateStart);
                         if (!isNaN(d.getTime())) {
-                            fmtDate = format(d, 'dd/MM HH:mm', { locale: ptBR });
+                            fmtDate = format(d, "dd/MM 'às' HH:mm", { locale: ptBR });
                         }
-                    } catch (e) {
-                        fmtDate = '';
-                    }
+                    } catch (e) { fmtDate = ''; }
                 }
 
-                if (action === 'INSERT') return `Nova aula agendada para ${fmtDate}`;
+                if (action === 'INSERT') return `Aula agendada para ${fmtDate}`;
                 if (action === 'UPDATE') {
-                    const status = newData.status;
-                    if (status === 'cancelled') return `Aula cancelada ${fmtDate ? `(${fmtDate})` : ''}`;
-                    if (status === 'rescheduled') return `Aula reagendada`;
-                    if (status === 'completed') return `Aula finalizada`;
-                    return `Atualização em agendamento de aula`;
+                    const oldStatus = oldData.status;
+                    const newStatus = newData.status;
+
+                    if (newStatus && newStatus !== oldStatus) {
+                        const statusMap = {
+                            'scheduled': 'Agendada',
+                            'rescheduled': 'Reagendada',
+                            'completed': 'Realizada',
+                            'cancelled': 'Cancelada',
+                            'no_show': 'Falta'
+                        };
+                        return `Status da aula de ${fmtDate} alterado para: ${statusMap[newStatus] || newStatus}`;
+                    }
+                    if (newData.meeting_link && newData.meeting_link !== oldData.meeting_link) {
+                        return `Link da reunião atualizado para a aula de ${fmtDate}`;
+                    }
+                    return `Atualização na aula de ${fmtDate}`;
                 }
-                if (action === 'DELETE') return `Agendamento de aula excluído`;
+                if (action === 'DELETE') return `Aula de ${fmtDate} excluída`;
             }
 
             // 3. Perfis (profiles)
             if (table === 'profiles') {
                 const name = newData.full_name || oldData.full_name || 'Usuário';
                 if (action === 'INSERT') return `Novo usuário cadastrado: ${name}`;
-                if (action === 'UPDATE') return `Dados de perfil atualizados para ${name}`;
+                if (action === 'UPDATE') {
+                    // Tentar identificar o que mudou
+                    if (newData.full_name !== oldData.full_name) return `Nome alterado de "${oldData.full_name}" para "${newData.full_name}"`;
+                    if (newData.role !== oldData.role) return `Função de ${name} alterada para ${newData.role}`;
+                    return `Dados de ${name} atualizados`;
+                }
                 if (action === 'DELETE') return `Usuário removido: ${name}`;
             }
 
-            // 4. Solicitações (solicitudes_clase)
-            if (table === 'solicitudes_clase') {
-                if (action === 'INSERT') return `Nova solicitação de aula recebida`;
-                if (action === 'UPDATE') return `Status de solicitação atualizado`;
-            }
-
-            // 5. Avisos (professor_announcements)
+            // 4. Avisos (professor_announcements)
             if (table === 'professor_announcements') {
-                if (action === 'INSERT') return `Novo comunicado publicado`;
-                if (action === 'UPDATE') return `Comunicado alterado/arquivado`;
-                if (action === 'DELETE') return `Comunicado removido`;
+                const title = newData.title || oldData.title || 'Comunicado';
+                if (action === 'INSERT') return `Novo comunicado: "${title}"`;
+                if (action === 'UPDATE') return `Comunicado "${title}" atualizado`;
+                if (action === 'DELETE') return `Comunicado "${title}" removido`;
             }
 
-            // Fallback genérico melhorado
+            // Fallback genérico: tenta listar campos alterados para UPDATE
+            if (action === 'UPDATE') {
+                const changedKeys = Object.keys(newData).filter(k =>
+                    newData[k] !== oldData[k] && !['id', 'updated_at', 'created_at'].includes(k)
+                );
+                if (changedKeys.length > 0) {
+                    const fields = changedKeys.slice(0, 2).map(translateField).join(', ');
+                    return `Alteração em ${translateTableName(table)}: ${fields}${changedKeys.length > 2 ? '...' : ''}`;
+                }
+            }
+
             const actionName = action === 'INSERT' ? 'Inclusão em' :
                 action === 'UPDATE' ? 'Alteração em' :
                     action === 'DELETE' ? 'Exclusão em' : 'Registro em';
 
             return `${actionName} ${translateTableName(table)}`;
         } catch (err) {
-            // Em caso de qualquer erro de formatação, retorna o histórico original ou mensagem genérica
             return log.history || 'Registro de auditoria';
         }
     };
