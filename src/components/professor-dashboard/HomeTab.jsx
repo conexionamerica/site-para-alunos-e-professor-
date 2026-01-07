@@ -505,8 +505,11 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         const profId = slot.professor_id;
         const targetTime = preferredSchedule[slot.day_of_week]; // "HH:mm"
 
-        // VERIFICAÇÃO DE EXATIDÃO (SEM TOLERÂNCIA - PEDIDO DO USUÁRIO)
-        if (slot.start_time.substring(0, 5) === targetTime) {
+        // VERIFICAÇÃO DE EXATIDÃO ROBUSTA (Comparação numérica de horas/minutos)
+        const [slotH, slotM] = slot.start_time.split(':').map(Number);
+        const [targetH, targetM] = targetTime.split(':').map(Number);
+
+        if (slotH === targetH && slotM === targetM) {
           // VERIFICAÇÃO DE CONFLITO COM AGENDA REAL
           // Calcula a data específica desse slot na próxima semana para checar colisão
           const slotDayIndex = slot.day_of_week;
