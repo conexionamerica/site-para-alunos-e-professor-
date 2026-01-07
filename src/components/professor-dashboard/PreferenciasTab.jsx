@@ -11,9 +11,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronsUpDown, Check, History, Loader2, Calendar as CalendarIcon, Lock } from "lucide-react";
+import { ChevronsUpDown, Check, History, Loader2, Calendar as CalendarIcon, Lock, AlertTriangle, Info } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
-import { format, parseISO, addMonths, parse, getDay, add } from 'date-fns';
+import { format, parseISO, addMonths, parse, getDay, add, differenceInDays, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getBrazilDate } from '@/lib/dateUtils';
 import { useFormPersistence } from '@/hooks/useFormPersistence';
@@ -347,6 +348,44 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
   // A lógica do agendamento automático será ativada se for o pacote 'Personalizado'
   const isAutomaticScheduling = isCustomPackageSelected;
 
+  // === CÁLCULO DE AULAS POSSÍVEIS NO PERÍODO ===
+  // Calcula quantas aulas podem ser criadas com base nos dias selecionados e no intervalo de datas
+  const scheduleValidation = useMemo(() => {
+    if (!isAutomaticScheduling || days.length === 0) {
+      return { possibleClasses: 0, requestedClasses: 0, isValid: true, daysInPeriod: 0 };
+    }
+
+    const requestedClasses = parseInt(totalClasses, 10) || 0;
+    const startDate = pckStartDate instanceof Date ? pckStartDate : new Date(pckStartDate);
+    const endDateVal = pckEndDate instanceof Date ? pckEndDate : new Date(pckEndDate);
+
+    // Validar datas
+    if (isNaN(startDate.getTime()) || isNaN(endDateVal.getTime()) || startDate > endDateVal) {
+      return { possibleClasses: 0, requestedClasses, isValid: false, error: 'Datas inválidas', daysInPeriod: 0 };
+    }
+
+    // Contar quantas ocorrências de cada dia selecionado existem no período
+    let possibleClasses = 0;
+    const allDaysInPeriod = eachDayOfInterval({ start: startDate, end: endDateVal });
+
+    allDaysInPeriod.forEach(date => {
+      const dayOfWeek = getDay(date);
+      if (days.includes(dayOfWeek)) {
+        possibleClasses++;
+      }
+    });
+
+    const daysInPeriod = differenceInDays(endDateVal, startDate) + 1;
+
+    return {
+      possibleClasses,
+      requestedClasses,
+      daysInPeriod,
+      isValid: requestedClasses <= possibleClasses,
+      exceeds: requestedClasses > possibleClasses,
+      shortage: requestedClasses - possibleClasses
+    };
+  }, [isAutomaticScheduling, days, totalClasses, pckStartDate, pckEndDate]);
 
 
   // CORREÇÃO: Usa 'classSlots' extraído do dashboardData e FILTRA pelo professor efetivo
@@ -743,6 +782,16 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
           variant: 'destructive',
           title: 'Campos obrigatórios',
           description: 'Preencha Nome do Pacote, Aulas, Preço e selecione os dias/horários.'
+        });
+        return;
+      }
+
+      // NOVA VALIDAÇÃO: Verificar se o período comporta o número de aulas
+      if (scheduleValidation.exceeds) {
+        toast({
+          variant: 'destructive',
+          title: 'Período insuficiente',
+          description: `O período selecionado comporta apenas ${scheduleValidation.possibleClasses} aulas, mas você solicitou ${scheduleValidation.requestedClasses}. Aumente o período ou reduza o número de aulas.`
         });
         return;
       }
@@ -1326,6 +1375,39 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
                     )}
 
                     {days.length === 0 && <p className="text-red-500 text-sm">Selecione pelo menos um dia para agendar as aulas.</p>}
+
+                    {/* === ALERTA DE VALIDAÇÃO DE PERÍODO === */}
+                    {days.length > 0 && totalClasses && (
+                      <div className="mt-4">
+                        {scheduleValidation.exceeds ? (
+                          <Alert variant="destructive" className="border-red-300 bg-red-50">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle className="text-red-800">Período Insuficiente</AlertTitle>
+                            <AlertDescription className="text-red-700">
+                              <p>
+                                O período selecionado (<strong>{scheduleValidation.daysInPeriod} dias</strong>) comporta apenas <strong>{scheduleValidation.possibleClasses} aulas</strong> nos dias escolhidos.
+                              </p>
+                              <p className="mt-1">
+                                Você solicitou <strong>{scheduleValidation.requestedClasses} aulas</strong>.
+                                Faltam <strong>{scheduleValidation.shortage} aulas</strong>.
+                              </p>
+                              <p className="mt-2 text-sm font-medium">
+                                💡 Aumente a data de validade ou reduza o número de aulas.
+                              </p>
+                            </AlertDescription>
+                          </Alert>
+                        ) : scheduleValidation.possibleClasses > 0 && (
+                          <Alert className="border-green-300 bg-green-50">
+                            <Info className="h-4 w-4 text-green-600" />
+                            <AlertTitle className="text-green-800">Validação OK</AlertTitle>
+                            <AlertDescription className="text-green-700">
+                              O período de <strong>{scheduleValidation.daysInPeriod} dias</strong> comporta até <strong>{scheduleValidation.possibleClasses} aulas</strong> nos dias selecionados.
+                              Serão agendadas <strong>{scheduleValidation.requestedClasses} aulas</strong>.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ) : null}
@@ -1333,7 +1415,11 @@ const PreferenciasTab = ({ dashboardData, hideForm = false, hideTable = false })
 
               <Textarea placeholder="Observação (motivo da inclusão)" value={observation} onChange={(e) => setObservation(e.target.value)} />
 
-              <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700" disabled={isSubmittingPackage}>
+              <Button
+                type="submit"
+                className="w-full bg-sky-600 hover:bg-sky-700"
+                disabled={isSubmittingPackage || (isAutomaticScheduling && scheduleValidation.exceeds)}
+              >
                 {isSubmittingPackage ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Incluindo...</> : 'Incluir Pacote'}
               </Button>
             </form>
