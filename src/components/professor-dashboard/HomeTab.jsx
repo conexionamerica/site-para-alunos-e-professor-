@@ -517,21 +517,30 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           let daysUntilSlot = slotDayIndex - currentDayIndex;
           if (daysUntilSlot < 0) daysUntilSlot += 7;
 
-          // Data exata do slot nesta semana
+          // Data exata do slot nesta semana (para referência, mas validação será por Dia da Semana + Minutos)
           const slotDate = add(today, { days: daysUntilSlot });
-          // Ajustar hora
-          const [h, m] = slot.start_time.split(':').map(Number);
-          const slotDateTime = new Date(slotDate.getFullYear(), slotDate.getMonth(), slotDate.getDate(), h, m, 0);
 
-          // Verificar se existe appointment colidindo
+          // Verificar se existe appointment colidindo (Lógica Simplificada: Dia da Semana + Intervalo de Minutos)
+          // Isso evita erros de timezone/data específica ao criar objetos Date manuais
           const hasConflict = busyAppointments.some(apt => {
             if (apt.professor_id !== profId) return false;
-            const aptStart = parseISO(apt.class_datetime);
-            const aptEnd = add(aptStart, { minutes: apt.duration_minutes || 30 });
-            const slotEnd = add(slotDateTime, { minutes: 30 }); // Assumindo slot de 30min para verificação básica
 
-            // Interseção de horários
-            return (slotDateTime < aptEnd && slotEnd > aptStart);
+            const aptDate = parseISO(apt.class_datetime);
+            const aptDayIndex = getDay(aptDate); // 0-6
+
+            // Se não é no mesmo dia da semana, não há conflito
+            if (aptDayIndex !== slotDayIndex) return false;
+
+            // Converter tudo para minutos desde o início do dia
+            const aptStartMinutes = aptDate.getHours() * 60 + aptDate.getMinutes();
+            const aptDuration = apt.duration_minutes || 30;
+            const aptEndMinutes = aptStartMinutes + aptDuration;
+
+            const slotStartMinutes = slotH * 60 + slotM;
+            const slotEndMinutes = slotStartMinutes + 30; // Assumindo 30min slot
+
+            // Interseção de horários simples
+            return (slotStartMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes);
           });
 
           if (!hasConflict) {
