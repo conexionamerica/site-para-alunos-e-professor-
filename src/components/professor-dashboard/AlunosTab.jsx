@@ -220,20 +220,74 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
             .map(([day, schedule]) => `${daysOfWeekFull[day]} às ${schedule.time}`)
             .join('\n');
 
-        if (!window.confirm(
-            `Tem certeza que deseja alterar o horário das aulas de ${student.full_name}?\n\n` +
+        // === PRÉ-CÁLCULO DE AULAS ELEGÍVEIS ===
+        const now = getBrazilDate();
+        const futureThreshold = new Date(now.getTime() + 15 * 60 * 1000);
+
+        const eligibleCount = scheduledAppointments.filter(apt => {
+            const aptDate = parseISO(apt.class_datetime);
+            const isValidStatus = ['scheduled', 'rescheduled'].includes(apt.status);
+            const isFuture = aptDate > futureThreshold;
+            return isValidStatus && isFuture;
+        }).length;
+
+        const skippedPreviewCount = scheduledAppointments.length - eligibleCount;
+
+        if (eligibleCount === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'Nenhuma aula elegível',
+                description: 'Não há aulas agendadas futuras para alterar. Aulas passadas ou com status diferente de "agendada/reagendada" não podem ser modificadas.'
+            });
+            return;
+        }
+
+        const confirmMessage = `Tem certeza que deseja alterar o horário das aulas de ${student.full_name}?\n\n` +
             `Novos horários:\n${scheduleText}\n\n` +
-            `Isso afetará ${scheduledAppointments.length} aulas agendadas.`
-        )) {
+            `📝 ${eligibleCount} aula(s) serão reagendadas.` +
+            (skippedPreviewCount > 0 ? `\n⏸️ ${skippedPreviewCount} aula(s) serão mantidas (passadas ou com outro status).` : '');
+
+        if (!window.confirm(confirmMessage)) {
             return;
         }
 
         setIsSubmitting(true);
 
         try {
-            // 1. Agrupar aulas por semana
+            // === NOVA LÓGICA: Filtrar apenas aulas futuras com status válido ===
+            const now = getBrazilDate();
+
+            // Filtrar aulas que podem ser alteradas:
+            // 1. Status 'scheduled' ou 'rescheduled'
+            // 2. Data/hora FUTURA (após agora + margem de segurança de 15 minutos)
+            const futureThreshold = new Date(now.getTime() + 15 * 60 * 1000); // Agora + 15 min
+
+            const eligibleAppointments = scheduledAppointments.filter(apt => {
+                const aptDate = parseISO(apt.class_datetime);
+                const isValidStatus = ['scheduled', 'rescheduled'].includes(apt.status);
+                const isFuture = aptDate > futureThreshold;
+                return isValidStatus && isFuture;
+            });
+
+            if (eligibleAppointments.length === 0) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Nenhuma aula elegível',
+                    description: 'Não há aulas agendadas futuras para alterar. Aulas passadas ou com status diferente de "agendada/reagendada" não podem ser modificadas.'
+                });
+                setIsSubmitting(false);
+                return;
+            }
+
+            // Log para debug
+            const keptCount = scheduledAppointments.length - eligibleAppointments.length;
+            if (keptCount > 0) {
+                console.log(`${keptCount} aulas serão mantidas (passadas ou com status diferente)`);
+            }
+
+            // 1. Agrupar aulas ELEGÍVEIS por semana
             const appointmentsByWeek = {};
-            scheduledAppointments.forEach(apt => {
+            eligibleAppointments.forEach(apt => {
                 const aptDate = parseISO(apt.class_datetime);
                 const weekKey = format(aptDate, 'yyyy-ww');
                 if (!appointmentsByWeek[weekKey]) {
@@ -270,7 +324,10 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                     const [hours, minutes] = schedule.time.split(':').map(Number);
                     newDate.setHours(hours, minutes, 0, 0);
 
-                    newDates.push(newDate);
+                    // === NOVA VALIDAÇÃO: Só incluir datas futuras ===
+                    if (newDate > futureThreshold) {
+                        newDates.push(newDate);
+                    }
                 });
 
                 // Ordenar las nuevas fechas cronológicamente
@@ -284,7 +341,7 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                             class_datetime: newDates[index].toISOString()
                         });
                     } else {
-                        // Si hay más appointments que días seleccionados, cancelar los extras
+                        // Si hay más appointments que días seleccionados, cancelar os extras
                         updates.push({
                             id: apt.id,
                             status: 'cancelled'
@@ -315,10 +372,13 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
 
             const updatedCount = updates.filter(u => !u.status).length;
             const cancelledCount = updates.filter(u => u.status).length;
+            const skippedCount = scheduledAppointments.length - eligibleAppointments.length;
 
             toast({
                 title: 'Horários atualizados!',
-                description: `${updatedCount} aulas reagendadas${cancelledCount > 0 ? ` e ${cancelledCount} canceladas` : ''}.`
+                description: `${updatedCount} aula(s) reagendada(s)` +
+                    (cancelledCount > 0 ? `, ${cancelledCount} cancelada(s)` : '') +
+                    (skippedCount > 0 ? `. ${skippedCount} aula(s) mantida(s) sem alteração.` : '.')
             });
 
             onUpdate();
