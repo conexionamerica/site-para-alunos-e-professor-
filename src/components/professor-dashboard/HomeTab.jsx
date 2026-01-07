@@ -476,6 +476,9 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
     });
 
     const preferredDays = Object.keys(preferredSchedule).map(Number);
+    // Garantir que temos strings para o filtro .in(...) se necessário
+    const preferredDaysStrings = preferredDays.map(String);
+    const preferredDaysAllTypes = [...new Set([...preferredDays, ...preferredDaysStrings])];
 
     if (preferredDays.length === 0) {
       toast({
@@ -494,7 +497,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         .from('class_slots')
         .select('*, professor:professor_id(id, full_name)')
         .eq('status', 'active')
-        .in('day_of_week', preferredDays);
+        .in('day_of_week', preferredDaysAllTypes);
 
       if (error) throw error;
 
@@ -551,7 +554,10 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
       (allSlots || []).forEach(slot => {
         const profId = slot.professor_id;
-        const targetTime = preferredSchedule[slot.day_of_week]; // "HH:mm"
+        const dayKey = slot.day_of_week;
+        const targetTime = preferredSchedule[dayKey] || preferredSchedule[String(dayKey)];
+
+        if (!targetTime) return; // Segurança contra slots de dias não solicitados
 
         // VERIFICAÇÃO DE EXATIDÃO ROBUSTA (Comparação numérica de horas/minutos)
         const [slotH, slotM] = slot.start_time.split(':').map(Number);
@@ -600,7 +606,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           matchedDaysCount: match.matchedDays.size,
           matchPercentage: Math.round((match.matchedDays.size / match.totalDaysRequested) * 100)
         }))
-        .filter(match => match.matchPercentage === 100) // EXIBIR APENAS PROFESSORES COM 100% DE DISPONIBILIDADE
+        .filter(match => match.matchPercentage > 0) // MOSTRAR TODOS (>0%) PARA EVITAR QUE PROFESSORES FIQUEM "OCULTOS" POR 1 SLOT FALTANTE
         .sort((a, b) => b.matchPercentage - a.matchPercentage);
 
       setMatchedProfessors(matchResults);
