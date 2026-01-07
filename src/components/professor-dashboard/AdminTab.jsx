@@ -29,7 +29,8 @@ const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta",
 const AdminTab = ({ dashboardData }) => {
     const { toast } = useToast();
     const [activeSubTab, setActiveSubTab] = useState('preferencias');
-    const [professorFilter, setProfessorFilter] = useState('all');
+    // REMOVIDO: professorFilter local. Agora usamos o filtro global do dashboardData.
+    // const [professorFilter, setProfessorFilter] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -137,10 +138,13 @@ const AdminTab = ({ dashboardData }) => {
         return matchesSearch && matchesRole;
     });
 
-    // Filter class slots for preferences
-    const filteredClassSlots = professorFilter === 'all'
+    // Use o ID filtrado globalmente (ou 'all' se não houver seleção)
+    const activeFilter = dashboardData?.filteredProfessorId || 'all';
+
+    // Filter class slots for preferences based on GLOBAL filter
+    const filteredClassSlots = activeFilter === 'all'
         ? data.classSlots || []
-        : (data.classSlots || []).filter(slot => slot.professor_id === professorFilter);
+        : (data.classSlots || []).filter(slot => slot.professor_id === activeFilter);
 
     // REMOVIDO: generatePasswordFromNameAndBirthdate não é mais usada
     // const generatePasswordFromNameAndBirthdate = (fullName, birthDate) => {
@@ -555,7 +559,7 @@ const AdminTab = ({ dashboardData }) => {
                         hideTable={true}
                         dashboardData={{
                             ...dashboardData,
-                            professorId: professorFilter // Pode ser 'all'
+                            professorId: activeFilter // Usa o filtro global
                         }}
                     />
 
@@ -564,26 +568,14 @@ const AdminTab = ({ dashboardData }) => {
                             <div className="flex justify-between items-center">
                                 <div>
                                     <CardTitle>Preferências dos Professores</CardTitle>
-                                    <CardDescription>Visualize as preferências de horários de todos os professores</CardDescription>
+                                    <CardDescription>Visualize as preferências de horários do professor selecionado acima (Filtro Global)</CardDescription>
                                 </div>
-                                <Select value={professorFilter} onValueChange={setProfessorFilter}>
-                                    <SelectTrigger className="w-[250px]">
-                                        <SelectValue placeholder="Filtrar por professor" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Todos os professores</SelectItem>
-                                        {professors.map(prof => (
-                                            <SelectItem key={prof.id} value={prof.id}>
-                                                {prof.full_name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                {/* REMOVIDO: Select local. O controle agora é 100% pelo filtro global no topo da página. */}
                             </div>
 
                         </CardHeader>
                         <CardContent>
-                            {professorFilter !== 'all' ? (
+                            {activeFilter !== 'all' ? (
                                 <PreferenciasTab
                                     hideForm={true}
                                     dashboardData={{
@@ -592,13 +584,13 @@ const AdminTab = ({ dashboardData }) => {
                                             ...data,
                                             classSlots: filteredClassSlots
                                         },
-                                        professorId: professorFilter
+                                        professorId: activeFilter
                                     }}
                                 />
                             ) : (
                                 <div className="text-center py-8 text-slate-500">
                                     <Settings className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-                                    <p>Selecione um professor no filtro acima para ver e editar seus horários semanais.</p>
+                                    <p>Selecione um professor no filtro principal (topo da página) para ver e editar seus horários.</p>
                                 </div>
                             )}
                         </CardContent>
