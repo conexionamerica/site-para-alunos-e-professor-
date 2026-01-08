@@ -173,7 +173,15 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         totalSlots: (professorSlots || []).length
                     });
 
-                    // REGRA 1: Se não existe slot → conflito
+                    // === REGRA PRINCIPAL: Se o aluno JÁ OCUPA este horário, ele pode manter ===
+                    // Isso acontece quando ele está apenas mantendo seus horários atuais
+                    if (studentOccupiedSlots.has(slotKey)) {
+                        // O próprio aluno já está neste horário - NÃO é conflito
+                        console.log(`[ConflictCheck] Aluno já ocupa ${slotKey} - ignorando verificação`);
+                        continue;
+                    }
+
+                    // REGRA 1: Se não existe slot → conflito (apenas para NOVOS horários)
                     if (!matchingSlot) {
                         conflicts.push({
                             day: daysOfWeekFull[dayNum],
@@ -184,7 +192,7 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         continue;
                     }
 
-                    // REGRA 2: Se slot está 'inactive' → conflito
+                    // REGRA 2: Se slot está 'inactive' → conflito (apenas para NOVOS horários)
                     if (matchingSlot.status === 'inactive') {
                         conflicts.push({
                             day: daysOfWeekFull[dayNum],
@@ -195,22 +203,16 @@ const ChangeScheduleDialog = ({ student, isOpen, onClose, onUpdate, professorId,
                         continue;
                     }
 
-                    // REGRA 3: Se slot está 'filled', verificar SE o próprio aluno já ocupa esse slot
+                    // REGRA 3: Se slot está 'filled' por OUTRO aluno → conflito
                     if (matchingSlot.status === 'filled') {
-                        // Verificar se É o próprio aluno que ocupa (usando appointments)
-                        if (studentOccupiedSlots.has(slotKey)) {
-                            // Tudo OK - é o próprio aluno, pode manter ou alterar
-                            continue;
-                        } else {
-                            // Ocupado por OUTRO aluno
-                            conflicts.push({
-                                day: daysOfWeekFull[dayNum],
-                                time: schedule.time,
-                                reason: 'slot_filled_other',
-                                existingStudent: 'Ocupado por outro aluno'
-                            });
-                            continue;
-                        }
+                        // Como já verificamos que NÃO é o próprio aluno (acima), é outro aluno
+                        conflicts.push({
+                            day: daysOfWeekFull[dayNum],
+                            time: schedule.time,
+                            reason: 'slot_filled_other',
+                            existingStudent: 'Ocupado por outro aluno'
+                        });
+                        continue;
                     }
 
                     // Se chegou aqui, slot está 'active' - verificar appointments de outros alunos
