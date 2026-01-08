@@ -561,8 +561,11 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         const [slotH, slotM] = slot.start_time.split(':').map(Number);
         const [targetH, targetM] = targetTime.split(':').map(Number);
 
-        if (slotH === targetH && slotM === targetM) {
-          const slotStart = slotH * 60 + slotM;
+        const slotTotalMinutes = slotH * 60 + slotM;
+        const targetTotalMinutes = targetH * 60 + targetM;
+
+        if (slotTotalMinutes === targetTotalMinutes) {
+          const slotStart = slotTotalMinutes;
           const slotEnd = slotStart + 30; // Janela base para match
 
           // Verificação de conflito real baseada em minutos do dia (Brasil)
