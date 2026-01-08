@@ -264,14 +264,18 @@ const ProfessorDashboardPage = () => {
         navigate('/professor-login');
     };
 
-    const fetchData = useCallback(async () => {
+    // Función para cargar datos - acepta parámetro `silent` para actualizaciones sin mostrar indicador de carga
+    const fetchData = useCallback(async (silent = false) => {
         const currentUserId = user?.id;
         if (!currentUserId) {
-            setIsLoading(true);
+            if (!silent) setIsLoading(true);
             return;
         }
 
-        setIsLoading(true);
+        // Solo mostrar indicador de carga en la carga inicial, no en actualizaciones silenciosas
+        if (!silent) {
+            setIsLoading(true);
+        }
         setHasError(false);
         try {
             // Primero verificar si el usuario es superadmin
@@ -285,7 +289,7 @@ const ProfessorDashboardPage = () => {
 
             const data = await fetchProfessorDashboardData(currentUserId, isSuperadmin);
 
-            setDashboardData({
+            setDashboardData(prevData => ({
                 data: {
                     ...data,
                     // Garantir que as permissões estejam acessíveis dentro do objeto data
@@ -298,20 +302,25 @@ const ProfessorDashboardPage = () => {
                 isSuperadmin: data.isSuperadmin,
                 meeting_link: data.meeting_link,
                 loading: false,
-                onUpdate: fetchData
-            });
+                // Usar la función silentRefresh para actualizaciones de componentes hijos
+                onUpdate: () => fetchData(true)
+            }));
         } catch (error) {
             console.error("Erro ao carregar dados do dashboard:", error);
             const errorMessage = error.message || 'Erro desconhecido ao conectar ao Supabase.';
-            setHasError(true);
-            setDashboardData(null);
+            if (!silent) {
+                setHasError(true);
+                setDashboardData(null);
+            }
             toast({
                 variant: 'destructive',
                 title: 'Erro de Conexão',
                 description: `Não foi possível carregar os dados do dashboard. Detalhes: ${errorMessage}`
             });
         } finally {
-            setIsLoading(false);
+            if (!silent) {
+                setIsLoading(false);
+            }
         }
     }, [user?.id, toast]);
 
