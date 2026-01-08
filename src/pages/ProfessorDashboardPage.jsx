@@ -361,6 +361,7 @@ const ProfessorDashboardPage = () => {
                 userRole: data.userRole,
                 isSuperadmin: data.isSuperadmin,
                 meeting_link: data.meeting_link,
+                avatar_url: data.avatar_url,
                 loading: false,
                 // Usar la función silentRefresh para actualizaciones de componentes hijos
                 onUpdate: () => fetchData(true)
