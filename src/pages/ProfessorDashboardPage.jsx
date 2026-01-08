@@ -650,11 +650,45 @@ const ProfessorDashboardPage = () => {
     // FIX LÓGICO DE RENDERIZADO
     if (isLoading || (!dashboardData && !hasError)) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-background">
+            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50">
                 <div className="flex flex-col items-center">
-                    <Loader2 className="h-12 w-12 text-sky-500 animate-spin" />
-                    <p className="mt-4 text-xl font-semibold text-slate-700">Carregando Painel do Professor...</p>
+                    {/* Logo con efecto shimmer */}
+                    <div className="relative overflow-hidden mb-8">
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-5xl sm:text-6xl font-bold text-sky-500 tracking-tight">
+                                Conexión
+                            </span>
+                            <span className="text-5xl sm:text-6xl font-bold text-slate-800 tracking-tight">
+                                América
+                            </span>
+                        </div>
+                        {/* Efecto de luz que pasa (shimmer) */}
+                        <div
+                            className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
+                            style={{
+                                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent)',
+                            }}
+                        />
+                    </div>
+
+                    {/* Indicador de carga elegante */}
+                    <div className="flex items-center gap-3 text-slate-500">
+                        <div className="flex gap-1">
+                            <span className="w-2 h-2 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                            <span className="w-2 h-2 rounded-full bg-sky-500 animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                            <span className="w-2 h-2 rounded-full bg-sky-600 animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                        </div>
+                        <span className="text-sm font-medium">Preparando seu painel...</span>
+                    </div>
                 </div>
+
+                {/* CSS para la animación shimmer */}
+                <style>{`
+                    @keyframes shimmer {
+                        0% { transform: translateX(-100%); }
+                        100% { transform: translateX(200%); }
+                    }
+                `}</style>
             </div>
         );
     }
