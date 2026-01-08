@@ -490,9 +490,8 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
     setIsSearchingMatches(true);
 
     try {
-      // Para cada dia/horário que o aluno precisa, vamos buscar os professores que têm esse slot ATIVO
+      // Para cada dia/horário que o aluno precisa, vamos buscar os professores que têm esse slot ATIVO e LIVRE
       const professorMatches = {};
-      const allProfessors = new Set();
 
       // Buscar TODOS os professores ativos
       const { data: professors } = await supabase
@@ -501,13 +500,43 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         .eq('role', 'professor')
         .eq('is_active', true);
 
-      (professors || []).forEach(p => allProfessors.add(p.id));
+      const professorIds = (professors || []).map(p => p.id);
 
-      // Para cada dia/horário solicitado, verificar quais professores têm o slot ATIVO
+      // Buscar TODOS os appointments futuros de TODOS os professores (para verificar ocupação)
+      const today = getBrazilDate();
+      const { data: allAppointments } = await supabase
+        .from('appointments')
+        .select('professor_id, student_id, class_datetime, duration_minutes')
+        .in('professor_id', professorIds)
+        .in('status', ['scheduled', 'rescheduled'])
+        .gte('class_datetime', today.toISOString());
+
+      // Criar mapa de horários ocupados: { "profId-dayOfWeek-HH:mm": studentId }
+      const occupiedSlots = {};
+      (allAppointments || []).forEach(apt => {
+        const d = new Date(apt.class_datetime);
+        const f = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Sao_Paulo',
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          weekday: 'long'
+        });
+        const pts = f.formatToParts(d);
+        const getV = (t) => pts.find(p => p.type === t)?.value;
+        const wMap = { 'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6 };
+        const dayOfWeek = wMap[getV('weekday').toLowerCase()];
+        const timeStr = `${getV('hour')}:${getV('minute')}`;
+        const key = `${apt.professor_id}-${dayOfWeek}-${timeStr}`;
+        occupiedSlots[key] = apt.student_id;
+      });
+
+      // Para cada dia/horário solicitado, verificar quais professores têm o slot ATIVO E LIVRE
       for (const [dayStr, time] of Object.entries(preferredSchedule)) {
         const day = Number(dayStr);
         const [h, m] = time.split(':').map(Number);
         const timeFormatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+        const timeShort = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 
         // Buscar slots ATIVOS para este dia/hora específico
         const { data: activeSlots } = await supabase
@@ -517,9 +546,20 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           .eq('start_time', timeFormatted)
           .eq('status', 'active');
 
-        // Marcar quais professores têm este slot disponível
+        // Marcar quais professores têm este slot disponível E LIVRE
         (activeSlots || []).forEach(slot => {
           const profId = slot.professor_id;
+          const occupiedKey = `${profId}-${day}-${timeShort}`;
+
+          // Verificar se o slot está ocupado por OUTRO aluno
+          const occupiedBy = occupiedSlots[occupiedKey];
+          if (occupiedBy && occupiedBy !== selectedStudentForVinculacao?.id) {
+            // Slot ocupado por outro aluno - NÃO é disponível
+            console.log(`[Match] Slot ${occupiedKey} ocupado por outro aluno, ignorando`);
+            return;
+          }
+
+          // Slot está ATIVO e LIVRE (ou ocupado pelo próprio aluno que estamos vinculando)
           if (!professorMatches[profId]) {
             professorMatches[profId] = {
               professor: slot.professor,
@@ -550,7 +590,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         toast({
           variant: 'destructive',
           title: 'Nenhum professor disponível',
-          description: `Nenhum professor possui os horários solicitados com status ATIVO (azul).`
+          description: `Nenhum professor possui os horários solicitados com status ATIVO (azul) e sem aulas agendadas.`
         });
       }
 
