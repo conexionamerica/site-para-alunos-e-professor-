@@ -682,6 +682,71 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
     setIsVinculando(true);
 
     try {
+      // === VERIFICAÇÃO CRÍTICA DE CONFLITOS ===
+      // Buscar TODOS os appointments do professor para verificar conflitos ANTES de vincular
+      const today = getBrazilDate();
+      const { data: existingApts } = await supabase
+        .from('appointments')
+        .select('class_datetime, student_id, student:profiles!student_id(full_name)')
+        .eq('professor_id', selectedProfessorId)
+        .in('status', ['scheduled', 'rescheduled'])
+        .gte('class_datetime', today.toISOString());
+
+      // Criar mapa de horários ocupados
+      const occupiedSlots = {};
+      (existingApts || []).forEach(apt => {
+        const d = new Date(apt.class_datetime);
+        const f = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Sao_Paulo',
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          weekday: 'long'
+        });
+        const pts = f.formatToParts(d);
+        const getV = (t) => pts.find(p => p.type === t)?.value;
+        const wMap = { 'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6 };
+        const dayOfWeek = wMap[getV('weekday').toLowerCase()];
+        const timeStr = `${getV('hour')}:${getV('minute')}`;
+        const key = `${dayOfWeek}-${timeStr}`;
+        occupiedSlots[key] = {
+          studentId: apt.student_id,
+          studentName: apt.student?.full_name || 'Outro aluno'
+        };
+      });
+
+      // Verificar se algum dos horários solicitados está ocupado por OUTRO aluno
+      const conflicts = [];
+      const daysOfWeekNames = { 0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado' };
+
+      for (const day of studentPreferences.days) {
+        const time = studentPreferences.time;
+        const key = `${day}-${time}`;
+        const occupied = occupiedSlots[key];
+
+        if (occupied && occupied.studentId !== selectedStudentForVinculacao.id) {
+          conflicts.push({
+            day: daysOfWeekNames[day],
+            time: time,
+            occupiedBy: occupied.studentName
+          });
+        }
+      }
+
+      if (conflicts.length > 0) {
+        // BLOQUEAR vinculação - há conflitos!
+        const conflictMsg = conflicts.map(c => `${c.day} às ${c.time} (ocupado por ${c.occupiedBy})`).join(', ');
+        toast({
+          variant: 'destructive',
+          title: 'Conflito de Horário!',
+          description: `Não é possível vincular. Os seguintes horários já estão ocupados: ${conflictMsg}`
+        });
+        setIsVinculando(false);
+        return;
+      }
+
+      // === FIM DA VERIFICAÇÃO DE CONFLITOS ===
+
       // Buscar dados do professor
       const selectedProf = professors.find(p => p.id === selectedProfessorId);
       const oldProfessorId = selectedStudentForVinculacao.assigned_professor_id;
