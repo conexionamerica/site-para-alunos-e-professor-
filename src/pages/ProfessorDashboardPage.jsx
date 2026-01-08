@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History, Megaphone, ExternalLink } from 'lucide-react';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History, Megaphone, ExternalLink, Camera, Upload } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import HomeTab from '@/components/professor-dashboard/HomeTab';
@@ -34,7 +34,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
     // Buscamos primeiro os campos garantidos
     const { data: userProfile, error: profProfileError } = await supabase
         .from('profiles')
-        .select('full_name, role, can_manage_classes, can_manage_students')
+        .select('full_name, role, can_manage_classes, can_manage_students, avatar_url')
         .eq('id', professorId)
         .maybeSingle();
 
@@ -190,7 +190,8 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         roleSettings: roleSettings || [],
         can_manage_classes,
         can_manage_students,
-        meeting_link: meetingLinkData
+        meeting_link: meetingLinkData,
+        avatar_url: userProfile?.avatar_url || null
     };
 };
 
@@ -219,33 +220,91 @@ const ProfessorDashboardPage = () => {
     const [showProfileSettings, setShowProfileSettings] = useState(false);
     const [meetingLink, setMeetingLink] = useState('');
     const [isSavingSettings, setIsSavingSettings] = useState(false);
+    const [avatarUrl, setAvatarUrl] = useState(null);
+    const [avatarFile, setAvatarFile] = useState(null);
+    const [avatarPreview, setAvatarPreview] = useState(null);
+    const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
     useEffect(() => {
         if (dashboardData?.meeting_link) {
             setMeetingLink(dashboardData.meeting_link);
         }
-    }, [dashboardData?.meeting_link]);
+        if (dashboardData?.avatar_url) {
+            setAvatarUrl(dashboardData.avatar_url);
+        }
+    }, [dashboardData?.meeting_link, dashboardData?.avatar_url]);
+
+    // Handler para seleccionar archivo de avatar
+    const handleAvatarChange = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                toast({
+                    title: "Arquivo muito grande",
+                    description: "O arquivo deve ter no máximo 2MB.",
+                    variant: "destructive"
+                });
+                return;
+            }
+            setAvatarFile(file);
+            const previewUrl = URL.createObjectURL(file);
+            setAvatarPreview(previewUrl);
+        }
+    };
 
     const handleSaveProfileSettings = async () => {
         if (!user?.id) return;
         setIsSavingSettings(true);
         try {
+            let newAvatarUrl = avatarUrl;
+
+            // Si hay un nuevo archivo de avatar, subirlo primero
+            if (avatarFile) {
+                setIsUploadingAvatar(true);
+                const fileExt = avatarFile.name.split('.').pop();
+                const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+                const filePath = `avatars/${fileName}`;
+
+                // Subir a Supabase Storage
+                const { error: uploadError } = await supabase.storage
+                    .from('avatars')
+                    .upload(filePath, avatarFile, { upsert: true });
+
+                if (uploadError) throw uploadError;
+
+                // Obtener URL pública
+                const { data: urlData } = supabase.storage
+                    .from('avatars')
+                    .getPublicUrl(filePath);
+
+                newAvatarUrl = urlData.publicUrl;
+                setIsUploadingAvatar(false);
+            }
+
+            // Actualizar perfil con meeting_link y avatar_url
             const { error } = await supabase
                 .from('profiles')
-                .update({ meeting_link: meetingLink })
+                .update({
+                    meeting_link: meetingLink,
+                    avatar_url: newAvatarUrl
+                })
                 .eq('id', user.id);
 
             if (error) throw error;
 
             toast({
                 title: "Configurações salvas",
-                description: "Seu link de reunião foi atualizado com sucesso.",
+                description: "Suas configurações foram atualizadas com sucesso.",
             });
             setShowProfileSettings(false);
+            setAvatarFile(null);
+            setAvatarPreview(null);
+            setAvatarUrl(newAvatarUrl);
             // Atualizar dados localmente
             setDashboardData(prev => ({
                 ...prev,
-                meeting_link: meetingLink
+                meeting_link: meetingLink,
+                avatar_url: newAvatarUrl
             }));
         } catch (error) {
             console.error('Erro ao salvar configurações:', error);
@@ -256,6 +315,7 @@ const ProfessorDashboardPage = () => {
             });
         } finally {
             setIsSavingSettings(false);
+            setIsUploadingAvatar(false);
         }
     };
 
@@ -736,10 +796,18 @@ const ProfessorDashboardPage = () => {
                                             <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p>
                                             <p className="text-xs leading-none text-muted-foreground">{user?.email || 'email@escola.com'}</p>
                                         </div>
-                                        {/* Avatar Placeholder */}
-                                        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-lg font-bold text-sky-600">
-                                            {(user?.email?.[0] || 'P').toUpperCase()}
-                                        </div>
+                                        {/* Avatar - Muestra foto de perfil o inicial */}
+                                        {avatarUrl ? (
+                                            <img
+                                                src={avatarUrl}
+                                                alt="Avatar"
+                                                className="h-8 w-8 rounded-full object-cover border-2 border-sky-200"
+                                            />
+                                        ) : (
+                                            <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-lg font-bold text-sky-600">
+                                                {(user?.email?.[0] || 'P').toUpperCase()}
+                                            </div>
+                                        )}
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="w-56" align="end" forceMount>
@@ -897,7 +965,55 @@ const ProfessorDashboardPage = () => {
                                 Personalize suas informações. O link de aula será compartilhado com seus alunos.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="grid gap-4 py-4">
+                        <div className="grid gap-6 py-4">
+                            {/* Sección de Foto de Perfil */}
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium leading-none">
+                                    Foto de Perfil
+                                </label>
+                                <div className="flex items-center gap-4">
+                                    {/* Preview del avatar */}
+                                    <div className="relative">
+                                        {avatarPreview || avatarUrl ? (
+                                            <img
+                                                src={avatarPreview || avatarUrl}
+                                                alt="Preview"
+                                                className="h-20 w-20 rounded-full object-cover border-2 border-sky-200"
+                                            />
+                                        ) : (
+                                            <div className="h-20 w-20 rounded-full bg-slate-100 flex items-center justify-center text-3xl font-bold text-sky-600 border-2 border-dashed border-slate-300">
+                                                {(user?.email?.[0] || 'P').toUpperCase()}
+                                            </div>
+                                        )}
+                                        {isUploadingAvatar && (
+                                            <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                                                <Loader2 className="h-6 w-6 text-white animate-spin" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    {/* Botón de subir foto */}
+                                    <div className="flex flex-col gap-2">
+                                        <label htmlFor="avatar-upload" className="cursor-pointer">
+                                            <div className="flex items-center gap-2 px-4 py-2 bg-sky-50 text-sky-700 rounded-md border border-sky-200 hover:bg-sky-100 transition-colors">
+                                                <Camera className="h-4 w-4" />
+                                                <span className="text-sm font-medium">Escolher foto</span>
+                                            </div>
+                                            <input
+                                                id="avatar-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleAvatarChange}
+                                                className="hidden"
+                                            />
+                                        </label>
+                                        <p className="text-[10px] text-slate-500">
+                                            JPG, PNG ou GIF. Máximo 2MB.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Sección de Link de Reunión */}
                             <div className="grid gap-2">
                                 <label htmlFor="meeting_link" className="text-sm font-medium leading-none">
                                     Link do Google Meet / Zoom
