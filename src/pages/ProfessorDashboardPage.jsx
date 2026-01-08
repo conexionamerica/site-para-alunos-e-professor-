@@ -792,8 +792,8 @@ const ProfessorDashboardPage = () => {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     {/* Trigger com nome e e-mail no desktop */}
-                                    <Button variant="ghost" className="relative h-8 w-auto pr-3 rounded-full text-slate-800 hover:bg-slate-100">
-                                        <div className="flex flex-col items-end mr-2">
+                                    <Button variant="ghost" className="relative h-10 w-auto pr-3 rounded-full text-slate-800 hover:bg-slate-100">
+                                        <div className="flex flex-col items-end mr-3">
                                             <p className="text-sm font-medium leading-none">{dashboardData.professorName || 'Professor'}</p>
                                             <p className="text-xs leading-none text-muted-foreground">{user?.email || 'email@escola.com'}</p>
                                         </div>
@@ -802,10 +802,10 @@ const ProfessorDashboardPage = () => {
                                             <img
                                                 src={avatarUrl}
                                                 alt="Avatar"
-                                                className="h-8 w-8 rounded-full object-cover border-2 border-sky-200"
+                                                className="h-10 w-10 rounded-full object-cover border-2 border-sky-200 shadow-sm"
                                             />
                                         ) : (
-                                            <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-lg font-bold text-sky-600">
+                                            <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center text-xl font-bold text-sky-600 shadow-sm">
                                                 {(user?.email?.[0] || 'P').toUpperCase()}
                                             </div>
                                         )}
