@@ -464,14 +464,13 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   const handleSearchCompatibleProfessors = async () => {
     let preferredSchedule = {};
 
-    // Usamos prioritariamente os dias selecionados no Step 1 do modal
+    // Build the exact requested timeline for the student
     studentPreferences.days.forEach(d => {
-      // Suporte a chaves vindo do JSONB (string) ou do estado (number)
       const sched = selectedStudentForVinculacao?.preferred_schedule;
-      if (sched && (sched[d] || sched[String(d)])) {
-        preferredSchedule[d] = sched[d] || sched[String(d)];
-      } else {
-        preferredSchedule[d] = studentPreferences.time;
+      // If student has a specific time for this day, use it. Otherwise use the modal's general time.
+      const timeForDay = (sched && (sched[d] || sched[String(d)])) || studentPreferences.time;
+      if (timeForDay) {
+        preferredSchedule[d] = timeForDay;
       }
     });
 
@@ -586,10 +585,11 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                 professor: slot.professor,
                 matchedDays: new Set(),
                 matchedSlots: [],
-                totalDaysRequested: preferredDays.length // Denominador fixo: dias que o ALUNO quer
+                totalDaysRequested: preferredDays.length // ALWAYS divide by what the student NEEDS
               };
             }
-            // Só adiciona se ainda não tiver adicionado este dia
+
+            // Increment weight if this specific slot matches day AND time required for that day
             const dayNum = Number(slot.day_of_week);
             if (!professorMatches[profId].matchedDays.has(dayNum)) {
               professorMatches[profId].matchedDays.add(dayNum);
