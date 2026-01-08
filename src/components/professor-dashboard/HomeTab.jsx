@@ -476,9 +476,8 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
     });
 
     const preferredDays = Object.keys(preferredSchedule).map(Number);
-    // Garantir que temos strings para o filtro .in(...) se necessário
-    const preferredDaysStrings = preferredDays.map(String);
-    const preferredDaysAllTypes = [...new Set([...preferredDays, ...preferredDaysStrings])];
+    // Garantizar que tratamos os dias como números para a comparação e strings para o filtro Supabase
+    const preferredDaysAllTypes = [...new Set([...preferredDays, ...preferredDays.map(String)])];
 
     if (preferredDays.length === 0) {
       toast({
@@ -554,8 +553,8 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
       (allSlots || []).forEach(slot => {
         const profId = slot.professor_id;
-        const dayKey = slot.day_of_week;
-        const targetTime = preferredSchedule[dayKey] || preferredSchedule[String(dayKey)];
+        const dayKey = Number(slot.day_of_week); // Garantir número
+        const targetTime = preferredSchedule[dayKey];
 
         if (!targetTime) return; // Segurança contra slots de dias não solicitados
 
@@ -587,12 +586,13 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                 professor: slot.professor,
                 matchedDays: new Set(),
                 matchedSlots: [],
-                totalDaysRequested: preferredDays.length
+                totalDaysRequested: preferredDays.length // Denominador fixo: dias que o ALUNO quer
               };
             }
-            // Só adiciona se ainda não tiver adicionado este dia (para evitar duplicidade se tiver 2 slots próximos)
-            if (!professorMatches[profId].matchedDays.has(slot.day_of_week)) {
-              professorMatches[profId].matchedDays.add(slot.day_of_week);
+            // Só adiciona se ainda não tiver adicionado este dia
+            const dayNum = Number(slot.day_of_week);
+            if (!professorMatches[profId].matchedDays.has(dayNum)) {
+              professorMatches[profId].matchedDays.add(dayNum);
               professorMatches[profId].matchedSlots.push(slot);
             }
           }
