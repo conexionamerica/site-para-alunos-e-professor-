@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Loader2, Star, Calendar, Clock, RotateCcw, UserX, Calendar as CalendarIcon, Filter } from 'lucide-react';
+import { MoreVertical, Loader2, Star, Calendar, Clock, RotateCcw, UserX, Calendar as CalendarIcon, Filter, FileText, Upload, X, ExternalLink, Trash2, History } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -20,6 +20,7 @@ import { Calendar as UICalendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from '@/lib/utils';
 import { useFormPersistence } from '@/hooks/useFormPersistence';
+import { Label } from '@/components/ui/label';
 
 
 const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
@@ -517,6 +518,15 @@ const AulasTab = ({ dashboardData }) => {
     const [selectedProfessorAgenda, setSelectedProfessorAgenda] = useState(null);
     const [loadingAgenda, setLoadingAgenda] = useState(false);
 
+    // Estados para modal de upload de PDF
+    const [showPdfModal, setShowPdfModal] = useState(false);
+    const [selectedAulaForPdf, setSelectedAulaForPdf] = useState(null);
+    const [pdfMaterialName, setPdfMaterialName] = useState('');
+    const [pdfFile, setPdfFile] = useState(null);
+    const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+    const [existingMaterials, setExistingMaterials] = useState([]);
+    const [loadingMaterials, setLoadingMaterials] = useState(false);
+
     // Cargar agenda cuando se selecciona un profesor
     useEffect(() => {
         const loadProfessorAgenda = async () => {
@@ -594,6 +604,155 @@ const AulasTab = ({ dashboardData }) => {
 
     const handleUpdate = () => {
         if (onUpdate) onUpdate(); // Executa o onUpdate se existir
+    };
+
+    // ==========================================
+    // FUNCIONES PARA MODAL DE PDF
+    // ==========================================
+    const handleOpenPdfModal = async (aula) => {
+        setSelectedAulaForPdf(aula);
+        setPdfMaterialName('');
+        setPdfFile(null);
+        setShowPdfModal(true);
+
+        // Cargar materiales existentes para esta aula
+        setLoadingMaterials(true);
+        try {
+            const { data: materials } = await supabase
+                .from('class_materials')
+                .select('*')
+                .eq('appointment_id', aula.id)
+                .order('created_at', { ascending: false });
+
+            setExistingMaterials(materials || []);
+        } catch (error) {
+            console.error('Erro ao carregar materiais:', error);
+        } finally {
+            setLoadingMaterials(false);
+        }
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.type !== 'application/pdf') {
+                toast({
+                    title: 'Arquivo inválido',
+                    description: 'Por favor, selecione um arquivo PDF.',
+                    variant: 'destructive'
+                });
+                return;
+            }
+            setPdfFile(file);
+        }
+    };
+
+    const handleUploadPdf = async () => {
+        if (!pdfMaterialName.trim()) {
+            toast({
+                title: 'Nome obrigatório',
+                description: 'Por favor, insira o nome do material.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        if (!pdfFile) {
+            toast({
+                title: 'Arquivo obrigatório',
+                description: 'Por favor, selecione um arquivo PDF.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        if (!selectedAulaForPdf?.id || !selectedAulaForPdf?.student_id) {
+            toast({
+                title: 'Erro',
+                description: 'Informações da aula não encontradas.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        setIsUploadingPdf(true);
+
+        try {
+            // Obtener el usuario autenticado actual
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            if (!currentUser) {
+                throw new Error('Usuário não autenticado');
+            }
+
+            // Gerar nome único para o arquivo
+            const fileExt = pdfFile.name.split('.').pop();
+            const fileName = `${selectedAulaForPdf.id}_${Date.now()}.${fileExt}`;
+            const filePath = `class-materials/${currentUser.id}/${fileName}`;
+
+            // 1. Upload do arquivo para Supabase Storage
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('class-materials')
+                .upload(filePath, pdfFile, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (uploadError) {
+                throw new Error(`Erro no upload: ${uploadError.message}`);
+            }
+
+            // 2. Obter URL pública do arquivo
+            const { data: urlData } = supabase.storage
+                .from('class-materials')
+                .getPublicUrl(filePath);
+
+            const fileUrl = urlData?.publicUrl;
+
+            // 3. Salvar registro na tabela class_materials
+            const { error: dbError } = await supabase
+                .from('class_materials')
+                .insert({
+                    appointment_id: selectedAulaForPdf.id,
+                    student_id: selectedAulaForPdf.student_id,
+                    professor_id: currentUser.id,
+                    material_name: pdfMaterialName.trim(),
+                    file_name: pdfFile.name,
+                    file_url: fileUrl,
+                    file_size_bytes: pdfFile.size
+                });
+
+            if (dbError) {
+                await supabase.storage.from('class-materials').remove([filePath]);
+                throw new Error(`Erro ao salvar: ${dbError.message}`);
+            }
+
+            toast({
+                title: 'Material enviado!',
+                description: `"${pdfMaterialName}" foi adicionado com sucesso.`,
+            });
+
+            // Recarregar os materiais
+            const { data: updatedMaterials } = await supabase
+                .from('class_materials')
+                .select('*')
+                .eq('appointment_id', selectedAulaForPdf.id)
+                .order('created_at', { ascending: false });
+
+            setExistingMaterials(updatedMaterials || []);
+            setPdfMaterialName('');
+            setPdfFile(null);
+
+            if (onUpdate) onUpdate();
+        } catch (error) {
+            console.error('Erro ao enviar PDF:', error);
+            toast({
+                title: 'Erro ao enviar',
+                description: error.message || 'Ocorreu um erro ao enviar o material.',
+                variant: 'destructive'
+            });
+        } finally {
+            setIsUploadingPdf(false);
+        }
     };
 
     // 1. OBTENÇÃO DO ID DO PACOTE 'PERSONALIZADO'
@@ -1128,6 +1287,11 @@ const AulasTab = ({ dashboardData }) => {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent>
                                                         <DropdownMenuItem
+                                                            onClick={() => handleOpenPdfModal(apt)}
+                                                        >
+                                                            <FileText className="mr-2 h-4 w-4" /> PDF Aulas
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
                                                             onClick={() => openFeedbackDialog(apt)}
                                                             disabled={!['scheduled', 'rescheduled'].includes(apt.status)}
                                                         >
@@ -1259,6 +1423,169 @@ const AulasTab = ({ dashboardData }) => {
                     onReschedule={handleUpdate}
                 />
             )}
+
+            {/* Modal de Upload de PDF */}
+            <Dialog open={showPdfModal} onOpenChange={setShowPdfModal}>
+                <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-sky-600" />
+                            Adicionar Material PDF
+                        </DialogTitle>
+                        <DialogDescription>
+                            {selectedAulaForPdf?.student?.full_name && (
+                                <span>Material para aula com <strong>{selectedAulaForPdf.student.full_name}</strong></span>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {/* Nome do Material */}
+                        <div className="space-y-2">
+                            <Label htmlFor="pdf-name">Nome do Material *</Label>
+                            <Input
+                                id="pdf-name"
+                                placeholder="Ex: Exercícios Capítulo 5"
+                                value={pdfMaterialName}
+                                onChange={(e) => setPdfMaterialName(e.target.value)}
+                            />
+                        </div>
+
+                        {/* Upload de Arquivo */}
+                        <div className="space-y-2">
+                            <Label htmlFor="pdf-file">Arquivo PDF *</Label>
+                            <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-sky-400 transition-colors">
+                                <input
+                                    type="file"
+                                    id="pdf-file"
+                                    accept=".pdf,application/pdf"
+                                    className="hidden"
+                                    onChange={handleFileChange}
+                                />
+                                <label htmlFor="pdf-file" className="cursor-pointer">
+                                    <Upload className="w-10 h-10 mx-auto mb-2 text-slate-400" />
+                                    <p className="text-sm text-slate-600">
+                                        Clique para selecionar ou arraste o arquivo
+                                    </p>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Apenas arquivos PDF
+                                    </p>
+                                </label>
+                            </div>
+
+                            {/* Preview do arquivo selecionado */}
+                            {pdfFile && (
+                                <div className="flex items-center gap-2 p-3 bg-sky-50 rounded-lg border border-sky-200">
+                                    <FileText className="w-5 h-5 text-sky-600" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-slate-800 truncate">{pdfFile.name}</p>
+                                        <p className="text-xs text-slate-500">{(pdfFile.size / 1024).toFixed(1)} KB</p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setPdfFile(null)}
+                                        className="text-slate-400 hover:text-red-500"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Histórico de Materiais */}
+                        <div className="pt-4 border-t">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                                <History className="w-4 h-4" />
+                                Materiais já enviados nesta aula
+                            </h4>
+
+                            {loadingMaterials ? (
+                                <div className="flex justify-center py-4">
+                                    <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                                </div>
+                            ) : existingMaterials.length > 0 ? (
+                                <div className="space-y-2 max-h-[180px] overflow-y-auto pr-2">
+                                    {existingMaterials.map((material) => (
+                                        <div key={material.id} className="flex items-center gap-3 p-2 rounded-md bg-slate-50 border border-slate-100 group">
+                                            <div className="p-1.5 bg-white rounded border border-slate-200">
+                                                <FileText className="w-4 h-4 text-slate-400" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-medium text-slate-700 truncate" title={material.material_name}>
+                                                    {material.material_name}
+                                                </p>
+                                                <p className="text-[10px] text-slate-400 truncate">
+                                                    {material.file_name}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 text-slate-400 hover:text-sky-600"
+                                                    asChild
+                                                >
+                                                    <a href={material.file_url} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                    </a>
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onClick={async () => {
+                                                        if (window.confirm('Excluir este material?')) {
+                                                            try {
+                                                                const filePath = material.file_url.split('/public/class-materials/')[1];
+                                                                if (filePath) {
+                                                                    await supabase.storage.from('class-materials').remove([filePath]);
+                                                                }
+                                                                const { error } = await supabase
+                                                                    .from('class_materials')
+                                                                    .delete()
+                                                                    .eq('id', material.id);
+                                                                if (error) throw error;
+                                                                setExistingMaterials(prev => prev.filter(m => m.id !== material.id));
+                                                                toast({ title: 'Material removido' });
+                                                            } catch (err) {
+                                                                console.error(err);
+                                                                toast({ title: 'Erro ao remover', variant: 'destructive' });
+                                                            }
+                                                        }
+                                                    }}
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-center py-4 text-slate-400 bg-slate-50 rounded-md border border-dashed">
+                                    Nenhum material enviado para esta aula.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button onClick={() => setShowPdfModal(false)}>Fechar</Button>
+                        <Button
+                            onClick={handleUploadPdf}
+                            className="bg-sky-600 hover:bg-sky-700"
+                            disabled={isUploadingPdf || !pdfMaterialName.trim() || !pdfFile}
+                        >
+                            {isUploadingPdf ? (
+                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
+                            ) : (
+                                <><Upload className="mr-2 h-4 w-4" /> Enviar Material</>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
