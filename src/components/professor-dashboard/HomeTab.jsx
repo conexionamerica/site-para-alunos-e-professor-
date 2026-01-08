@@ -490,117 +490,48 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
     setIsSearchingMatches(true);
 
     try {
-      // Buscar slots de todos os professores nos dias de interesse
-      const { data: allSlots, error } = await supabase
-        .from('class_slots')
-        .select('*, professor:professor_id(id, full_name)')
-        .eq('status', 'active')
-        .in('day_of_week', preferredDaysAllTypes);
-
-      if (error) throw error;
-
-      // Agrupar por professor e calcular compatibilidade real por dia/hora
+      // Para cada dia/horário que o aluno precisa, vamos buscar os professores que têm esse slot ATIVO
       const professorMatches = {};
-      const professorIds = [...new Set((allSlots || []).map(s => s.professor_id))];
+      const allProfessors = new Set();
 
-      // BUSCAR APPOINTMENTS EXISTENTES (Próximos 7 dias) para verificar conflitos reais
-      const today = getBrazilDate();
-      const nextWeek = add(today, { days: 7 });
+      // Buscar TODOS os professores ativos
+      const { data: professors } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('role', 'professor')
+        .eq('is_active', true);
 
-      // Usar a data formatada com offset -03:00 para garantir exatidão no banco
-      const { data: busyApps } = await supabase
-        .from('appointments')
-        .select('professor_id, student_id, class_datetime, duration_minutes')
-        .in('professor_id', professorIds)
-        .gte('class_datetime', toBrazilISOString(today))
-        .lte('class_datetime', toBrazilISOString(nextWeek))
-        .neq('status', 'cancelled');
+      (professors || []).forEach(p => allProfessors.add(p.id));
 
-      const busyAppointments = busyApps || [];
+      // Para cada dia/horário solicitado, verificar quais professores têm o slot ATIVO
+      for (const [dayStr, time] of Object.entries(preferredSchedule)) {
+        const day = Number(dayStr);
+        const [h, m] = time.split(':').map(Number);
+        const timeFormatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
 
-      // Helper para converter ISO para componentes de Brasil de forma robusta e independente do fuso local
-      const getAptBrParts = (isoString) => {
-        const d = new Date(isoString);
-        const f = new Intl.DateTimeFormat('en-US', {
-          timeZone: 'America/Sao_Paulo',
-          hour12: false,
-          hour: 'numeric',
-          minute: 'numeric',
-          weekday: 'long'
-        });
-        const parts = f.formatToParts(d);
-        const getV = (t) => parts.find(p => p.type === t)?.value;
-        const h = parseInt(getV('hour'), 10);
-        const m = parseInt(getV('minute'), 10);
-        const wStr = getV('weekday').toLowerCase();
+        // Buscar slots ATIVOS para este dia/hora específico
+        const { data: activeSlots } = await supabase
+          .from('class_slots')
+          .select('professor_id, professor:professor_id(id, full_name)')
+          .eq('day_of_week', day)
+          .eq('start_time', timeFormatted)
+          .eq('status', 'active');
 
-        const wMap = {
-          'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
-          'thursday': 4, 'friday': 5, 'saturday': 6
-        };
-        return {
-          day: wMap[wStr],
-          minutes: h * 60 + m
-        };
-      };
-
-      // Pré-processar apps para evitar recálculo no loop
-      const processedBusyApps = busyAppointments.map(apt => ({
-        ...apt,
-        ...getAptBrParts(apt.class_datetime)
-      }));
-
-      (allSlots || []).forEach(slot => {
-        const profId = slot.professor_id;
-        const dayKey = Number(slot.day_of_week); // Garantir número
-        const targetTime = preferredSchedule[dayKey];
-
-        if (!targetTime) return; // Segurança contra slots de dias não solicitados
-
-        // VERIFICAÇÃO DE EXATIDÃO ROBUSTA (Comparação numérica de horas/minutos)
-        const [slotH, slotM] = slot.start_time.split(':').map(Number);
-        const [targetH, targetM] = targetTime.split(':').map(Number);
-
-        const slotTotalMinutes = slotH * 60 + slotM;
-        const targetTotalMinutes = targetH * 60 + targetM;
-
-        if (slotTotalMinutes === targetTotalMinutes) {
-          const slotStart = slotTotalMinutes;
-          const slotEnd = slotStart + 30; // Janela base para match
-
-          // Verificação de conflito real baseada em minutos do dia (Brasil)
-          const hasConflict = processedBusyApps.some(apt => {
-            if (String(apt.professor_id) !== String(profId)) return false;
-            // Se a aula ocupada for do PRÓPRIO aluno que estamos vinculando, não conta como conflito
-            // (Isso permite que o sistema sugira o professor mesmo se o aluno já tiver aulas agendadas com ele/outro)
-            if (String(apt.student_id) === String(selectedStudentForVinculacao?.id)) return false;
-
-            if (Number(apt.day) !== Number(slot.day_of_week)) return false;
-
-            const aptEnd = apt.minutes + (apt.duration_minutes || 30);
-            // Interseção clássica de intervalos
-            return (slotStart < aptEnd && slotEnd > apt.minutes);
-          });
-
-          if (!hasConflict) {
-            if (!professorMatches[profId]) {
-              professorMatches[profId] = {
-                professor: slot.professor,
-                matchedDays: new Set(),
-                matchedSlots: [],
-                totalSlotsRequired: preferredDays.length // O único número que importa é o que o aluno quer
-              };
-            }
-
-            // LÓGICA DIRECTA: Se o slot está AZUL (ativo) no sistema, conta como match.
-            const dayNum = Number(slot.day_of_week);
-            if (!professorMatches[profId].matchedDays.has(dayNum)) {
-              professorMatches[profId].matchedDays.add(dayNum);
-              professorMatches[profId].matchedSlots.push(slot);
-            }
+        // Marcar quais professores têm este slot disponível
+        (activeSlots || []).forEach(slot => {
+          const profId = slot.professor_id;
+          if (!professorMatches[profId]) {
+            professorMatches[profId] = {
+              professor: slot.professor,
+              matchedDays: new Set(),
+              matchedSlots: [],
+              totalSlotsRequired: preferredDays.length
+            };
           }
-        }
-      });
+          professorMatches[profId].matchedDays.add(day);
+          professorMatches[profId].matchedSlots.push({ day_of_week: day, start_time: time });
+        });
+      }
 
       // Calcular porcentagem e ordenar
       const matchResults = Object.values(professorMatches)
@@ -619,7 +550,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         toast({
           variant: 'destructive',
           title: 'Nenhum professor disponível',
-          description: `Nenhum professor possui horários exatamente iguais aos solicitados.`
+          description: `Nenhum professor possui os horários solicitados com status ATIVO (azul).`
         });
       }
 
