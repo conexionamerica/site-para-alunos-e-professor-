@@ -585,11 +585,11 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                 professor: slot.professor,
                 matchedDays: new Set(),
                 matchedSlots: [],
-                totalDaysRequested: preferredDays.length // ALWAYS divide by what the student NEEDS
+                totalSlotsRequired: preferredDays.length // O único número que importa é o que o aluno quer
               };
             }
 
-            // Increment weight if this specific slot matches day AND time required for that day
+            // Incrementa o match apenas se este slot específico é o que o aluno precisa
             const dayNum = Number(slot.day_of_week);
             if (!professorMatches[profId].matchedDays.has(dayNum)) {
               professorMatches[profId].matchedDays.add(dayNum);
@@ -604,9 +604,9 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
         .map(match => ({
           ...match,
           matchedDaysCount: match.matchedDays.size,
-          matchPercentage: Math.round((match.matchedDays.size / match.totalDaysRequested) * 100)
+          matchPercentage: Math.round((match.matchedDays.size / match.totalSlotsRequired) * 100)
         }))
-        .filter(match => match.matchPercentage > 0) // MOSTRAR TODOS (>0%) PARA EVITAR QUE PROFESSORES FIQUEM "OCULTOS" POR 1 SLOT FALTANTE
+        .filter(match => match.matchPercentage > 0)
         .sort((a, b) => b.matchPercentage - a.matchPercentage);
 
       setMatchedProfessors(matchResults);
