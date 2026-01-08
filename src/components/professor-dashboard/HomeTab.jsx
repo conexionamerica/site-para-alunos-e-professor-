@@ -589,7 +589,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
               };
             }
 
-            // Incrementa o match apenas se este slot específico é o que o aluno precisa
+            // LÓGICA DIRECTA: Se o slot está AZUL (ativo) no sistema, conta como match.
             const dayNum = Number(slot.day_of_week);
             if (!professorMatches[profId].matchedDays.has(dayNum)) {
               professorMatches[profId].matchedDays.add(dayNum);
