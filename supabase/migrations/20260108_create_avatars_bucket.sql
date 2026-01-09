@@ -1,41 +1,54 @@
--- Migration: Create avatars storage bucket for profile photos
--- This bucket must be created in Supabase Storage for the avatar upload feature to work
+-- ============================================================
+-- POLÍTICAS DE SEGURIDAD PARA EL BUCKET DE AVATARS
+-- ============================================================
+-- Ejecutar este script en Supabase SQL Editor para habilitar
+-- la subida de fotos de perfil
+-- ============================================================
 
--- Instructions to create the bucket manually in Supabase Dashboard:
--- 1. Go to Storage in your Supabase project
--- 2. Click "New Bucket"
--- 3. Name: avatars
--- 4. Public bucket: YES (check the box)
--- 5. Click "Create bucket"
+-- 1. Primero, verificar si el bucket existe. Si no, créalo manualmente:
+-- Dashboard -> Storage -> New Bucket -> Name: "avatars" -> Public: YES
 
--- Alternatively, run this SQL in the SQL Editor:
--- Note: Storage bucket creation via SQL requires specific setup
+-- 2. Eliminar políticas existentes que puedan estar causando conflicto
+DROP POLICY IF EXISTS "Allow authenticated users to upload avatars" ON storage.objects;
+DROP POLICY IF EXISTS "Allow public access to avatars" ON storage.objects;
+DROP POLICY IF EXISTS "Allow users to update their avatars" ON storage.objects;
+DROP POLICY IF EXISTS "Allow users to delete their avatars" ON storage.objects;
 
--- The bucket needs to be PUBLIC so avatar images can be displayed without authentication
+-- 3. Crear política para permitir a usuarios autenticados SUBIR archivos al bucket avatars
+CREATE POLICY "Allow authenticated users to upload avatars"
+ON storage.objects
+FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'avatars');
 
--- Storage policies for the avatars bucket:
--- You can add these policies in the Supabase Dashboard under Storage > avatars > Policies
+-- 4. Crear política para permitir acceso PÚBLICO de lectura a los avatars
+CREATE POLICY "Allow public access to avatars"
+ON storage.objects
+FOR SELECT
+TO public
+USING (bucket_id = 'avatars');
 
--- Policy 1: Allow authenticated users to upload their own avatar
--- CREATE POLICY "Users can upload their own avatar"
--- ON storage.objects
--- FOR INSERT
--- TO authenticated
--- WITH CHECK (bucket_id = 'avatars' AND (storage.foldername(name))[1] = 'avatars');
+-- 5. Crear política para permitir a usuarios autenticados ACTUALIZAR sus avatars
+CREATE POLICY "Allow users to update their avatars"
+ON storage.objects
+FOR UPDATE
+TO authenticated
+USING (bucket_id = 'avatars')
+WITH CHECK (bucket_id = 'avatars');
 
--- Policy 2: Allow public read access to all avatars
--- CREATE POLICY "Public can view avatars"
--- ON storage.objects
--- FOR SELECT
--- TO public
--- USING (bucket_id = 'avatars');
+-- 6. Crear política para permitir a usuarios autenticados ELIMINAR sus avatars
+CREATE POLICY "Allow users to delete their avatars"
+ON storage.objects
+FOR DELETE
+TO authenticated
+USING (bucket_id = 'avatars');
 
--- Policy 3: Allow authenticated users to update their own avatar
--- CREATE POLICY "Users can update their own avatar"
--- ON storage.objects
--- FOR UPDATE
--- TO authenticated
--- USING (bucket_id = 'avatars')
--- WITH CHECK (bucket_id = 'avatars');
+-- ============================================================
+-- ALTERNATIVA: Si el bucket no existe, créalo con SQL
+-- ============================================================
+-- Nota: Esto puede requerir permisos especiales
+-- INSERT INTO storage.buckets (id, name, public) 
+-- VALUES ('avatars', 'avatars', true)
+-- ON CONFLICT (id) DO NOTHING;
 
-SELECT 'Please create the "avatars" bucket manually in Supabase Storage Dashboard with Public access enabled.' as instruction;
+SELECT 'Políticas de storage para avatars creadas con éxito!' as resultado;

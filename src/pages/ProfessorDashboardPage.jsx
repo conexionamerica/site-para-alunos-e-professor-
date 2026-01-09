@@ -141,6 +141,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
     if (logsError) throw logsError;
 
     // 9. Fetch de Chats (Superadmin ve todos, profesor solo los suyos)
+    let chatListData = [];
     const { data: chatList, error: chatListError } = await supabase.rpc('get_chat_list_v2', {
         p_prof_id: isSuperadmin ? null : professorId
     });
@@ -149,8 +150,10 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         // Fallback para RPC antiga se a nova falhar (migração ainda não aplicada)
         if (chatListError.code === 'PGRST202') {
             const { data: oldChatList } = await supabase.rpc('get_professor_chat_list', { p_id: professorId });
-            chatList = oldChatList || [];
+            chatListData = oldChatList || [];
         }
+    } else {
+        chatListData = chatList || [];
     }
 
     // 10. Fetch de configurações de role (permissões de abas)
@@ -186,7 +189,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
         appointments: appointments || [],
         allBillings: allBillings || [],
         assignedLogs: assignedLogs || [],
-        chatList: chatList || [],
+        chatList: chatListData,
         roleSettings: roleSettings || [],
         can_manage_classes,
         can_manage_students,
