@@ -15,10 +15,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Se incluyen los iconos necesarios para la nueva funcionalidad
-import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot, Download, ExternalLink, Volume2, Mic } from 'lucide-react';
+import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot, Download, ExternalLink, Volume2, Mic, Ticket } from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
 import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 import { PlanExpiringBanner } from '@/components/student/PlanExpiringBanner';
+import { DaysRemainingWidget } from '@/components/student/DaysRemainingWidget';
+import { StudentTicketsTab } from '@/components/student/StudentTicketsTab';
+
 
 // IMPORTACIONES NECESSÁRIAS, AHORA CON DialogDescription
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -104,20 +107,25 @@ export const HelpWidget = () => (
   </motion.div>
 )
 
-// Widget de Vocabulario Diario
+// Widget de Vocabulario Diario - MEJORADO con vocabulario expandido
 const DailyVocabularyWidget = () => {
-  // Vocabulario estático (podría venir de una API o base de datos)
-  const vocabulary = [
-    { word: "Mariposa", pronunciation: "ma-ri-PO-sa", translation: "Borboleta", example: "La mariposa vuela en el jardín.", type: "Sustantivo" },
-    { word: "Soñar", pronunciation: "so-ÑAR", translation: "Sonhar", example: "Me gusta soñar despierto.", type: "Verbo" },
-    { word: "Atardecer", pronunciation: "a-tar-de-CER", translation: "Entardecer", example: "El atardecer es hermoso.", type: "Sustantivo" },
-    { word: "Abrazo", pronunciation: "a-BRA-zo", translation: "Abraço", example: "Dame un abrazo fuerte.", type: "Sustantivo" },
-    { word: "Estrella", pronunciation: "es-TRE-lla", translation: "Estrela", example: "Las estrellas brillan en la noche.", type: "Sustantivo" },
-    { word: "Caminar", pronunciation: "ca-mi-NAR", translation: "Caminhar", example: "Me encanta caminar por la playa.", type: "Verbo" },
-    { word: "Esperanza", pronunciation: "es-pe-RAN-za", translation: "Esperança", example: "La esperanza nunca muere.", type: "Sustantivo" },
-  ];
+  // Importar vocabulario expandido
+  const { getRandomVocabulary } = require('@/data/expandedVocabulary');
 
-  const todayWord = vocabulary[new Date().getDay() % vocabulary.length];
+  // Obtener palabra del día basada en el día del año para variedad
+  const getDayOfYear = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 0);
+    const diff = now - start;
+    const oneDay = 1000 * 60 * 60 * 24;
+    return Math.floor(diff / oneDay);
+  };
+
+  // Usar el día del año para seleccionar una palabra consistente cada día
+  const dayOfYear = getDayOfYear();
+  const vocabulary = require('@/data/expandedVocabulary').expandedVocabulary;
+  const todayWord = vocabulary[dayOfYear % vocabulary.length];
+
   const [showTranslation, setShowTranslation] = useState(false);
 
   return (
@@ -203,6 +211,7 @@ const HomePage = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [roleSettings, setRoleSettings] = useState(null);
   const [classMaterials, setClassMaterials] = useState([]);
+  const [sharedMaterials, setSharedMaterials] = useState([]);
 
   const chatEndRef = React.useRef(null);
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -338,6 +347,17 @@ const HomePage = () => {
         pending: pendingClassesCount,
         rescheduledCount: rescheduledClassesCount,
       });
+
+      // Fetch shared materials from professor
+      const { data: sharedMaterialsData, error: materialsError } = await supabase
+        .from('shared_materials')
+        .select('*')
+        .or(`student_id.eq.${user.id},and(student_id.is.null,professor_id.eq.${currentProfessorId})`)
+        .order('created_at', { ascending: false });
+
+      if (!materialsError) {
+        setSharedMaterials(sharedMaterialsData || []);
+      }
 
     } catch (error) {
       toast({ variant: "destructive", title: "Erro ao carregar dados", description: `(${error.message})` });
@@ -696,15 +716,10 @@ const HomePage = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Frases motivacionales aleatorias
-  const motivationalPhrases = [
-    "¡Cada día es una nueva oportunidad para brillar! ✨",
-    "El español te abre puertas al mundo 🌎",
-    "¡Tu dedicación te llevará lejos! 🚀",
-    "Aprender es un superpoder 💪",
-    "¡Hoy es un gran día para aprender! 📚"
-  ];
-  const todayPhrase = motivationalPhrases[new Date().getDay() % motivationalPhrases.length];
+  // Frases motivacionales - Usando sistema de 360 frases (una para cada día del año)
+  const { getDailyPhrase } = require('@/data/dailyPhrases');
+  const todayPhrase = getDailyPhrase();
+
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
@@ -816,38 +831,54 @@ const HomePage = () => {
         {/* Banner de Plano Expirando */}
         <PlanExpiringBanner userId={user?.id} />
 
+        {/* Widget de Días Restantes */}
+        <DaysRemainingWidget userId={user?.id} />
+
         {/* Widget de Mensagens do Professor */}
         <StudentMessagesWidget />
 
         {/* Navegación por tabs moderna */}
         <Tabs defaultValue="agenda" className="w-full mt-6">
-          <TabsList className="w-full flex justify-start gap-1 bg-white/80 backdrop-blur-sm p-1.5 rounded-xl shadow-sm border border-slate-100 overflow-x-auto">
-            {/* Abas dinâmicas baseadas em permissões */}
-            {(() => {
-              const allowedTabs = roleSettings?.permissions?.tabs || ['dashboard', 'clases', 'chat', 'desempenho', 'faturas'];
-              const tabsDef = [
-                { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', color: 'sky' },
-                { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', color: 'violet' },
-                { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', color: 'sky' },
-                { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', color: 'emerald' },
-                { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', color: 'amber' },
-                { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Chat', color: 'emerald' },
-                { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Notas', color: 'amber' },
-                { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas', color: 'rose' },
-              ];
+          {/* Tabs mejoradas con wrap para mobile y scroll indicators */}
+          <div className="relative">
+            {/* Indicador de scroll izquierdo (solo mobile) */}
+            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none lg:hidden" />
 
-              return tabsDef.filter(t => allowedTabs.includes(t.permission)).map(tab => (
-                <TabsTrigger
-                  key={tab.id}
-                  value={tab.value}
-                  className="flex-1 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg px-4 py-2.5 transition-all"
-                >
-                  <tab.icon className="mr-2 h-4 w-4" />
-                  {tab.label}
-                </TabsTrigger>
-              ));
-            })()}
-          </TabsList>
+            {/* Indicador de scroll derecho (solo mobile) */}
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none lg:hidden flex items-center justify-end pr-2">
+              <ChevronRight className="h-4 w-4 text-slate-400 animate-pulse" />
+            </div>
+
+            <TabsList className="w-full flex flex-wrap lg:flex-nowrap justify-start gap-1 bg-white/80 backdrop-blur-sm p-1.5 rounded-xl shadow-sm border border-slate-100 overflow-x-auto scrollbar-hide">
+              {/* Abas dinâmicas baseadas em permissões */}
+              {(() => {
+                const allowedTabs = roleSettings?.permissions?.tabs || ['dashboard', 'clases', 'chat', 'desempenho', 'faturas'];
+                const tabsDef = [
+                  { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', color: 'sky', shortLabel: 'Inicio' },
+                  { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', color: 'violet', shortLabel: 'Aulas' },
+                  { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', color: 'sky', shortLabel: 'Recursos' },
+                  { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', color: 'emerald', shortLabel: 'Quiz' },
+                  { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', color: 'amber', shortLabel: 'Logros' },
+                  { id: 'tickets', value: 'tickets', permission: 'dashboard', icon: Ticket, label: 'Tickets', color: 'violet', shortLabel: 'Tickets' },
+                  { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Chat', color: 'emerald', shortLabel: 'Chat' },
+                  { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Notas', color: 'amber', shortLabel: 'Notas' },
+                  { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas', color: 'rose', shortLabel: 'Faturas' },
+                ];
+
+                return tabsDef.filter(t => allowedTabs.includes(t.permission)).map(tab => (
+                  <TabsTrigger
+                    key={tab.id}
+                    value={tab.value}
+                    className="flex-shrink-0 min-w-fit data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg px-3 py-2.5 transition-all text-sm whitespace-nowrap"
+                  >
+                    <tab.icon className="mr-1.5 h-4 w-4 flex-shrink-0" />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    <span className="sm:hidden">{tab.shortLabel}</span>
+                  </TabsTrigger>
+                ));
+              })()}
+            </TabsList>
+          </div>
 
           <TabsContent value="faturas" className="mt-4 space-y-6">
             <Alert className="border-sky-400 bg-sky-50 text-sky-900 [&>svg]:text-sky-600">
@@ -1054,46 +1085,89 @@ const HomePage = () => {
                 </div>
               </div>
               <div className="p-6">
-                <div className="grid gap-4">
-                  {/* Recursos de demostración */}
-                  {[
-                    { name: 'Verbos Irregulares - Guía Completa', type: 'PDF', size: '2.3 MB', category: 'Gramática' },
-                    { name: 'Vocabulário: Comida y Restaurante', type: 'PDF', size: '1.1 MB', category: 'Vocabulário' },
-                    { name: 'Audio: Conversación en el Aeropuerto', type: 'MP3', size: '4.5 MB', category: 'Listening' },
-                    { name: 'Exercícios de Conjugação', type: 'PDF', size: '890 KB', category: 'Exercícios' },
-                  ].map((recurso, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className="flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-sky-200 hover:bg-sky-50/50 transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "p-3 rounded-xl",
-                          recurso.type === 'PDF' ? 'bg-red-100' : recurso.type === 'MP3' ? 'bg-purple-100' : 'bg-sky-100'
-                        )}>
-                          <FileText className={cn(
-                            "h-6 w-6",
-                            recurso.type === 'PDF' ? 'text-red-600' : recurso.type === 'MP3' ? 'text-purple-600' : 'text-sky-600'
-                          )} />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-slate-800 group-hover:text-sky-600 transition-colors">{recurso.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className="text-xs">{recurso.type}</Badge>
-                            <span className="text-xs text-slate-400">{recurso.size}</span>
-                            <Badge className="text-xs bg-slate-100 text-slate-600">{recurso.category}</Badge>
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+                  </div>
+                ) : sharedMaterials.length > 0 ? (
+                  <div className="grid gap-4">
+                    {sharedMaterials.map((material, idx) => {
+                      const fileExtension = material.file_url.split('.').pop().toUpperCase();
+                      const displayType = material.file_type || fileExtension;
+
+                      return (
+                        <motion.a
+                          key={material.id}
+                          href={material.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.05 }}
+                          className="flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-sky-200 hover:bg-sky-50/50 transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className={cn(
+                              "p-3 rounded-xl",
+                              displayType === 'PDF' ? 'bg-red-100' :
+                                displayType.includes('MP3') || displayType.includes('AUDIO') ? 'bg-purple-100' :
+                                  displayType.includes('MP4') || displayType.includes('VIDEO') ? 'bg-blue-100' :
+                                    'bg-sky-100'
+                            )}>
+                              <FileText className={cn(
+                                "h-6 w-6",
+                                displayType === 'PDF' ? 'text-red-600' :
+                                  displayType.includes('MP3') || displayType.includes('AUDIO') ? 'text-purple-600' :
+                                    displayType.includes('MP4') || displayType.includes('VIDEO') ? 'text-blue-600' :
+                                      'text-sky-600'
+                              )} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-slate-800 group-hover:text-sky-600 transition-colors truncate">
+                                {material.material_name}
+                              </p>
+                              {material.description && (
+                                <p className="text-xs text-slate-500 mt-0.5 truncate">{material.description}</p>
+                              )}
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <Badge variant="outline" className="text-xs">{displayType}</Badge>
+                                {material.file_size_bytes && (
+                                  <span className="text-xs text-slate-400">
+                                    {(material.file_size_bytes / 1024 / 1024).toFixed(1)} MB
+                                  </span>
+                                )}
+                                {material.category && (
+                                  <Badge className="text-xs bg-slate-100 text-slate-600">{material.category}</Badge>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    </motion.div>
-                  ))}
-                </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              window.open(material.file_url, '_blank');
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </motion.a>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="p-4 bg-slate-100 rounded-full inline-block mb-4">
+                      <FileText className="h-10 w-10 text-slate-300" />
+                    </div>
+                    <p className="font-medium text-slate-600 mb-2">Nenhum recurso disponível</p>
+                    <p className="text-sm text-slate-400">
+                      Seu professor ainda não compartilhou materiais de estudo
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </TabsContent>
@@ -1183,14 +1257,14 @@ const HomePage = () => {
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
-                  { name: 'Primeira Aula', icon: '🎉', earned: true, desc: 'Completou sua primeira aula' },
+                  { name: 'Primeira Aula', icon: '🎉', earned: (classStats.completed || 0) >= 1, desc: 'Completou sua primeira aula' },
                   { name: '5 Aulas', icon: '⭐', earned: (classStats.completed || 0) >= 5, desc: 'Completou 5 aulas' },
                   { name: '10 Aulas', icon: '🏆', earned: (classStats.completed || 0) >= 10, desc: 'Completou 10 aulas' },
                   { name: 'Dedicado', icon: '🔥', earned: (classStats.completed || 0) >= 15, desc: '15 aulas completadas' },
                   { name: 'Nota Alta', icon: '💯', earned: (performanceStats?.overallAveragePercent || 0) >= 80, desc: 'Média acima de 80%' },
-                  { name: 'Conversador', icon: '💬', earned: true, desc: 'Usou o chat' },
-                  { name: 'IA Master', icon: '🤖', earned: true, desc: 'Usou o assistente IA' },
-                  { name: 'Estudioso', icon: '📚', earned: false, desc: 'Baixou 5 recursos' },
+                  { name: 'Conversador', icon: '💬', earned: (chatMessages?.length || 0) >= 5, desc: 'Enviou 5 mensagens no chat' },
+                  { name: 'IA Master', icon: '🤖', earned: (chatMessages?.length || 0) >= 10, desc: 'Usou bastante o assistente IA' },
+                  { name: 'Estudioso', icon: '📚', earned: (sharedMaterials?.length || 0) >= 3, desc: 'Recebeu 3 ou mais recursos' },
                 ].map((badge, idx) => (
                   <motion.div
                     key={idx}
@@ -1209,6 +1283,11 @@ const HomePage = () => {
                 ))}
               </div>
             </div>
+          </TabsContent>
+
+          {/* PESTAÑA DE TICKETS */}
+          <TabsContent value="tickets" className="mt-4">
+            <StudentTicketsTab />
           </TabsContent>
 
           <TabsContent value="aulas" className="mt-4">

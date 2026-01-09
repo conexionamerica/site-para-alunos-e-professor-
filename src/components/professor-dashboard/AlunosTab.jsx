@@ -17,9 +17,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Loader2, MoreVertical, UserCheck, UserX, MessageSquare, Send, Calendar, Clock, Filter, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Search, Package, Loader2, MoreVertical, UserCheck, UserX, MessageSquare, Send, Calendar, Clock, Filter, RefreshCw, AlertTriangle, Upload } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import SendResourceDialog from './SendResourceDialog';
+
 
 const daysOfWeekMap = {
     0: 'Dom',
@@ -939,6 +941,7 @@ const AlunosTab = ({ dashboardData }) => {
     const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
     const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
     const [isChangeProfessorDialogOpen, setIsChangeProfessorDialogOpen] = useState(false);
+    const [isResourceDialogOpen, setIsResourceDialogOpen] = useState(false);
     const [messageDraft, setMessageDraft, clearMessageDraft] = useFormPersistence('student_message_form', {
         title: '',
         content: '',
@@ -1252,6 +1255,14 @@ const AlunosTab = ({ dashboardData }) => {
 
                                                             <DropdownMenuSeparator />
 
+                                                            <DropdownMenuItem onClick={() => {
+                                                                setSelectedStudent(student);
+                                                                setIsResourceDialogOpen(true);
+                                                            }}>
+                                                                <Upload className="mr-2 h-4 w-4 text-emerald-600" />
+                                                                Enviar Material
+                                                            </DropdownMenuItem>
+
                                                             <DropdownMenuItem onClick={() => handleOpenMessageDialog(student)}>
                                                                 <MessageSquare className="mr-2 h-4 w-4 text-sky-600" />
                                                                 Enviar Mensagem
@@ -1344,6 +1355,14 @@ const AlunosTab = ({ dashboardData }) => {
                         professors={professors}
                         classSlots={data.allClassSlots || data.classSlots || []}
                         currentProfessorId={professorId}
+                    />
+
+                    <SendResourceDialog
+                        student={selectedStudent}
+                        isOpen={isResourceDialogOpen}
+                        onClose={() => setIsResourceDialogOpen(false)}
+                        onUpdate={onUpdate}
+                        professorId={professorId}
                     />
                 </div>
             </div>

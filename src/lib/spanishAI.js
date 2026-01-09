@@ -1,6 +1,8 @@
 // Archivo: src/lib/spanishAI.js
 // Sistema de IA Local para Asistente de Español
 
+import { expandedVocabulary } from '@/data/expandedVocabulary';
+
 /**
  * Base de Conocimiento de Español
  */
@@ -204,7 +206,24 @@ class SpanishAI {
     }
 
     handleTranslation(message) {
-        // Buscar en vocabulario
+        // Primero buscar en el vocabulario expandido (300+ palabras)
+        const searchTerm = message.toLowerCase().trim();
+
+        for (const vocabItem of expandedVocabulary) {
+            const wordMatch = searchTerm.includes(vocabItem.word.toLowerCase()) ||
+                searchTerm.includes(vocabItem.translation.toLowerCase());
+
+            if (wordMatch) {
+                let response = `📝 **${vocabItem.word}** (${vocabItem.pronunciation})\n\n`;
+                response += `🇧🇷 Tradução: **${vocabItem.translation}**\n\n`;
+                response += `💡 Exemplo: "${vocabItem.example}"\n\n`;
+                response += `📚 Tipo: ${vocabItem.type} | Categoria: ${vocabItem.category}`;
+
+                return response;
+            }
+        }
+
+        // Buscar en vocabulario básico
         for (const [category, words] of Object.entries(spanishKnowledge.vocabulary)) {
             for (const [spanish, portuguese] of Object.entries(words)) {
                 if (message.includes(spanish.toLowerCase()) || message.includes(portuguese.toLowerCase())) {
@@ -220,7 +239,7 @@ class SpanishAI {
             }
         }
 
-        return '🤔 No encontré esa palabra en mi base de datos. ¿Podrías ser más específico? Por ejemplo: "¿Cómo se dice casa?" o "Traduce rojo"';
+        return '🤔 No encontré esa palabra en mi base de datos. ¿Podrías ser más específico? Por ejemplo: "¿Cómo se dice casa?" o "Traduce rojo"\n\n💡 Tengo más de 300 palabras en mi vocabulario, incluyendo verbos, sustantivos y adjetivos.';
     }
 
     handleConjugation(message) {
@@ -325,7 +344,8 @@ class SpanishAI {
      * Obtener sugerencias de seguimiento
      */
     getSuggestions() {
-        const suggestions = [
+        // Sugerencias básicas
+        const basicSuggestions = [
             '¿Cómo se dice "casa"?',
             'Conjuga el verbo ser',
             'Diferencia entre ser y estar',
@@ -333,7 +353,16 @@ class SpanishAI {
             'Números en español',
             'Colores en español'
         ];
-        return suggestions.sort(() => 0.5 - Math.random()).slice(0, 3);
+
+        // Agregar sugerencias del vocabulario expandido
+        const randomVocab = expandedVocabulary
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 3)
+            .map(item => `¿Cómo se dice "${item.translation}"?`);
+
+        const allSuggestions = [...basicSuggestions, ...randomVocab];
+
+        return allSuggestions.sort(() => 0.5 - Math.random()).slice(0, 3);
     }
 }
 
