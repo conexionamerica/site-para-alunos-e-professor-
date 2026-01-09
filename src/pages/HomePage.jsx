@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Se incluyen los iconos necesarios para la nueva funcionalidad
-import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot, Download, ExternalLink } from 'lucide-react';
+import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot, Download, ExternalLink, Volume2, Mic } from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
 import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 import { PlanExpiringBanner } from '@/components/student/PlanExpiringBanner';
@@ -40,9 +40,14 @@ const ALL_TIMES = Array.from({ length: 68 }, (_, i) => {
 const NextClassWidget = ({ nextClass }) => {
   if (!nextClass) {
     return (
-      <div className="bg-white rounded-lg border-l-4 border-slate-300 shadow-sm p-4 h-full flex flex-col justify-center">
-        <h3 className="text-lg font-bold mb-2">Próxima Aula</h3>
-        <p className="text-slate-500 text-sm">Você não tem nenhuma aula agendada no futuro.</p>
+      <div className="bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl p-5 shadow-sm border border-slate-200">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 bg-slate-300/50 rounded-lg">
+            <CalendarClock className="h-5 w-5 text-slate-500" />
+          </div>
+          <h3 className="text-base font-bold text-slate-600">Próxima Aula</h3>
+        </div>
+        <p className="text-slate-500 text-sm">Nenhuma aula agendada.</p>
       </div>
     );
   }
@@ -50,17 +55,42 @@ const NextClassWidget = ({ nextClass }) => {
   const { class_datetime, student } = nextClass;
 
   return (
-    <div className="bg-white rounded-lg border-l-4 border-sky-500 shadow-sm p-4 h-full flex flex-col">
-      <h3 className="text-lg font-bold mb-1">Próxima Aula</h3>
-      <p className="text-xs text-slate-500 mb-2">Começa {formatDistanceToNowStrict(new Date(class_datetime), { locale: ptBR, addSuffix: true })}</p>
-      <div className="flex-grow">
-        <p className="text-lg font-bold mt-1">{student?.spanish_level ? 'Espanhol' : 'Inglês'}</p>
-        <p className="text-sm"><strong>Nível:</strong> {student?.spanish_level || 'Não definido'}</p>
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 rounded-xl p-5 shadow-lg shadow-sky-200 text-white min-w-[320px]"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+            <CalendarCheck className="h-5 w-5 text-white" />
+          </div>
+          <span className="text-sky-100 text-sm font-medium">Próxima Aula</span>
+        </div>
+        <Badge className="bg-white/20 text-white border-0 text-xs">
+          {formatDistanceToNowStrict(new Date(class_datetime), { locale: ptBR, addSuffix: true })}
+        </Badge>
       </div>
-      <Button asChild className="w-full mt-3 bg-sky-600 hover:bg-sky-700">
-        <a href={nextClass.professor?.meeting_link || "https://meet.google.com/tmi-xwmg-kua"} target="_blank" rel="noopener noreferrer">Iniciar Agora</a>
+
+      <div className="mb-4">
+        <p className="text-3xl font-black">
+          {format(new Date(class_datetime), 'dd MMM', { locale: ptBR })} | {format(new Date(class_datetime), 'HH:mm')}
+        </p>
+        <p className="text-sky-100 text-sm mt-1">
+          Nível {student?.spanish_level || 'Intermediário'}
+        </p>
+        <p className="text-white/90 text-xs mt-0.5">
+          Professor: {nextClass.professor?.full_name || nextClass.professor?.name || 'Não atribuído'}
+        </p>
+      </div>
+
+      <Button asChild className="w-full bg-white text-sky-700 hover:bg-sky-50 font-bold shadow-md">
+        <a href={nextClass.professor?.meeting_link || "https://meet.google.com/tmi-xwmg-kua"} target="_blank" rel="noopener noreferrer">
+          <ExternalLink className="h-4 w-4 mr-2" />
+          Entrar na Aula
+        </a>
       </Button>
-    </div>
+    </motion.div>
   );
 };
 
@@ -74,6 +104,68 @@ export const HelpWidget = () => (
   </motion.div>
 )
 
+// Widget de Vocabulario Diario
+const DailyVocabularyWidget = () => {
+  // Vocabulario estático (podría venir de una API o base de datos)
+  const vocabulary = [
+    { word: "Mariposa", pronunciation: "ma-ri-PO-sa", translation: "Borboleta", example: "La mariposa vuela en el jardín.", type: "Sustantivo" },
+    { word: "Soñar", pronunciation: "so-ÑAR", translation: "Sonhar", example: "Me gusta soñar despierto.", type: "Verbo" },
+    { word: "Atardecer", pronunciation: "a-tar-de-CER", translation: "Entardecer", example: "El atardecer es hermoso.", type: "Sustantivo" },
+    { word: "Abrazo", pronunciation: "a-BRA-zo", translation: "Abraço", example: "Dame un abrazo fuerte.", type: "Sustantivo" },
+    { word: "Estrella", pronunciation: "es-TRE-lla", translation: "Estrela", example: "Las estrellas brillan en la noche.", type: "Sustantivo" },
+    { word: "Caminar", pronunciation: "ca-mi-NAR", translation: "Caminhar", example: "Me encanta caminar por la playa.", type: "Verbo" },
+    { word: "Esperanza", pronunciation: "es-pe-RAN-za", translation: "Esperança", example: "La esperanza nunca muere.", type: "Sustantivo" },
+  ];
+
+  const todayWord = vocabulary[new Date().getDay() % vocabulary.length];
+  const [showTranslation, setShowTranslation] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg mb-6"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+            <Sparkles className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">Palabra del Día</h3>
+            <p className="text-orange-100 text-xs">Aprende algo nuevo cada día</p>
+          </div>
+        </div>
+        <Badge className="bg-white/20 text-white border-0 text-xs">
+          {todayWord.type}
+        </Badge>
+      </div>
+
+      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-4">
+        <p className="text-4xl font-black mb-1">{todayWord.word}</p>
+        <p className="text-orange-100 text-sm font-mono">/{todayWord.pronunciation}/</p>
+      </div>
+
+      <div className="space-y-3">
+        <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
+          <p className="text-xs text-orange-200 mb-1">Ejemplo:</p>
+          <p className="text-sm italic">"{todayWord.example}"</p>
+        </div>
+
+        <button
+          onClick={() => setShowTranslation(!showTranslation)}
+          className="w-full bg-white/20 hover:bg-white/30 transition-colors rounded-lg py-2 px-4 text-sm font-medium flex items-center justify-center gap-2"
+        >
+          {showTranslation ? (
+            <>🇧🇷 {todayWord.translation}</>
+          ) : (
+            <>👁️ Ver tradução</>
+          )}
+        </button>
+      </div>
+    </motion.div>
+  );
+};
 const HomePage = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
@@ -87,6 +179,7 @@ const HomePage = () => {
   const [nextClass, setNextClass] = useState(null);
   const [professorId, setProfessorId] = useState(null);
   const [assignedLogs, setAssignedLogs] = useState([]);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const [schedulingStep, setSchedulingStep] = useState(1);
   const [allAvailableSlots, setAllAvailableSlots] = useState([]);
@@ -494,12 +587,32 @@ const HomePage = () => {
     setIsSubmitting(false);
   };
 
-  const StatCard = ({ title, value, icon: Icon, loading: statLoading }) => (
-    <div className="bg-white p-4 rounded-lg shadow-sm flex items-center space-x-4">
-      <div className="bg-sky-100 p-3 rounded-full"><Icon className="w-6 h-6 text-sky-600" /></div>
-      <div><p className="text-slate-500 text-sm">{title}</p>{statLoading ? <div className="h-7 w-12 bg-slate-200 rounded-md animate-pulse mt-1" /> : <p className="text-2xl font-bold text-slate-800">{value}</p>}</div>
-    </div>
-  );
+  const StatCard = ({ title, value, icon: Icon, loading: statLoading, color = 'sky' }) => {
+    const colorClasses = {
+      sky: 'from-sky-500 to-sky-600 shadow-sky-200',
+      amber: 'from-amber-500 to-amber-600 shadow-amber-200',
+      emerald: 'from-emerald-500 to-emerald-600 shadow-emerald-200',
+      violet: 'from-violet-500 to-violet-600 shadow-violet-200'
+    };
+    return (
+      <motion.div
+        whileHover={{ scale: 1.02, y: -2 }}
+        className={`bg-gradient-to-br ${colorClasses[color] || colorClasses.sky} p-5 rounded-xl shadow-lg text-white`}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-white/80 text-sm font-medium">{title}</span>
+          <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+            <Icon className="w-5 h-5 text-white" />
+          </div>
+        </div>
+        {statLoading ? (
+          <div className="h-10 w-16 bg-white/30 rounded-md animate-pulse" />
+        ) : (
+          <p className="text-4xl font-black">{value}</p>
+        )}
+      </motion.div>
+    );
+  };
 
   const StatusBadge = ({ status }) => {
     const statusMap = { scheduled: { label: "Agendada", className: "bg-blue-100 text-blue-800" }, completed: { label: "Realizada", className: "bg-green-100 text-green-800" }, canceled: { label: "Cancelada", className: "bg-red-100 text-red-800" }, missed: { label: "Falta", className: "bg-orange-100 text-orange-800" }, rescheduled: { label: "Reagendada", className: "bg-purple-100 text-purple-800" } };
@@ -574,18 +687,130 @@ const HomePage = () => {
     }
   };
 
+  // Detectar scroll para header compacto
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 100);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Frases motivacionales aleatorias
+  const motivationalPhrases = [
+    "¡Cada día es una nueva oportunidad para brillar! ✨",
+    "El español te abre puertas al mundo 🌎",
+    "¡Tu dedicación te llevará lejos! 🚀",
+    "Aprender es un superpoder 💪",
+    "¡Hoy es un gran día para aprender! 📚"
+  ];
+  const todayPhrase = motivationalPhrases[new Date().getDay() % motivationalPhrases.length];
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-      <div>
-        <div className="flex flex-col sm:flex-row justify-between items-start mb-6">
-          <div className='flex-1 mb-4 sm:mb-0'>
-            <h1 className="text-2xl font-bold text-slate-800">Painel do Aluno</h1>
-            <p className="text-lg text-slate-600">Bem-vindo(a) de volta, <span className="font-semibold text-sky-600">{profile?.full_name || user?.email}</span>!</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50">
+
+        {/* Header - Se esconde al hacer scroll */}
+        <div className="bg-white/80 backdrop-blur-sm border-b border-slate-100 mb-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 py-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+                  {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                </span>
+                <span className="px-2 py-0.5 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[10px] font-bold rounded-full flex items-center gap-1">
+                  🔥 {classStats.completed || 0} aulas
+                </span>
+              </div>
+              <motion.h1
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="text-2xl lg:text-3xl font-black text-slate-800"
+              >
+                Olá, <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-blue-600">{profile?.full_name?.split(' ')[0] || 'Aluno'}</span>! 👋
+              </motion.h1>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="text-slate-500 mt-1"
+              >
+                {todayPhrase}
+              </motion.p>
+            </div>
+            {/* Stats + Próxima Aula */}
+            <div className="flex items-center gap-3">
+              <div className="hidden lg:flex items-center gap-2">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl px-5 py-4 text-white shadow-lg shadow-sky-200 min-w-[100px] text-center"
+                >
+                  <p className="text-3xl font-black">{classStats.scheduled || 0}</p>
+                  <p className="text-xs text-sky-100 uppercase">Agendadas</p>
+                </motion.div>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl px-5 py-4 text-white shadow-lg shadow-emerald-200 min-w-[100px] text-center"
+                >
+                  <p className="text-3xl font-black">{classStats.completed || 0}</p>
+                  <p className="text-xs text-emerald-100 uppercase">Realizadas</p>
+                </motion.div>
+              </div>
+              <NextClassWidget nextClass={nextClass} />
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <NextClassWidget nextClass={nextClass} />
-          </div>
+        </div>
+
+        {/* Quick Stats Row - Solo en móvil + IA Assistant */}
+        <div className="grid grid-cols-2 lg:grid-cols-2 gap-3 mb-6">
+          {/* Stats para móvil (ocultos en desktop porque ya están en el header) */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="lg:hidden bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl p-4 text-white shadow-lg"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-black">{classStats.scheduled || 0}</p>
+                <p className="text-xs text-sky-100">Aulas Agendadas</p>
+              </div>
+              <CalendarClock className="h-8 w-8 text-white/30" />
+            </div>
+          </motion.div>
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="lg:hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-black">{classStats.completed || 0}</p>
+                <p className="text-xs text-emerald-100">Aulas Realizadas</p>
+              </div>
+              <CalendarCheck className="h-8 w-8 text-white/30" />
+            </div>
+          </motion.div>
+          {/* IA Assistant - siempre visible */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="col-span-2 lg:col-span-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl p-4 shadow-lg text-white"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  <Bot className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold">Asistente IA de Español</p>
+                  <p className="text-xs text-violet-100">Practica conversación, gramática y más</p>
+                </div>
+              </div>
+              <Button
+                onClick={() => navigate('/spanish-assistant')}
+                className="bg-white text-violet-600 hover:bg-violet-50 font-bold"
+              >
+                Praticar agora →
+              </Button>
+            </div>
+          </motion.div>
         </div>
 
         {/* Banner de Plano Expirando */}
@@ -594,22 +819,30 @@ const HomePage = () => {
         {/* Widget de Mensagens do Professor */}
         <StudentMessagesWidget />
 
-        <Tabs defaultValue="agenda" className="w-full mt-8">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 bg-slate-200">
+        {/* Navegación por tabs moderna */}
+        <Tabs defaultValue="agenda" className="w-full mt-6">
+          <TabsList className="w-full flex justify-start gap-1 bg-white/80 backdrop-blur-sm p-1.5 rounded-xl shadow-sm border border-slate-100 overflow-x-auto">
             {/* Abas dinâmicas baseadas em permissões */}
             {(() => {
               const allowedTabs = roleSettings?.permissions?.tabs || ['dashboard', 'clases', 'chat', 'desempenho', 'faturas'];
               const tabsDef = [
-                { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Agenda' },
-                { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas' },
-                { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Conversas' },
-                { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Desempenho' },
-                { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas' },
+                { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', color: 'sky' },
+                { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', color: 'violet' },
+                { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', color: 'sky' },
+                { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', color: 'emerald' },
+                { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', color: 'amber' },
+                { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Chat', color: 'emerald' },
+                { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Notas', color: 'amber' },
+                { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas', color: 'rose' },
               ];
 
               return tabsDef.filter(t => allowedTabs.includes(t.permission)).map(tab => (
-                <TabsTrigger key={tab.id} value={tab.value}>
-                  <tab.icon className="mr-2 h-4 w-4 hidden sm:block" />
+                <TabsTrigger
+                  key={tab.id}
+                  value={tab.value}
+                  className="flex-1 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg px-4 py-2.5 transition-all"
+                >
+                  <tab.icon className="mr-2 h-4 w-4" />
                   {tab.label}
                 </TabsTrigger>
               ));
@@ -624,433 +857,842 @@ const HomePage = () => {
                 Sabia que você pode reagendar aulas perdidas? Converse com seu professor e aproveite ao máximo seu pacote, sempre dentro dos 30 dias de validade. Flexibilidade é a chave para o sucesso!
               </AlertDescription>
             </Alert>
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h2 className="text-xl font-bold mb-4">Contratos Ativos</h2>
-              {loading ? <p>Carregando...</p> : activeBillings.length > 0 ? activeBillings.map(billing => {
-                // Match Robust: Find closest log by date
-                const billingDate = new Date(billing.purchase_date).getTime();
-                const matchLog = assignedLogs
-                  .filter(l => l.package_id == billing.package_id && l.status !== 'Cancelado')
-                  .sort((a, b) => {
-                    const diffA = Math.abs(new Date(a.assigned_at).getTime() - billingDate);
-                    const diffB = Math.abs(new Date(b.assigned_at).getTime() - billingDate);
-                    return diffA - diffB;
-                  })[0];
-                const displayName = billing.custom_package_name || matchLog?.custom_package_name || billing.packages?.name;
-                const displayClasses = matchLog?.assigned_classes || billing.packages?.number_of_classes;
 
-                return (
-                  <div key={billing.id} className="p-4 border rounded-lg bg-sky-50 border-sky-200 mb-4">
-                    <p className="text-lg font-bold text-slate-800">{displayName} <span className="font-normal text-slate-600">({displayClasses} aulas)</span></p>
-                    <div className="flex gap-4 mt-2">
-                      <p className="text-sm text-slate-600">Preço: <span className="font-semibold text-emerald-600">R$ {billing.amount_paid}</span></p>
-                      <p className="text-sm text-slate-600">Validade: <span className="font-semibold">{format(parseISO(billing.end_date), 'PPP', { locale: ptBR })}</span></p>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">Adquirido em: {format(parseISO(billing.purchase_date), 'dd/MM/yyyy')}</p>
+            {/* Contratos Ativos - Diseño moderno */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-6 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-emerald-100 rounded-lg">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                   </div>
-                );
-              }) : <p className="text-slate-500">Nenhum contrato ativo.</p>}
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">Contratos Ativos</h2>
+                    <p className="text-sm text-slate-500">Seus pacotes de aulas ativos</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 text-sky-500 animate-spin" />
+                  </div>
+                ) : activeBillings.length > 0 ? (
+                  <div className="grid gap-4">
+                    {activeBillings.map(billing => {
+                      const billingDate = new Date(billing.purchase_date).getTime();
+                      const matchLog = assignedLogs
+                        .filter(l => l.package_id == billing.package_id && l.status !== 'Cancelado')
+                        .sort((a, b) => {
+                          const diffA = Math.abs(new Date(a.assigned_at).getTime() - billingDate);
+                          const diffB = Math.abs(new Date(b.assigned_at).getTime() - billingDate);
+                          return diffA - diffB;
+                        })[0];
+                      const displayName = billing.custom_package_name || matchLog?.custom_package_name || billing.packages?.name;
+                      const displayClasses = matchLog?.assigned_classes || billing.packages?.number_of_classes;
+
+                      return (
+                        <motion.div
+                          key={billing.id}
+                          whileHover={{ scale: 1.01 }}
+                          className="p-5 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-100 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <h3 className="text-lg font-bold text-slate-800">{displayName}</h3>
+                              <Badge className="mt-1 bg-sky-100 text-sky-700 border-sky-200">{displayClasses} aulas</Badge>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-black text-emerald-600">R$ {billing.amount_paid}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between mt-4 pt-4 border-t border-sky-100">
+                            <div className="flex items-center gap-2 text-sm text-slate-600">
+                              <CalendarIcon className="h-4 w-4" />
+                              <span>Validade: <strong>{format(parseISO(billing.end_date), 'dd/MM/yyyy')}</strong></span>
+                            </div>
+                            <span className="text-xs text-slate-400">Adquirido em {format(parseISO(billing.purchase_date), 'dd/MM/yyyy')}</span>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-center text-slate-500 py-8">Nenhum contrato ativo.</p>
+                )}
+              </div>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h2 className="text-xl font-bold mb-4">Histórico de Faturas</h2>
-              <div className="border rounded-lg overflow-hidden">{loading ? <p className="p-4">Carregando...</p> : pastBillings.length > 0 ? <Table><TableHeader className="bg-slate-50"><TableRow><TableHead>Pacote</TableHead><TableHead>Data da Compra</TableHead><TableHead>Data de Expiração</TableHead></TableRow></TableHeader><TableBody>{pastBillings.map(b => (<TableRow key={b.id}><TableCell>{b.packages.name}</TableCell><TableCell>{format(parseISO(b.purchase_date), 'PPP', { locale: ptBR })}</TableCell><TableCell>{format(parseISO(b.end_date), 'PPP', { locale: ptBR })}</TableCell></TableRow>))}</TableBody></Table> : <p className="p-8 text-center text-slate-500">Nenhum histórico encontrado.</p>}</div>
+
+            {/* Histórico - Diseño moderno */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-6 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-100 rounded-lg">
+                    <FileText className="h-5 w-5 text-slate-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">Histórico de Faturas</h2>
+                    <p className="text-sm text-slate-500">Pacotes anteriores</p>
+                  </div>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 text-sky-500 animate-spin" />
+                  </div>
+                ) : pastBillings.length > 0 ? (
+                  <Table>
+                    <TableHeader className="bg-slate-50/50">
+                      <TableRow>
+                        <TableHead className="font-semibold">Pacote</TableHead>
+                        <TableHead className="font-semibold">Data da Compra</TableHead>
+                        <TableHead className="font-semibold">Data de Expiração</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pastBillings.map(b => (
+                        <TableRow key={b.id} className="hover:bg-slate-50/50">
+                          <TableCell className="font-medium">{b.packages.name}</TableCell>
+                          <TableCell>{format(parseISO(b.purchase_date), 'PPP', { locale: ptBR })}</TableCell>
+                          <TableCell>{format(parseISO(b.end_date), 'PPP', { locale: ptBR })}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="p-8 text-center text-slate-500">Nenhum histórico encontrado.</p>
+                )}
+              </div>
             </div>
 
           </TabsContent>
 
           <TabsContent value="agenda" className="mt-4 space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {/* Card Aulas Disponíveis OCULTO conforme solicitação */}
-              {/* <StatCard title="Aulas Disponíveis" value={classStats.available} icon={CalendarPlus} loading={loading} /> */}
-              <StatCard title="Aulas Pendentes" value={classStats.pending} icon={Clock3} loading={loading} />
-              <StatCard title="Aulas Agendadas" value={classStats.scheduled} icon={CalendarClock} loading={loading} />
-              <StatCard title="Aulas Realizadas" value={classStats.completed} icon={CalendarCheck} loading={loading} />
+            {/* Cards de estadísticas OCULTOS - Ya están en el header */}
+            {/* 
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard title="Aulas Pendentes" value={classStats.pending} icon={Clock3} loading={loading} color="amber" />
+              <StatCard title="Aulas Agendadas" value={classStats.scheduled} icon={CalendarClock} loading={loading} color="sky" />
+              <StatCard title="Aulas Realizadas" value={classStats.completed} icon={CalendarCheck} loading={loading} color="emerald" />
             </div>
+            */}
 
             {/* BLOCO DE AGENDAMENTO PONTUAL OCULTO conforme solicitação */}
             {/* A funcionalidade de agendamento pontual foi removida da interface do aluno */}
 
             {/* BLOCO DE AGENDAMENTO SEMANAL OCULTO conforme solicitação */}
-            {/* A funcionalidade de agendamento semanal foi removida da interface do aluno */}
-          </TabsContent>
-          <TabsContent value="aulas" className="mt-4 space-y-6 bg-white p-6 rounded-lg shadow-sm">
-            <h2 className="text-xl font-bold mb-4">Minhas Aulas</h2>
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader className="bg-slate-50">
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Hora</TableHead>
-                    <TableHead>Duração</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Material</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow><TableCell colSpan="5" className="text-center">Carregando...</TableCell></TableRow>
-                  ) : appointments.length > 0 ? (
-                    appointments.map(apt => {
-                      // Buscar materiales para esta aula
-                      const aptMaterials = classMaterials.filter(m => m.appointment_id === apt.id);
+            {/* A funcionalidade de agendamento semanal fue removida da interface do aluno */}
 
-                      return (
-                        <TableRow key={apt.id}>
-                          <TableCell className="font-medium">{format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR })}</TableCell>
-                          <TableCell>{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell>
-                          <TableCell>{apt.duration_minutes || 30} min</TableCell>
-                          <TableCell><StatusBadge status={apt.status} /></TableCell>
-                          <TableCell>
-                            {aptMaterials.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {aptMaterials.map(material => (
-                                  <a
-                                    key={material.id}
-                                    href={material.file_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-sky-100 text-sky-700 rounded-md hover:bg-sky-200 transition-colors"
-                                    title={`Baixar: ${material.material_name}`}
-                                  >
-                                    <FileText className="w-3 h-3" />
-                                    <span className="max-w-[100px] truncate">{material.material_name}</span>
-                                    <Download className="w-3 h-3" />
-                                  </a>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-xs text-slate-400">-</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
+            {/* Grid de dos columnas: Próximas Aulas + Vocabulario */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Próximas Aulas - Columna izquierda */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 overflow-hidden h-fit">
+                <div className="p-5 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-sky-100 rounded-lg">
+                      <CalendarClock className="h-5 w-5 text-sky-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-slate-800">Próximas Aulas</h3>
+                      <p className="text-xs text-slate-500">Suas aulas agendadas</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {loading ? (
+                    <div className="p-8 flex justify-center">
+                      <Loader2 className="h-6 w-6 text-sky-500 animate-spin" />
+                    </div>
+                  ) : appointments.filter(a => a.status === 'scheduled').slice(0, 4).length > 0 ? (
+                    appointments.filter(a => a.status === 'scheduled').slice(0, 4).map((apt, idx) => (
+                      <motion.div
+                        key={apt.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.1 }}
+                        className="p-4 flex items-center justify-between hover:bg-slate-50/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="text-center min-w-[50px]">
+                            <p className="text-2xl font-black text-sky-600">{format(parseISO(apt.class_datetime), 'dd')}</p>
+                            <p className="text-xs text-slate-500 uppercase">{format(parseISO(apt.class_datetime), 'MMM', { locale: ptBR })}</p>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-800">{format(parseISO(apt.class_datetime), 'EEEE', { locale: ptBR })}</p>
+                            <p className="text-sm text-slate-500">{format(parseISO(apt.class_datetime), 'HH:mm')} - {apt.duration_minutes || 30} min</p>
+                          </div>
+                        </div>
+                        <Badge className="bg-sky-100 text-sky-700 border-sky-200">Agendada</Badge>
+                      </motion.div>
+                    ))
                   ) : (
-                    <TableRow><TableCell colSpan="5" className="text-center p-8 text-slate-500">Nenhuma aula encontrada.</TableCell></TableRow>
+                    <div className="p-8 text-center">
+                      <CalendarClock className="h-10 w-10 text-slate-200 mx-auto mb-2" />
+                      <p className="text-slate-500">Nenhuma aula agendada</p>
+                    </div>
                   )}
-                </TableBody>
-              </Table>
+                </div>
+              </div>
+
+              {/* Vocabulario del Día - Columna derecha */}
+              <DailyVocabularyWidget />
+            </div>
+          </TabsContent>
+
+          {/* NUEVA PESTAÑA: RECURSOS */}
+          <TabsContent value="recursos" className="mt-4 space-y-6">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-6 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-sky-100 rounded-lg">
+                    <FileText className="h-5 w-5 text-sky-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">Biblioteca de Recursos</h2>
+                    <p className="text-sm text-slate-500">Materiais de estudo do seu professor</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                <div className="grid gap-4">
+                  {/* Recursos de demostración */}
+                  {[
+                    { name: 'Verbos Irregulares - Guía Completa', type: 'PDF', size: '2.3 MB', category: 'Gramática' },
+                    { name: 'Vocabulário: Comida y Restaurante', type: 'PDF', size: '1.1 MB', category: 'Vocabulário' },
+                    { name: 'Audio: Conversación en el Aeropuerto', type: 'MP3', size: '4.5 MB', category: 'Listening' },
+                    { name: 'Exercícios de Conjugação', type: 'PDF', size: '890 KB', category: 'Exercícios' },
+                  ].map((recurso, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-sky-200 hover:bg-sky-50/50 transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "p-3 rounded-xl",
+                          recurso.type === 'PDF' ? 'bg-red-100' : recurso.type === 'MP3' ? 'bg-purple-100' : 'bg-sky-100'
+                        )}>
+                          <FileText className={cn(
+                            "h-6 w-6",
+                            recurso.type === 'PDF' ? 'text-red-600' : recurso.type === 'MP3' ? 'text-purple-600' : 'text-sky-600'
+                          )} />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800 group-hover:text-sky-600 transition-colors">{recurso.name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs">{recurso.type}</Badge>
+                            <span className="text-xs text-slate-400">{recurso.size}</span>
+                            <Badge className="text-xs bg-slate-100 text-slate-600">{recurso.category}</Badge>
+                          </div>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* PESTAÑA QUIZ - Acceso a página dedicada */}
+          <TabsContent value="quiz" className="mt-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-gradient-to-br from-violet-500 via-purple-600 to-indigo-700 rounded-2xl p-8 text-white shadow-xl text-center"
+            >
+              <motion.div
+                animate={{ y: [0, -10, 0] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="text-7xl mb-6"
+              >
+                🎯
+              </motion.div>
+              <h2 className="text-3xl font-black mb-3">¡Practica tu Español!</h2>
+              <p className="text-violet-100 mb-6 max-w-md mx-auto">
+                Ejercicios interactivos estilo Duolingo: traducción, conjugación, vocabulario y más.
+                ¡Gana XP y mantén tu racha!
+              </p>
+
+              <div className="flex items-center justify-center gap-6 mb-8">
+                <div className="text-center">
+                  <p className="text-2xl font-black">❤️ 3</p>
+                  <p className="text-xs text-violet-200">Vidas</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-black">⭐ +10</p>
+                  <p className="text-xs text-violet-200">XP por acierto</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-black">🔥 Racha</p>
+                  <p className="text-xs text-violet-200">Bonus</p>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => navigate('/quiz')}
+                size="lg"
+                className="bg-white text-violet-700 hover:bg-violet-50 font-bold text-lg px-8 py-6 shadow-lg"
+              >
+                <Sparkles className="h-5 w-5 mr-2" />
+                Comenzar Lección
+              </Button>
+
+              <p className="text-xs text-violet-200 mt-4">
+                10 ejercicios aleatorios por lección
+              </p>
+            </motion.div>
+          </TabsContent>
+
+          {/* NUEVA PESTAÑA: LOGROS (GAMIFICACIÓN) */}
+          <TabsContent value="logros" className="mt-4 space-y-6">
+            <div className="bg-gradient-to-br from-amber-400 via-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-lg">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                    <Star className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black">Nível {Math.floor((classStats.completed || 0) / 5) + 1}</h2>
+                    <p className="text-orange-100">Estudante {(classStats.completed || 0) >= 20 ? 'Avançado' : (classStats.completed || 0) >= 10 ? 'Intermediário' : 'Iniciante'}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-4xl font-black">{((classStats.completed || 0) * 50) + (classStats.scheduled || 0) * 10}</p>
+                  <p className="text-orange-100 text-sm">Pontos XP</p>
+                </div>
+              </div>
+              <div className="bg-white/20 rounded-full h-3 mb-2">
+                <div
+                  className="bg-white rounded-full h-3 transition-all duration-500"
+                  style={{ width: `${((classStats.completed || 0) % 5) * 20}%` }}
+                />
+              </div>
+              <p className="text-xs text-orange-100">{5 - ((classStats.completed || 0) % 5)} aulas para o próximo nível</p>
+            </div>
+
+            {/* Badges */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 p-6">
+              <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <Star className="h-5 w-5 text-amber-500" />
+                Suas Conquistas
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {[
+                  { name: 'Primeira Aula', icon: '🎉', earned: true, desc: 'Completou sua primeira aula' },
+                  { name: '5 Aulas', icon: '⭐', earned: (classStats.completed || 0) >= 5, desc: 'Completou 5 aulas' },
+                  { name: '10 Aulas', icon: '🏆', earned: (classStats.completed || 0) >= 10, desc: 'Completou 10 aulas' },
+                  { name: 'Dedicado', icon: '🔥', earned: (classStats.completed || 0) >= 15, desc: '15 aulas completadas' },
+                  { name: 'Nota Alta', icon: '💯', earned: (performanceStats?.overallAveragePercent || 0) >= 80, desc: 'Média acima de 80%' },
+                  { name: 'Conversador', icon: '💬', earned: true, desc: 'Usou o chat' },
+                  { name: 'IA Master', icon: '🤖', earned: true, desc: 'Usou o assistente IA' },
+                  { name: 'Estudioso', icon: '📚', earned: false, desc: 'Baixou 5 recursos' },
+                ].map((badge, idx) => (
+                  <motion.div
+                    key={idx}
+                    whileHover={{ scale: 1.05 }}
+                    className={cn(
+                      "text-center p-4 rounded-xl border-2 transition-all",
+                      badge.earned
+                        ? "bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200 shadow-sm"
+                        : "bg-slate-50 border-slate-200 opacity-50"
+                    )}
+                  >
+                    <span className="text-3xl">{badge.icon}</span>
+                    <p className={cn("font-semibold mt-2 text-sm", badge.earned ? "text-slate-800" : "text-slate-400")}>{badge.name}</p>
+                    <p className="text-xs text-slate-400 mt-1">{badge.desc}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="aulas" className="mt-4">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-6 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-violet-100 rounded-lg">
+                    <BookOpen className="h-5 w-5 text-violet-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">Minhas Aulas</h2>
+                    <p className="text-sm text-slate-500">Histórico completo de suas aulas</p>
+                  </div>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-slate-50/50">
+                    <TableRow>
+                      <TableHead className="font-semibold">Data</TableHead>
+                      <TableHead className="font-semibold">Hora</TableHead>
+                      <TableHead className="font-semibold">Duração</TableHead>
+                      <TableHead className="font-semibold">Status</TableHead>
+                      <TableHead className="font-semibold">Material</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow><TableCell colSpan="5" className="text-center">Carregando...</TableCell></TableRow>
+                    ) : appointments.length > 0 ? (
+                      appointments.map(apt => {
+                        // Buscar materiales para esta aula
+                        const aptMaterials = classMaterials.filter(m => m.appointment_id === apt.id);
+
+                        return (
+                          <TableRow key={apt.id}>
+                            <TableCell className="font-medium">{format(parseISO(apt.class_datetime), 'PPP', { locale: ptBR })}</TableCell>
+                            <TableCell>{format(parseISO(apt.class_datetime), 'HH:mm')}</TableCell>
+                            <TableCell>{apt.duration_minutes || 30} min</TableCell>
+                            <TableCell><StatusBadge status={apt.status} /></TableCell>
+                            <TableCell>
+                              {aptMaterials.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {aptMaterials.map(material => (
+                                    <a
+                                      key={material.id}
+                                      href={material.file_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-sky-100 text-sky-700 rounded-md hover:bg-sky-200 transition-colors"
+                                      title={`Baixar: ${material.material_name}`}
+                                    >
+                                      <FileText className="w-3 h-3" />
+                                      <span className="max-w-[100px] truncate">{material.material_name}</span>
+                                      <Download className="w-3 h-3" />
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400">-</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow><TableCell colSpan="5" className="text-center p-8 text-slate-500">Nenhuma aula encontrada.</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </TabsContent>
 
           <TabsContent value="conversas" className="mt-4">
-            <div className="bg-white rounded-lg shadow-sm flex flex-col h-[600px] border overflow-hidden">
-              <header className="p-4 border-b bg-slate-50 flex items-center justify-between">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[600px] overflow-hidden">
+              <header className="p-5 border-b border-slate-100 bg-gradient-to-r from-emerald-500 to-teal-600">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-sky-100 flex items-center justify-center text-sky-600">
+                  <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white">
                     <User className="h-6 w-6" />
                   </div>
-                  <div>
-                    <h3 className="font-bold">Chat com Professor</h3>
-                    <p className="text-xs text-slate-500">Tire suas dúvidas em tempo real</p>
+                  <div className="text-white">
+                    <h3 className="font-bold text-lg">Chat com Professor</h3>
+                    <p className="text-emerald-100 text-sm">Tire suas dúvidas em tempo real</p>
                   </div>
                 </div>
               </header>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-slate-50 to-white">
                 {chatLoading ? (
-                  <div className="flex justify-center items-center h-full"><Loader2 className="w-8 h-8 animate-spin text-sky-600" /></div>
+                  <div className="flex justify-center items-center h-full">
+                    <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+                  </div>
                 ) : chatMessages.length > 0 ? (
                   chatMessages.map((msg, idx) => {
                     const isMe = msg.remitente_id === user.id;
                     return (
-                      <div key={msg.mensaje_id || idx} className={cn("flex", isMe ? "justify-end" : "justify-start")}>
-                        <div className={cn("max-w-[80%] rounded-2xl px-4 py-2 shadow-sm", isMe ? "bg-sky-600 text-white rounded-tr-none" : "bg-white text-slate-800 rounded-tl-none border")}>
+                      <motion.div
+                        key={msg.mensaje_id || idx}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={cn("flex", isMe ? "justify-end" : "justify-start")}
+                      >
+                        <div className={cn(
+                          "max-w-[80%] rounded-2xl px-4 py-3 shadow-sm",
+                          isMe
+                            ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-tr-sm"
+                            : "bg-white text-slate-800 rounded-tl-sm border border-slate-100"
+                        )}>
                           <p className="text-sm">{msg.contenido}</p>
-                          <p className={cn("text-[10px] mt-1 text-right", isMe ? "text-sky-100" : "text-slate-400")}>
+                          <p className={cn("text-[10px] mt-1 text-right", isMe ? "text-emerald-100" : "text-slate-400")}>
                             {format(parseISO(msg.enviado_en), 'HH:mm')}
                           </p>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                    <MessageCircle className="h-12 w-12 mb-2 opacity-20" />
-                    <p>Inicie uma conversa com seu professor!</p>
+                    <div className="p-4 bg-slate-100 rounded-full mb-4">
+                      <MessageCircle className="h-10 w-10 text-slate-300" />
+                    </div>
+                    <p className="font-medium">Inicie uma conversa!</p>
+                    <p className="text-sm text-slate-400">Envie uma mensagem para seu professor</p>
                   </div>
                 )}
                 <div ref={chatEndRef} />
               </div>
 
-              <form onSubmit={handleSendMessage} className="p-4 border-t bg-white flex gap-2">
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-100 bg-white flex gap-3">
                 <input
                   value={newChatMessage}
                   onChange={(e) => setNewChatMessage(e.target.value)}
                   placeholder="Escreva sua mensagem..."
-                  className="flex-1 bg-slate-100 border-none rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                  className="flex-1 bg-slate-100 border-none rounded-full px-5 py-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                   disabled={isSendingMessage}
                 />
-                <Button type="submit" size="icon" className="rounded-full bg-sky-600 h-10 w-10 shrink-0" disabled={isSendingMessage || !newChatMessage.trim()}>
-                  {isSendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 h-12 w-12 shrink-0 shadow-lg shadow-emerald-200 hover:shadow-emerald-300"
+                  disabled={isSendingMessage || !newChatMessage.trim()}
+                >
+                  {isSendingMessage ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
                 </Button>
               </form>
             </div>
           </TabsContent>
 
-          <TabsContent value="desempenho" className="mt-4 space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h2 className="text-xl font-bold mb-6">Meu Desempenho</h2>
-              {!performanceStats ? (
-                <div className="text-center py-12 text-slate-500">
-                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                  <p>Ainda não há avaliações disponíveis para gerar seu dashboard.</p>
-                  <p className="text-sm">As notas aparecerão aqui após suas aulas serem avaliadas pelo professor.</p>
+          <TabsContent value="desempenho" className="mt-4">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="p-6 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <BarChart3 className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">Meu Desempenho</h2>
+                    <p className="text-sm text-slate-500">Acompanhe sua evolução no aprendizado</p>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-8">
-                  {/* Três Indicadores KPI */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Indicador 1: Média Geral */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0 }}
-                      className="bg-gradient-to-br from-sky-500 to-sky-600 p-6 rounded-xl text-white shadow-lg"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sky-100 text-sm font-medium">Média Geral</span>
-                        <div className="p-2 bg-white/20 rounded-lg">
-                          <Star className="h-5 w-5 text-white" />
+              </div>
+              <div className="p-6">
+                {!performanceStats ? (
+                  <div className="text-center py-12">
+                    <div className="p-4 bg-slate-100 rounded-full inline-block mb-4">
+                      <BarChart3 className="h-10 w-10 text-slate-300" />
+                    </div>
+                    <p className="font-medium text-slate-600">Ainda não há avaliações</p>
+                    <p className="text-sm text-slate-400 mt-1">As notas aparecerão aqui após suas aulas serem avaliadas</p>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    {/* Três Indicadores KPI */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Indicador 1: Média Geral */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0 }}
+                        className="bg-gradient-to-br from-sky-500 to-sky-600 p-6 rounded-xl text-white shadow-lg"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sky-100 text-sm font-medium">Média Geral</span>
+                          <div className="p-2 bg-white/20 rounded-lg">
+                            <Star className="h-5 w-5 text-white" />
+                          </div>
                         </div>
-                      </div>
-                      <p className="text-4xl font-black">{performanceStats.overallAveragePercent}%</p>
-                      <p className="text-sky-100 text-xs mt-1">Baseado em {performanceStats.totalFeedbacks} avaliações</p>
-                    </motion.div>
+                        <p className="text-4xl font-black">{performanceStats.overallAveragePercent}%</p>
+                        <p className="text-sky-100 text-xs mt-1">Baseado em {performanceStats.totalFeedbacks} avaliações</p>
+                      </motion.div>
 
-                    {/* Indicador 2: Média 30 Dias */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.1 }}
-                      className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-xl text-white shadow-lg"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-emerald-100 text-sm font-medium">Últimos 30 Dias</span>
-                        <div className="p-2 bg-white/20 rounded-lg">
-                          <CalendarIcon className="h-5 w-5 text-white" />
+                      {/* Indicador 2: Média 30 Dias */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.1 }}
+                        className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-xl text-white shadow-lg"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-emerald-100 text-sm font-medium">Últimos 30 Dias</span>
+                          <div className="p-2 bg-white/20 rounded-lg">
+                            <CalendarIcon className="h-5 w-5 text-white" />
+                          </div>
                         </div>
-                      </div>
-                      <p className="text-4xl font-black">
-                        {performanceStats.recentAveragePercent ? `${performanceStats.recentAveragePercent}%` : 'N/A'}
-                      </p>
-                      <p className="text-emerald-100 text-xs mt-1">
-                        {performanceStats.recentFeedbacksCount > 0
-                          ? `${performanceStats.recentFeedbacksCount} avaliações recentes`
-                          : 'Sem avaliações neste período'
-                        }
-                      </p>
-                    </motion.div>
+                        <p className="text-4xl font-black">
+                          {performanceStats.recentAveragePercent ? `${performanceStats.recentAveragePercent}%` : 'N/A'}
+                        </p>
+                        <p className="text-emerald-100 text-xs mt-1">
+                          {performanceStats.recentFeedbacksCount > 0
+                            ? `${performanceStats.recentFeedbacksCount} avaliações recentes`
+                            : 'Sem avaliações neste período'
+                          }
+                        </p>
+                      </motion.div>
 
-                    {/* Indicador 3: Tendência */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.2 }}
-                      className={cn(
-                        "p-6 rounded-xl text-white shadow-lg",
-                        performanceStats.trendDirection === 'up'
-                          ? "bg-gradient-to-br from-green-500 to-green-600"
-                          : performanceStats.trendDirection === 'down'
-                            ? "bg-gradient-to-br from-orange-500 to-orange-600"
-                            : "bg-gradient-to-br from-slate-500 to-slate-600"
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={cn(
-                          "text-sm font-medium",
+                      {/* Indicador 3: Tendência */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.2 }}
+                        className={cn(
+                          "p-6 rounded-xl text-white shadow-lg",
+                          performanceStats.trendDirection === 'up'
+                            ? "bg-gradient-to-br from-green-500 to-green-600"
+                            : performanceStats.trendDirection === 'down'
+                              ? "bg-gradient-to-br from-orange-500 to-orange-600"
+                              : "bg-gradient-to-br from-slate-500 to-slate-600"
+                        )}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={cn(
+                            "text-sm font-medium",
+                            performanceStats.trendDirection === 'up' ? "text-green-100"
+                              : performanceStats.trendDirection === 'down' ? "text-orange-100"
+                                : "text-slate-100"
+                          )}>Tendência</span>
+                          <div className="p-2 bg-white/20 rounded-lg">
+                            {performanceStats.trendDirection === 'up' ? (
+                              <TrendingUp className="h-5 w-5 text-white" />
+                            ) : performanceStats.trendDirection === 'down' ? (
+                              <TrendingDown className="h-5 w-5 text-white" />
+                            ) : (
+                              <Minus className="h-5 w-5 text-white" />
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-4xl font-black flex items-center gap-2">
+                          {performanceStats.trendPercent ? (
+                            <>
+                              {performanceStats.trendDirection === 'up' ? '+' : performanceStats.trendDirection === 'down' ? '-' : ''}
+                              {performanceStats.trendPercent}%
+                            </>
+                          ) : 'N/A'}
+                        </p>
+                        <p className={cn(
+                          "text-xs mt-1",
                           performanceStats.trendDirection === 'up' ? "text-green-100"
                             : performanceStats.trendDirection === 'down' ? "text-orange-100"
                               : "text-slate-100"
-                        )}>Tendência</span>
-                        <div className="p-2 bg-white/20 rounded-lg">
-                          {performanceStats.trendDirection === 'up' ? (
-                            <TrendingUp className="h-5 w-5 text-white" />
-                          ) : performanceStats.trendDirection === 'down' ? (
-                            <TrendingDown className="h-5 w-5 text-white" />
-                          ) : (
-                            <Minus className="h-5 w-5 text-white" />
-                          )}
+                        )}>
+                          {performanceStats.trendDirection === 'up'
+                            ? 'Você está evoluindo!'
+                            : performanceStats.trendDirection === 'down'
+                              ? 'Hora de focar mais!'
+                              : 'Sem dados suficientes'
+                          }
+                        </p>
+                      </motion.div>
+                    </div>
+
+                    {/* Gráfico de Barras Verticais */}
+                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-100">
+                      <h3 className="text-lg font-bold mb-6 text-slate-800">Desempenho por Competência</h3>
+                      <div className="flex items-end justify-between gap-2 h-64 px-4">
+                        {performanceStats.dimensions.map((stat, index) => {
+                          const heightPercent = (parseFloat(stat.average) / 5) * 100;
+                          const getBarColor = (percent) => {
+                            if (percent >= 80) return 'from-emerald-400 to-emerald-600';
+                            if (percent >= 60) return 'from-sky-400 to-sky-600';
+                            if (percent >= 40) return 'from-yellow-400 to-yellow-600';
+                            return 'from-orange-400 to-orange-600';
+                          };
+                          return (
+                            <div key={stat.key} className="flex flex-col items-center flex-1 group">
+                              <div className="relative w-full flex flex-col items-center">
+                                {/* Valor acima da barra */}
+                                <motion.span
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  transition={{ delay: 0.5 + index * 0.1 }}
+                                  className="text-xs font-bold text-slate-700 mb-1"
+                                >
+                                  {stat.average}
+                                </motion.span>
+                                {/* Container da barra */}
+                                <div className="w-full h-48 bg-slate-200 rounded-t-lg overflow-hidden flex items-end">
+                                  <motion.div
+                                    initial={{ height: 0 }}
+                                    animate={{ height: `${heightPercent}%` }}
+                                    transition={{ duration: 1, delay: index * 0.1, ease: "easeOut" }}
+                                    className={cn(
+                                      "w-full rounded-t-lg bg-gradient-to-t shadow-inner",
+                                      getBarColor(heightPercent)
+                                    )}
+                                  />
+                                </div>
+                              </div>
+                              {/* Label abaixo */}
+                              <span className="text-[10px] font-medium text-slate-600 mt-2 text-center leading-tight">
+                                {stat.name}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Legenda */}
+                      <div className="flex justify-center gap-6 mt-6 pt-4 border-t border-slate-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" />
+                          <span className="text-xs text-slate-600">Excelente (≥80%)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-gradient-to-r from-sky-400 to-sky-600" />
+                          <span className="text-xs text-slate-600">Bom (60-79%)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600" />
+                          <span className="text-xs text-slate-600">Regular (40-59%)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-400 to-orange-600" />
+                          <span className="text-xs text-slate-600">A melhorar (&lt;40%)</span>
                         </div>
                       </div>
-                      <p className="text-4xl font-black flex items-center gap-2">
-                        {performanceStats.trendPercent ? (
-                          <>
-                            {performanceStats.trendDirection === 'up' ? '+' : performanceStats.trendDirection === 'down' ? '-' : ''}
-                            {performanceStats.trendPercent}%
-                          </>
-                        ) : 'N/A'}
-                      </p>
-                      <p className={cn(
-                        "text-xs mt-1",
-                        performanceStats.trendDirection === 'up' ? "text-green-100"
-                          : performanceStats.trendDirection === 'down' ? "text-orange-100"
-                            : "text-slate-100"
-                      )}>
-                        {performanceStats.trendDirection === 'up'
-                          ? 'Você está evoluindo!'
-                          : performanceStats.trendDirection === 'down'
-                            ? 'Hora de focar mais!'
-                            : 'Sem dados suficientes'
-                        }
-                      </p>
-                    </motion.div>
-                  </div>
+                    </div>
 
-                  {/* Gráfico de Barras Verticais */}
-                  <div className="bg-slate-50 p-6 rounded-xl border border-slate-100">
-                    <h3 className="text-lg font-bold mb-6 text-slate-800">Desempenho por Competência</h3>
-                    <div className="flex items-end justify-between gap-2 h-64 px-4">
-                      {performanceStats.dimensions.map((stat, index) => {
-                        const heightPercent = (parseFloat(stat.average) / 5) * 100;
-                        const getBarColor = (percent) => {
-                          if (percent >= 80) return 'from-emerald-400 to-emerald-600';
-                          if (percent >= 60) return 'from-sky-400 to-sky-600';
-                          if (percent >= 40) return 'from-yellow-400 to-yellow-600';
-                          return 'from-orange-400 to-orange-600';
-                        };
-                        return (
-                          <div key={stat.key} className="flex flex-col items-center flex-1 group">
-                            <div className="relative w-full flex flex-col items-center">
-                              {/* Valor acima da barra */}
-                              <motion.span
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 0.5 + index * 0.1 }}
-                                className="text-xs font-bold text-slate-700 mb-1"
+                    {/* Histórico de Feedbacks */}
+                    <div className="pt-6 border-t">
+                      <h3 className="text-lg font-bold mb-4">Comentários e Feedbacks do Professor</h3>
+                      <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                        {feedbacks.length === 0 ? (
+                          <p className="text-center text-slate-500 py-8">Nenhum feedback encontrado.</p>
+                        ) : (
+                          feedbacks.map((f) => {
+                            const dimensions = ['fala', 'leitura', 'escrita', 'compreensao', 'audicao', 'gramatica', 'pronuncia', 'vocabulario'];
+                            const avgScore = dimensions.reduce((sum, d) => sum + (f[d] || 0), 0) / dimensions.length;
+                            const avgPercent = ((avgScore / 5) * 100).toFixed(0);
+
+                            return (
+                              <motion.div
+                                key={f.id}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="p-5 rounded-xl bg-white border-2 border-slate-100 hover:border-sky-200 hover:shadow-md transition-all"
                               >
-                                {stat.average}
-                              </motion.span>
-                              {/* Container da barra */}
-                              <div className="w-full h-48 bg-slate-200 rounded-t-lg overflow-hidden flex items-end">
-                                <motion.div
-                                  initial={{ height: 0 }}
-                                  animate={{ height: `${heightPercent}%` }}
-                                  transition={{ duration: 1, delay: index * 0.1, ease: "easeOut" }}
-                                  className={cn(
-                                    "w-full rounded-t-lg bg-gradient-to-t shadow-inner",
-                                    getBarColor(heightPercent)
-                                  )}
-                                />
-                              </div>
-                            </div>
-                            {/* Label abaixo */}
-                            <span className="text-[10px] font-medium text-slate-600 mt-2 text-center leading-tight">
-                              {stat.name}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {/* Legenda */}
-                    <div className="flex justify-center gap-6 mt-6 pt-4 border-t border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" />
-                        <span className="text-xs text-slate-600">Excelente (≥80%)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-sky-400 to-sky-600" />
-                        <span className="text-xs text-slate-600">Bom (60-79%)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600" />
-                        <span className="text-xs text-slate-600">Regular (40-59%)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-400 to-orange-600" />
-                        <span className="text-xs text-slate-600">A melhorar (&lt;40%)</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Histórico de Feedbacks */}
-                  <div className="pt-6 border-t">
-                    <h3 className="text-lg font-bold mb-4">Comentários e Feedbacks do Professor</h3>
-                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                      {feedbacks.length === 0 ? (
-                        <p className="text-center text-slate-500 py-8">Nenhum feedback encontrado.</p>
-                      ) : (
-                        feedbacks.map((f) => {
-                          const dimensions = ['fala', 'leitura', 'escrita', 'compreensao', 'audicao', 'gramatica', 'pronuncia', 'vocabulario'];
-                          const avgScore = dimensions.reduce((sum, d) => sum + (f[d] || 0), 0) / dimensions.length;
-                          const avgPercent = ((avgScore / 5) * 100).toFixed(0);
-
-                          return (
-                            <motion.div
-                              key={f.id}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              className="p-5 rounded-xl bg-white border-2 border-slate-100 hover:border-sky-200 hover:shadow-md transition-all"
-                            >
-                              <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="p-2 bg-sky-100 rounded-lg">
-                                    <CalendarIcon className="h-4 w-4 text-sky-600" />
+                                <div className="flex justify-between items-start mb-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-sky-100 rounded-lg">
+                                      <CalendarIcon className="h-4 w-4 text-sky-600" />
+                                    </div>
+                                    <div>
+                                      <span className="text-sm font-bold text-slate-800">
+                                        {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'PPP', { locale: ptBR }) : 'Aula'}
+                                      </span>
+                                      <p className="text-xs text-slate-500">
+                                        {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'HH:mm') : ''}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <div>
-                                    <span className="text-sm font-bold text-slate-800">
-                                      {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'PPP', { locale: ptBR }) : 'Aula'}
-                                    </span>
-                                    <p className="text-xs text-slate-500">
-                                      {f.appointment?.class_datetime ? format(parseISO(f.appointment.class_datetime), 'HH:mm') : ''}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <div className="flex gap-0.5">
-                                    {[1, 2, 3, 4, 5].map(s => (
-                                      <Star key={s} className={cn("h-4 w-4", s <= Math.round(avgScore) ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
-                                    ))}
-                                  </div>
-                                  <Badge variant="outline" className={cn(
-                                    "text-xs font-bold",
-                                    parseInt(avgPercent) >= 80 ? "border-emerald-300 bg-emerald-50 text-emerald-700" :
-                                      parseInt(avgPercent) >= 60 ? "border-sky-300 bg-sky-50 text-sky-700" :
-                                        parseInt(avgPercent) >= 40 ? "border-yellow-300 bg-yellow-50 text-yellow-700" :
-                                          "border-orange-300 bg-orange-50 text-orange-700"
-                                  )}>
-                                    {avgPercent}%
-                                  </Badge>
-                                </div>
-                              </div>
-
-                              {/* Comentário do professor */}
-                              <div className="bg-slate-50 p-4 rounded-lg mb-4">
-                                <p className="text-sm text-slate-700 italic leading-relaxed">
-                                  "{f.comment || 'Sem comentário adicional do professor.'}"
-                                </p>
-                              </div>
-
-                              {/* Notas por competência */}
-                              <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-                                {dimensions.map(d => (
-                                  <div key={d} className="text-center p-2 bg-white border rounded-lg">
-                                    <p className="text-[10px] text-slate-500 font-medium truncate">
-                                      {d.charAt(0).toUpperCase() + d.slice(1)}
-                                    </p>
-                                    <p className={cn(
-                                      "text-sm font-bold mt-1",
-                                      f[d] >= 4 ? "text-emerald-600" :
-                                        f[d] >= 3 ? "text-sky-600" :
-                                          f[d] >= 2 ? "text-yellow-600" :
-                                            "text-orange-600"
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex gap-0.5">
+                                      {[1, 2, 3, 4, 5].map(s => (
+                                        <Star key={s} className={cn("h-4 w-4", s <= Math.round(avgScore) ? "text-yellow-400 fill-yellow-400" : "text-slate-200")} />
+                                      ))}
+                                    </div>
+                                    <Badge variant="outline" className={cn(
+                                      "text-xs font-bold",
+                                      parseInt(avgPercent) >= 80 ? "border-emerald-300 bg-emerald-50 text-emerald-700" :
+                                        parseInt(avgPercent) >= 60 ? "border-sky-300 bg-sky-50 text-sky-700" :
+                                          parseInt(avgPercent) >= 40 ? "border-yellow-300 bg-yellow-50 text-yellow-700" :
+                                            "border-orange-300 bg-orange-50 text-orange-700"
                                     )}>
-                                      {f[d]}
-                                    </p>
+                                      {avgPercent}%
+                                    </Badge>
                                   </div>
-                                ))}
-                              </div>
-                            </motion.div>
-                          );
-                        })
-                      )}
+                                </div>
+
+                                {/* Comentário do professor */}
+                                <div className="bg-slate-50 p-4 rounded-lg mb-4">
+                                  <p className="text-sm text-slate-700 italic leading-relaxed">
+                                    "{f.comment || 'Sem comentário adicional do professor.'}"
+                                  </p>
+                                </div>
+
+                                {/* Notas por competência */}
+                                <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+                                  {dimensions.map(d => (
+                                    <div key={d} className="text-center p-2 bg-white border rounded-lg">
+                                      <p className="text-[10px] text-slate-500 font-medium truncate">
+                                        {d.charAt(0).toUpperCase() + d.slice(1)}
+                                      </p>
+                                      <p className={cn(
+                                        "text-sm font-bold mt-1",
+                                        f[d] >= 4 ? "text-emerald-600" :
+                                          f[d] >= 3 ? "text-sky-600" :
+                                            f[d] >= 2 ? "text-yellow-600" :
+                                              "text-orange-600"
+                                      )}>
+                                        {f[d]}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Sección de Acceso Rápido - Al final */}
+        <div className="mt-6 mb-20 bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="h-5 w-5 text-sky-500" />
+            <h3 className="font-bold text-slate-800">Acesso Rápido</h3>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <motion.button
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => navigate('/spanish-assistant')}
+              className="flex flex-col items-center gap-2 p-4 rounded-xl bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-100 hover:border-violet-200 transition-colors"
+            >
+              <div className="p-3 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl text-white shadow-lg shadow-violet-200">
+                <Bot className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-medium text-slate-700">IA Assistant</span>
+              <span className="text-xs text-slate-400">Praticar</span>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex flex-col items-center gap-2 p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 hover:border-emerald-200 transition-colors"
+            >
+              <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl text-white shadow-lg shadow-emerald-200">
+                <MessageIcon className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-medium text-slate-700">Chat</span>
+              <span className="text-xs text-slate-400">Professor</span>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex flex-col items-center gap-2 p-4 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-100 hover:border-sky-200 transition-colors"
+            >
+              <div className="p-3 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl text-white shadow-lg shadow-sky-200">
+                <FileText className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-medium text-slate-700">Materiais</span>
+              <span className="text-xs text-slate-400">Em breve</span>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.03, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex flex-col items-center gap-2 p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 hover:border-amber-200 transition-colors"
+            >
+              <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl text-white shadow-lg shadow-amber-200">
+                <BarChart3 className="h-6 w-6" />
+              </div>
+              <span className="text-sm font-medium text-slate-700">Desempenho</span>
+              <span className="text-xs text-slate-400">Ver notas</span>
+            </motion.button>
+          </div>
+        </div>
 
         {/* Botões Flutuantes Globais */}
         <div className="fixed bottom-6 right-24 z-50 flex gap-3">

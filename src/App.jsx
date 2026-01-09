@@ -10,6 +10,7 @@ import UpdatePasswordPage from '@/pages/UpdatePasswordPage';
 import ProfessorLoginPage from '@/pages/ProfessorLoginPage';
 import ProfessorDashboardPage from '@/pages/ProfessorDashboardPage';
 import SpanishAssistantDemo from '@/pages/SpanishAssistantDemo';
+import QuizPage from '@/pages/QuizPage';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { AnimatePresence } from 'framer-motion';
 import ChatWidget from '@/components/ChatWidget';
@@ -121,6 +122,7 @@ function App() {
             <Route path="/professor-login" element={!professorSession ? <ProfessorLoginPage /> : <Navigate to="/professor-dashboard" />} />
             <Route path="/professor-dashboard" element={professorSession ? <ProfessorDashboardPage /> : <Navigate to="/professor-login" />} />
             <Route path="/spanish-assistant" element={<SpanishAssistantDemo />} />
+            <Route path="/quiz" element={user ? <QuizPage /> : <Navigate to="/login" />} />
           </Routes>
         </AnimatePresence>
       </main>
