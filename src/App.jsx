@@ -12,6 +12,7 @@ import ProfessorDashboardPage from '@/pages/ProfessorDashboardPage';
 import SpanishAssistantDemo from '@/pages/SpanishAssistantDemo';
 import QuizPage from '@/pages/QuizPage';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { supabase } from '@/lib/customSupabaseClient'; // Import supabase
 import { AnimatePresence } from 'framer-motion';
 import ChatWidget from '@/components/ChatWidget';
 import PostRegistrationForm from '@/components/PostRegistrationForm';
@@ -74,6 +75,39 @@ function App() {
       </div>
     );
   }
+
+  // Effect to track presence
+  React.useEffect(() => {
+    if (!user || !profile) return;
+
+    const channel = supabase.channel('online-users', {
+      config: {
+        presence: {
+          key: user.id,
+        },
+      },
+    });
+
+    channel.on('presence', { event: 'sync' }, () => {
+      // Optional: Handle sync if needed globally
+    });
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        const trackStatus = await channel.track({
+          user_id: user.id,
+          full_name: profile.full_name,
+          role: profile.role,
+          avatar_url: profile.avatar_url,
+          online_at: new Date().toISOString(),
+        });
+      }
+    });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, profile]);
 
   const showHeaderFooter = !['/professor-login', '/professor-dashboard'].includes(location.pathname);
   const needsPostRegistration = user && profile && !profile.age;

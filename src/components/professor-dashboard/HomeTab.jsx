@@ -57,6 +57,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   const [historico, setHistorico] = useState([]);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
   const [processingAction, setProcessingAction] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]); // State for online users
 
   // Estado para modal de vinculação de professor
   const [showVincularModal, setShowVincularModal] = useState(false);
@@ -316,6 +317,30 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   useEffect(() => {
     loadPendencias();
   }, [loadPendencias]);
+
+  // Track Online Users
+  useEffect(() => {
+    if (!isSuperadmin) return;
+
+    const channel = supabase.channel('online-users');
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const newState = channel.presenceState();
+        const users = [];
+        for (const key in newState) {
+          users.push(...newState[key]);
+        }
+        // Deduplicate by user_id
+        const uniqueUsers = Array.from(new Map(users.map(u => [u.user_id, u])).values());
+        setOnlineUsers(uniqueUsers);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isSuperadmin]);
 
   // Contar totais de pendências
   const pendenciasCounts = useMemo(() => ({
@@ -1564,6 +1589,29 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                 </TabsTrigger>
 
                 <TabsTrigger
+                  value="online"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-purple-600 rounded-none h-full px-0 pb-0 text-slate-500 data-[state=active]:text-purple-700"
+                >
+                  <div className="flex items-center gap-2 pb-2">
+                    <div className="relative">
+                      <Users className="h-4 w-4" />
+                      {onlineUsers.length > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                      )}
+                    </div>
+                    <span>Online</span>
+                    {onlineUsers.length > 0 && (
+                      <Badge variant="secondary" className="bg-green-100 text-green-700 h-5 px-1.5 min-w-[1.25rem] text-[10px] flex justify-center items-center">
+                        {onlineUsers.length}
+                      </Badge>
+                    )}
+                  </div>
+                </TabsTrigger>
+
+                <TabsTrigger
                   value="historico"
                   className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-purple-600 rounded-none h-full px-0 pb-0 text-slate-500 data-[state=active]:text-purple-700 ml-auto"
                 >
@@ -1739,6 +1787,59 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                   </ScrollArea>
                 </TabsContent>
 
+                {/* === TAB: ONLINE USERS === */}
+                <TabsContent value="online" className="p-0">
+                  <ScrollArea className="h-[300px] w-full">
+                    <div className="p-6">
+                      {onlineUsers.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-center text-slate-500">
+                          <div className="p-3 bg-slate-50 rounded-full mb-3">
+                            <Users className="h-8 w-8 text-slate-200" />
+                          </div>
+                          <p>Nenhum usuário online no momento.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {onlineUsers.map((u, idx) => (
+                            <div key={u.user_id || idx} className="flex items-center justify-between p-4 bg-white rounded-lg border shadow-sm transition-all hover:shadow-md">
+                              <div className="flex items-center gap-4">
+                                <div className="relative">
+                                  <Avatar className="h-10 w-10 border border-green-100">
+                                    <AvatarImage src={u.avatar_url} />
+                                    <AvatarFallback className="bg-green-50 text-green-700 font-bold">
+                                      {u.full_name?.[0]}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-white ring-1 ring-green-100"></span>
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-slate-800">{u.full_name}</p>
+                                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                                    <Badge variant="outline" className="capitalize text-[10px] h-4 px-1 bg-slate-50">
+                                      {u.role === 'student' ? 'Aluno' : u.role === 'professor' ? 'Professor' : u.role}
+                                    </Badge>
+                                    <span>•</span>
+                                    <span>Entrou {u.online_at ? formatDistanceToNowStrict(new Date(u.online_at), { locale: ptBR, addSuffix: true }) : 'agora'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-100 animate-pulse">
+                                  <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                  </span>
+                                  Ativo agora
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
                 {/* === TAB: HISTORICO === */}
                 <TabsContent value="historico" className="p-0">
                   <ScrollArea className="h-[300px] w-full">
@@ -1773,8 +1874,8 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
               </>
             )}
           </Tabs>
-        </CardContent>
-      </Card>
+        </CardContent >
+      </Card >
     );
   };
 
