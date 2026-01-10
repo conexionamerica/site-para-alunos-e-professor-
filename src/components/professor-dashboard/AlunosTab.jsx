@@ -1245,44 +1245,51 @@ const AlunosTab = ({ dashboardData }) => {
                                             <TableCell>{format(new Date(student.created_at), 'dd/MM/yyyy')}</TableCell>
                                             {can_manage_students && (
                                                 <TableCell className="text-right">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon">
-                                                                <MoreVertical className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            {student.scheduledAppointments.length > 0 && (
-                                                                <>
-                                                                    <DropdownMenuItem onClick={() => handleOpenScheduleDialog(student)}>
-                                                                        <Calendar className="mr-2 h-4 w-4 text-blue-600" />
-                                                                        Alterar Dias/Horários
-                                                                    </DropdownMenuItem>
-                                                                    <DropdownMenuSeparator />
-                                                                </>
-                                                            )}
-
-                                                            <DropdownMenuItem onClick={() => handleOpenChangeProfessorDialog(student)}>
-                                                                <RefreshCw className="mr-2 h-4 w-4 text-purple-600" />
-                                                                Alterar Professor Vinculado
-                                                            </DropdownMenuItem>
-
-                                                            <DropdownMenuSeparator />
-
-                                                            <DropdownMenuItem onClick={() => {
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                                            title="Enviar Material"
+                                                            onClick={() => {
                                                                 setSelectedStudent(student);
                                                                 setIsResourceDialogOpen(true);
-                                                            }}>
-                                                                <Upload className="mr-2 h-4 w-4 text-emerald-600" />
-                                                                Enviar Material
-                                                            </DropdownMenuItem>
+                                                            }}
+                                                        >
+                                                            <Upload className="h-4 w-4" />
+                                                        </Button>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon">
+                                                                    <MoreVertical className="h-4 w-4" />
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                {student.scheduledAppointments.length > 0 && (
+                                                                    <>
+                                                                        <DropdownMenuItem onClick={() => handleOpenScheduleDialog(student)}>
+                                                                            <Calendar className="mr-2 h-4 w-4 text-blue-600" />
+                                                                            Alterar Dias/Horários
+                                                                        </DropdownMenuItem>
+                                                                        <DropdownMenuSeparator />
+                                                                    </>
+                                                                )}
 
-                                                            <DropdownMenuItem onClick={() => handleOpenMessageDialog(student)}>
-                                                                <MessageSquare className="mr-2 h-4 w-4 text-sky-600" />
-                                                                Enviar Mensagem
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                                <DropdownMenuItem onClick={() => handleOpenChangeProfessorDialog(student)}>
+                                                                    <RefreshCw className="mr-2 h-4 w-4 text-purple-600" />
+                                                                    Alterar Professor Vinculado
+                                                                </DropdownMenuItem>
+
+                                                                <DropdownMenuSeparator />
+
+
+                                                                <DropdownMenuItem onClick={() => handleOpenMessageDialog(student)}>
+                                                                    <MessageSquare className="mr-2 h-4 w-4 text-sky-600" />
+                                                                    Enviar Mensagem
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </div>
                                                 </TableCell>
                                             )}
                                         </TableRow>
@@ -1380,7 +1387,7 @@ const AlunosTab = ({ dashboardData }) => {
                     />
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 
