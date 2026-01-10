@@ -123,6 +123,9 @@ function App() {
             <Route path="/professor-dashboard" element={professorSession ? <ProfessorDashboardPage /> : <Navigate to="/professor-login" />} />
             <Route path="/spanish-assistant" element={<SpanishAssistantDemo />} />
             <Route path="/quiz" element={user ? <QuizPage /> : <Navigate to="/login" />} />
+            <Route path="/professor" element={<Navigate to="/professor-login" />} />
+            <Route path="/dashboard" element={user ? <HomePage /> : <Navigate to="/login" />} />
+            <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />
           </Routes>
         </AnimatePresence>
       </main>
