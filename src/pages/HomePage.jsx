@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Se incluyen los iconos necesarios para la nueva funcionalidad
-import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot, Download, ExternalLink, Volume2, Mic, Ticket } from 'lucide-react';
+import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot, Download, ExternalLink, Volume2, Mic, Ticket, AlertCircle, Clock } from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
 import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 import { PlanExpiringBanner } from '@/components/student/PlanExpiringBanner';
@@ -181,7 +181,7 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const [activeBillings, setActiveBillings] = useState([]);
   const [pastBillings, setPastBillings] = useState([]);
-  const [classStats, setClassStats] = useState({ available: 0, scheduled: 0, completed: 0, pending: 0, rescheduledCount: 0 });
+  const [classStats, setClassStats] = useState({ available: 0, scheduled: 0, completed: 0, missed: 0, pending: 0, rescheduledCount: 0 });
   const [appointments, setAppointments] = useState([]);
   const [nextClass, setNextClass] = useState(null);
   const [professorId, setProfessorId] = useState(null);
@@ -351,6 +351,7 @@ const HomePage = () => {
         available,
         scheduled: scheduledClassesCount,
         completed: appointmentsData.filter(a => a.status === 'completed').length,
+        missed: appointmentsData.filter(a => a.status === 'missed').length,
         pending: pendingClassesCount,
         rescheduledCount: rescheduledClassesCount,
       });
@@ -776,6 +777,13 @@ const HomePage = () => {
                   <p className="text-3xl font-black">{classStats.completed || 0}</p>
                   <p className="text-[10px] text-emerald-100 uppercase font-bold">Realizadas</p>
                 </motion.div>
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl px-5 py-4 text-white shadow-lg shadow-red-200 min-w-[100px] text-center"
+                >
+                  <p className="text-3xl font-black">{classStats.missed || 0}</p>
+                  <p className="text-[10px] text-red-100 uppercase font-bold">Faltas</p>
+                </motion.div>
                 {daysRemaining !== null && (
                   <motion.div
                     whileHover={{ scale: 1.05 }}
@@ -818,7 +826,32 @@ const HomePage = () => {
               <CalendarCheck className="h-6 w-6 text-white/30" />
             </div>
           </motion.div>
-          {/* Removed old daysRemaining widget from here */}
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-4 text-white shadow-lg h-full flex flex-col justify-center"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-2xl font-black leading-none">{classStats.missed || 0}</p>
+                <p className="text-[10px] text-red-100 font-bold uppercase mt-1">Faltas</p>
+              </div>
+              <AlertCircle className="h-6 w-6 text-white/30" />
+            </div>
+          </motion.div>
+          {daysRemaining !== null && (
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg h-full flex flex-col justify-center"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-black leading-none">{daysRemaining}</p>
+                  <p className="text-[10px] text-amber-100 font-bold uppercase mt-1">DIAS</p>
+                </div>
+                <Clock className="h-6 w-6 text-white/30" />
+              </div>
+            </motion.div>
+          )}
           {/* IA Assistant - siempre visible */}
           <motion.div
             whileHover={{ scale: 1.02 }}
