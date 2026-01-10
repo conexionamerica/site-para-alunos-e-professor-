@@ -15,7 +15,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 // Se incluyen los iconos necesarios para la nueva funcionalidad
-import { FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus, Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot, Download, ExternalLink, Volume2, Mic, Ticket, AlertCircle, Clock } from 'lucide-react';
+import {
+  FileText, Package, BookOpen, CalendarCheck, CalendarClock, CalendarPlus,
+  Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot,
+  Download, ExternalLink, Volume2, Mic, Ticket, AlertCircle, Clock,
+  MessageSquare as MessageIcon, BarChart3, Star, MessageCircle,
+  ChevronRight, User, TrendingUp, TrendingDown, Minus, Calendar as CalendarIcon
+} from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
 import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 import { PlanExpiringBanner } from '@/components/student/PlanExpiringBanner';
@@ -24,12 +30,10 @@ import { StudentTicketsTab } from '@/components/student/StudentTicketsTab';
 import { expandedVocabulary } from '@/data/expandedVocabulary';
 import { getDailyPhrase } from '@/data/dailyPhrases';
 
-
-// IMPORTACIONES NECESSÁRIAS, AHORA CON DialogDescription
+// UI Components
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare as MessageIcon, BarChart3, Star, MessageCircle, ChevronRight, User, TrendingUp, TrendingDown, Minus, Calendar as CalendarIcon } from 'lucide-react';
 
 
 const daysOfWeekMap = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
@@ -799,63 +803,66 @@ const HomePage = () => {
           </div>
         </div>
 
-        {/* Quick Stats Row - Solo en móvil + IA Assistant */}
-        <div className="grid grid-cols-2 lg:grid-cols-2 gap-3 mb-6">
-          {/* Stats para móvil (ocultos en desktop porque ya están en el header) */}
+        {/* Stats Row - Mobile Only */}
+        <div className="flex flex-col gap-3 mb-6 lg:hidden">
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl p-4 text-white shadow-lg h-full flex flex-col justify-center"
+            className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl p-4 text-white shadow-lg"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-black leading-none">{classStats.scheduled || 0}</p>
-                <p className="text-[10px] text-sky-100 font-bold uppercase mt-1">Agendadas</p>
+                <p className="text-3xl font-black">{classStats.scheduled || 0}</p>
+                <p className="text-xs text-sky-100 uppercase font-bold">Aulas Agendadas</p>
               </div>
-              <CalendarClock className="h-6 w-6 text-white/30" />
+              <CalendarClock className="h-8 w-8 text-white/30" />
             </div>
           </motion.div>
+
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg h-full flex flex-col justify-center"
+            className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-black leading-none">{classStats.completed || 0}</p>
-                <p className="text-[10px] text-emerald-100 font-bold uppercase mt-1">Realizadas</p>
+                <p className="text-3xl font-black">{classStats.completed || 0}</p>
+                <p className="text-xs text-emerald-100 uppercase font-bold">Aulas Realizadas</p>
               </div>
-              <CalendarCheck className="h-6 w-6 text-white/30" />
+              <CalendarCheck className="h-8 w-8 text-white/30" />
             </div>
           </motion.div>
+
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-4 text-white shadow-lg h-full flex flex-col justify-center"
+            className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-4 text-white shadow-lg"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-black leading-none">{classStats.missed || 0}</p>
-                <p className="text-[10px] text-red-100 font-bold uppercase mt-1">Faltas</p>
+                <p className="text-3xl font-black">{classStats.missed || 0}</p>
+                <p className="text-xs text-red-100 uppercase font-bold">Faltas</p>
               </div>
-              <AlertCircle className="h-6 w-6 text-white/30" />
+              <AlertCircle className="h-8 w-8 text-white/30" />
             </div>
           </motion.div>
+
           {daysRemaining !== null && (
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg h-full flex flex-col justify-center"
+              className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-black leading-none">{daysRemaining}</p>
-                  <p className="text-[10px] text-amber-100 font-bold uppercase mt-1">DIAS</p>
+                  <p className="text-3xl font-black">{daysRemaining}</p>
+                  <p className="text-xs text-amber-100 font-bold uppercase">DIAS RESTANTES</p>
                 </div>
-                <Clock className="h-6 w-6 text-white/30" />
+                <Clock className="h-8 w-8 text-white/30" />
               </div>
             </motion.div>
           )}
-          {/* IA Assistant - siempre visible */}
+
+          {/* IA Assistant */}
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="col-span-2 lg:col-span-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl p-4 shadow-lg text-white"
+            className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl p-4 shadow-lg text-white"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -871,7 +878,7 @@ const HomePage = () => {
                 onClick={() => navigate('/spanish-assistant')}
                 className="bg-white text-violet-600 hover:bg-violet-50 font-bold"
               >
-                Praticar agora →
+                Praticar →
               </Button>
             </div>
           </motion.div>
@@ -890,39 +897,36 @@ const HomePage = () => {
             {/* Indicador de scroll izquierdo (solo mobile) */}
             <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none lg:hidden" />
 
-            {/* Indicador de scroll derecho (solo mobile) - ELIMINADO en favor de grid */}
+            {/* Indicador de scroll derecho (solo mobile) */}
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none lg:hidden flex items-center justify-end pr-2">
+              <ChevronRight className="h-4 w-4 text-slate-400 animate-pulse" />
+            </div>
 
-            <TabsList className="w-full flex flex-wrap lg:flex-nowrap justify-start gap-2 bg-white/80 backdrop-blur-sm p-2 rounded-xl shadow-sm border border-slate-100 overflow-x-auto lg:overflow-visible scrollbar-hide">
+            <TabsList className="w-full flex flex-nowrap justify-start gap-1 bg-white/80 backdrop-blur-sm p-1.5 rounded-xl shadow-sm border border-slate-100 overflow-x-auto scrollbar-hide">
               {/* Abas dinâmicas baseadas em permissões */}
               {(() => {
                 const allowedTabs = roleSettings?.permissions?.tabs || ['dashboard', 'clases', 'chat', 'desempenho', 'faturas'];
                 const tabsDef = [
-                  { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', color: 'sky', shortLabel: 'Inicio', bg: 'bg-sky-50', text: 'text-sky-600' },
-                  { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', color: 'violet', shortLabel: 'Aulas', bg: 'bg-violet-50', text: 'text-violet-600' },
-                  { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', color: 'blue', shortLabel: 'Recursos', bg: 'bg-blue-50', text: 'text-blue-600' },
-                  { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', color: 'emerald', shortLabel: 'Quiz', bg: 'bg-emerald-50', text: 'text-emerald-600' },
-                  { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', color: 'amber', shortLabel: 'Logros', bg: 'bg-amber-50', text: 'text-amber-600' },
-                  { id: 'tickets', value: 'tickets', permission: 'dashboard', icon: Ticket, label: 'Tickets', color: 'rose', shortLabel: 'Tickets', bg: 'bg-rose-50', text: 'text-rose-600' },
-                  { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Chat', color: 'emerald', shortLabel: 'Chat', bg: 'bg-emerald-50', text: 'text-emerald-600' },
-                  { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Notas', color: 'amber', shortLabel: 'Notas', bg: 'bg-amber-50', text: 'text-amber-600' },
-                  { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas', color: 'slate', shortLabel: 'Faturas', bg: 'bg-slate-50', text: 'text-slate-600' },
+                  { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', shortLabel: 'Inicio' },
+                  { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', shortLabel: 'Aulas' },
+                  { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', shortLabel: 'Recursos' },
+                  { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', shortLabel: 'Quiz' },
+                  { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', shortLabel: 'Logros' },
+                  { id: 'tickets', value: 'tickets', permission: 'dashboard', icon: Ticket, label: 'Tickets', shortLabel: 'Tickets' },
+                  { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Chat', shortLabel: 'Chat' },
+                  { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Notas', shortLabel: 'Notas' },
+                  { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas', shortLabel: 'Faturas' },
                 ];
 
                 return tabsDef.filter(t => allowedTabs.includes(t.permission)).map(tab => (
                   <TabsTrigger
                     key={tab.id}
                     value={tab.value}
-                    className={cn(
-                      "flex-shrink-0 min-w-fit lg:px-6 lg:py-4 lg:text-lg rounded-xl transition-all whitespace-nowrap font-bold shadow-sm",
-                      "data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-xl active:scale-95",
-                      "flex flex-col lg:flex-row items-center justify-center gap-1.5 lg:gap-3",
-                      "w-[calc(25%-6px)] md:w-[calc(20%-8px)] lg:w-auto", // 4 colunas no mobile para não ficar muito apertado mas mostrar tudo
-                      tab.bg, tab.text,
-                      "data-[state=active]:bg-none"
-                    )}
+                    className="flex-shrink-0 min-w-fit data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg px-3 py-2.5 transition-all text-sm whitespace-nowrap"
                   >
-                    <tab.icon className="h-5 w-5 lg:h-6 lg:w-6 flex-shrink-0" />
-                    <span className="text-[10px] lg:text-base">{tab.label}</span>
+                    <tab.icon className="mr-1.5 h-4 w-4 flex-shrink-0" />
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    <span className="sm:hidden">{tab.shortLabel}</span>
                   </TabsTrigger>
                 ));
               })()}
