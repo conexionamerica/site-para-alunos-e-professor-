@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
-import { add, format, parseISO, getDay, parse, isFuture, formatDistanceToNowStrict } from 'date-fns';
+import { add, format, parseISO, getDay, parse, isFuture, formatDistanceToNowStrict, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getBrazilDate, getTodayBrazil } from '@/lib/dateUtils';
 
