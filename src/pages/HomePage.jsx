@@ -842,36 +842,39 @@ const HomePage = () => {
             {/* Indicador de scroll izquierdo (solo mobile) */}
             <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none lg:hidden" />
 
-            {/* Indicador de scroll derecho (solo mobile) */}
-            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none lg:hidden flex items-center justify-end pr-2">
-              <ChevronRight className="h-4 w-4 text-slate-400 animate-pulse" />
-            </div>
+            {/* Indicador de scroll derecho (solo mobile) - ELIMINADO en favor de grid */}
 
-            <TabsList className="w-full flex flex-wrap lg:flex-nowrap justify-start gap-1 bg-white/80 backdrop-blur-sm p-1.5 rounded-xl shadow-sm border border-slate-100 overflow-x-auto scrollbar-hide">
+            <TabsList className="w-full flex flex-wrap lg:flex-nowrap justify-start gap-2 bg-white/80 backdrop-blur-sm p-2 rounded-xl shadow-sm border border-slate-100 overflow-x-auto lg:overflow-visible scrollbar-hide">
               {/* Abas dinâmicas baseadas em permissões */}
               {(() => {
                 const allowedTabs = roleSettings?.permissions?.tabs || ['dashboard', 'clases', 'chat', 'desempenho', 'faturas'];
                 const tabsDef = [
-                  { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', color: 'sky', shortLabel: 'Inicio' },
-                  { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', color: 'violet', shortLabel: 'Aulas' },
-                  { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', color: 'sky', shortLabel: 'Recursos' },
-                  { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', color: 'emerald', shortLabel: 'Quiz' },
-                  { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', color: 'amber', shortLabel: 'Logros' },
-                  { id: 'tickets', value: 'tickets', permission: 'dashboard', icon: Ticket, label: 'Tickets', color: 'violet', shortLabel: 'Tickets' },
-                  { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Chat', color: 'emerald', shortLabel: 'Chat' },
-                  { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Notas', color: 'amber', shortLabel: 'Notas' },
-                  { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas', color: 'rose', shortLabel: 'Faturas' },
+                  { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', color: 'sky', shortLabel: 'Inicio', bg: 'bg-sky-50', text: 'text-sky-600' },
+                  { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', color: 'violet', shortLabel: 'Aulas', bg: 'bg-violet-50', text: 'text-violet-600' },
+                  { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', color: 'blue', shortLabel: 'Recursos', bg: 'bg-blue-50', text: 'text-blue-600' },
+                  { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', color: 'emerald', shortLabel: 'Quiz', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+                  { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', color: 'amber', shortLabel: 'Logros', bg: 'bg-amber-50', text: 'text-amber-600' },
+                  { id: 'tickets', value: 'tickets', permission: 'dashboard', icon: Ticket, label: 'Tickets', color: 'rose', shortLabel: 'Tickets', bg: 'bg-rose-50', text: 'text-rose-600' },
+                  { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Chat', color: 'emerald', shortLabel: 'Chat', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+                  { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Notas', color: 'amber', shortLabel: 'Notas', bg: 'bg-amber-50', text: 'text-amber-600' },
+                  { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas', color: 'slate', shortLabel: 'Faturas', bg: 'bg-slate-50', text: 'text-slate-600' },
                 ];
 
                 return tabsDef.filter(t => allowedTabs.includes(t.permission)).map(tab => (
                   <TabsTrigger
                     key={tab.id}
                     value={tab.value}
-                    className="flex-shrink-0 min-w-fit data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg px-3 py-2.5 transition-all text-sm whitespace-nowrap"
+                    className={cn(
+                      "flex-shrink-0 min-w-fit lg:px-6 lg:py-3.5 lg:text-base rounded-xl transition-all whitespace-nowrap",
+                      "data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg",
+                      "flex flex-col lg:flex-row items-center justify-center gap-1 lg:gap-2",
+                      "w-[calc(33.33%-8px)] lg:w-auto", // 3 colunas no celular
+                      tab.bg, tab.text, // Cores de fundo e texto quando inativo no mobile para maior impacto
+                      "data-[state=active]:bg-none" // Remove o gradiente se não for active (sobreposto por bg-gradient)
+                    )}
                   >
-                    <tab.icon className="mr-1.5 h-4 w-4 flex-shrink-0" />
-                    <span className="hidden sm:inline">{tab.label}</span>
-                    <span className="sm:hidden">{tab.shortLabel}</span>
+                    <tab.icon className="h-5 w-5 lg:h-5 lg:w-5 flex-shrink-0" />
+                    <span className="text-[10px] lg:text-base font-bold">{tab.label}</span>
                   </TabsTrigger>
                 ));
               })()}

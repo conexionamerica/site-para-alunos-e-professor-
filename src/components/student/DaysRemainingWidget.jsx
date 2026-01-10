@@ -66,8 +66,39 @@ export function DaysRemainingWidget({ userId }) {
         return () => clearInterval(interval);
     }, [userId]);
 
-    if (loading || daysRemaining === null) {
-        return null;
+    // Fallback si no hay datos de facturación activa
+    if (!loading && daysRemaining === null) {
+        return (
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-6 shadow-sm mb-6 text-center"
+            >
+                <div className="flex flex-col items-center gap-3">
+                    <div className="p-3 bg-slate-200 rounded-full">
+                        <Calendar className="h-6 w-6 text-slate-400" />
+                    </div>
+                    <div>
+                        <p className="font-bold text-slate-600">Nenhuma assinatura ativa</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                            Você não possui um pacote de aulas ativo ou ele já expirou.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => window.open('https://wa.me/5551989470997', '_blank')}
+                        className="mt-2 text-sm font-semibold text-sky-600 hover:text-sky-700 transition-colors"
+                    >
+                        Renovar agora →
+                    </button>
+                </div>
+            </motion.div>
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="h-24 w-full bg-slate-100 animate-pulse rounded-2xl mb-6" />
+        );
     }
 
     // Determinar el color basado en los días restantes
