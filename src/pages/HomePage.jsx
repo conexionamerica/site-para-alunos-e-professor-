@@ -221,6 +221,14 @@ const HomePage = () => {
   const classDuration = latestActiveBilling?.packages?.class_duration_minutes || 30;
   const slotsPerClass = Math.ceil(classDuration / 15);
 
+  const daysRemaining = useMemo(() => {
+    if (!activeBillings || activeBillings.length === 0) return null;
+    const endDate = parseISO(activeBillings[0].end_date);
+    const today = new Date();
+    const days = differenceInDays(endDate, today);
+    return Math.max(0, days);
+  }, [activeBillings]);
+
 
   const fetchData = useCallback(async () => {
     if (!user || !profile?.age) return;
@@ -752,22 +760,31 @@ const HomePage = () => {
               </motion.p>
             </div>
             {/* Stats + Próxima Aula */}
-            <div className="flex items-center gap-3">
-              <div className="hidden lg:flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <div className="hidden min-[1200px]:flex items-center gap-2">
                 <motion.div
                   whileHover={{ scale: 1.05 }}
                   className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl px-5 py-4 text-white shadow-lg shadow-sky-200 min-w-[100px] text-center"
                 >
                   <p className="text-3xl font-black">{classStats.scheduled || 0}</p>
-                  <p className="text-xs text-sky-100 uppercase">Agendadas</p>
+                  <p className="text-[10px] text-sky-100 uppercase font-bold">Agendadas</p>
                 </motion.div>
                 <motion.div
                   whileHover={{ scale: 1.05 }}
                   className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl px-5 py-4 text-white shadow-lg shadow-emerald-200 min-w-[100px] text-center"
                 >
                   <p className="text-3xl font-black">{classStats.completed || 0}</p>
-                  <p className="text-xs text-emerald-100 uppercase">Realizadas</p>
+                  <p className="text-[10px] text-emerald-100 uppercase font-bold">Realizadas</p>
                 </motion.div>
+                {daysRemaining !== null && (
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl px-5 py-4 text-white shadow-lg shadow-amber-200 min-w-[100px] text-center"
+                  >
+                    <p className="text-3xl font-black">{daysRemaining}</p>
+                    <p className="text-[10px] text-amber-100 uppercase font-bold">Dias Restantes</p>
+                  </motion.div>
+                )}
               </div>
               <NextClassWidget nextClass={nextClass} />
             </div>
@@ -779,28 +796,29 @@ const HomePage = () => {
           {/* Stats para móvil (ocultos en desktop porque ya están en el header) */}
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="lg:hidden bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl p-4 text-white shadow-lg"
+            className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl p-4 text-white shadow-lg h-full flex flex-col justify-center"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-black">{classStats.scheduled || 0}</p>
-                <p className="text-xs text-sky-100">Aulas Agendadas</p>
+                <p className="text-2xl font-black leading-none">{classStats.scheduled || 0}</p>
+                <p className="text-[10px] text-sky-100 font-bold uppercase mt-1">Agendadas</p>
               </div>
-              <CalendarClock className="h-8 w-8 text-white/30" />
+              <CalendarClock className="h-6 w-6 text-white/30" />
             </div>
           </motion.div>
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="lg:hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg"
+            className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg h-full flex flex-col justify-center"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-black">{classStats.completed || 0}</p>
-                <p className="text-xs text-emerald-100">Aulas Realizadas</p>
+                <p className="text-2xl font-black leading-none">{classStats.completed || 0}</p>
+                <p className="text-[10px] text-emerald-100 font-bold uppercase mt-1">Realizadas</p>
               </div>
-              <CalendarCheck className="h-8 w-8 text-white/30" />
+              <CalendarCheck className="h-6 w-6 text-white/30" />
             </div>
           </motion.div>
+          {/* Removed old daysRemaining widget from here */}
           {/* IA Assistant - siempre visible */}
           <motion.div
             whileHover={{ scale: 1.02 }}
@@ -828,9 +846,6 @@ const HomePage = () => {
 
         {/* Banner de Plano Expirando */}
         <PlanExpiringBanner userId={user?.id} />
-
-        {/* Widget de Días Restantes */}
-        <DaysRemainingWidget userId={user?.id} />
 
         {/* Widget de Mensagens do Professor */}
         <StudentMessagesWidget />
@@ -865,16 +880,16 @@ const HomePage = () => {
                     key={tab.id}
                     value={tab.value}
                     className={cn(
-                      "flex-shrink-0 min-w-fit lg:px-6 lg:py-3.5 lg:text-base rounded-xl transition-all whitespace-nowrap",
-                      "data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg",
-                      "flex flex-col lg:flex-row items-center justify-center gap-1 lg:gap-2",
-                      "w-[calc(33.33%-8px)] lg:w-auto", // 3 colunas no celular
-                      tab.bg, tab.text, // Cores de fundo e texto quando inativo no mobile para maior impacto
-                      "data-[state=active]:bg-none" // Remove o gradiente se não for active (sobreposto por bg-gradient)
+                      "flex-shrink-0 min-w-fit lg:px-6 lg:py-4 lg:text-lg rounded-xl transition-all whitespace-nowrap font-bold shadow-sm",
+                      "data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-xl active:scale-95",
+                      "flex flex-col lg:flex-row items-center justify-center gap-1.5 lg:gap-3",
+                      "w-[calc(25%-6px)] md:w-[calc(20%-8px)] lg:w-auto", // 4 colunas no mobile para não ficar muito apertado mas mostrar tudo
+                      tab.bg, tab.text,
+                      "data-[state=active]:bg-none"
                     )}
                   >
-                    <tab.icon className="h-5 w-5 lg:h-5 lg:w-5 flex-shrink-0" />
-                    <span className="text-[10px] lg:text-base font-bold">{tab.label}</span>
+                    <tab.icon className="h-5 w-5 lg:h-6 lg:w-6 flex-shrink-0" />
+                    <span className="text-[10px] lg:text-base">{tab.label}</span>
                   </TabsTrigger>
                 ));
               })()}
