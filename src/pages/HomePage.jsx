@@ -803,82 +803,83 @@ const HomePage = () => {
           </div>
         </div>
 
-        {/* Stats Row - Mobile Only */}
-        <div className="flex flex-col gap-3 mb-6 lg:hidden">
+        {/* Stats Row - Mobile Only - Compacted Grid */}
+        <div className="grid grid-cols-2 gap-2 mb-4 lg:hidden">
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl p-4 text-white shadow-lg"
+            className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl p-3 text-white shadow-lg"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-black">{classStats.scheduled || 0}</p>
-                <p className="text-xs text-sky-100 uppercase font-bold">Aulas Agendadas</p>
+                <p className="text-2xl font-black leading-none">{classStats.scheduled || 0}</p>
+                <p className="text-[10px] text-sky-100 uppercase font-bold mt-1">Agendadas</p>
               </div>
-              <CalendarClock className="h-8 w-8 text-white/30" />
+              <CalendarClock className="h-6 w-6 text-white/30" />
             </div>
           </motion.div>
 
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-4 text-white shadow-lg"
+            className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-3 text-white shadow-lg"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-black">{classStats.completed || 0}</p>
-                <p className="text-xs text-emerald-100 uppercase font-bold">Aulas Realizadas</p>
+                <p className="text-2xl font-black leading-none">{classStats.completed || 0}</p>
+                <p className="text-[10px] text-emerald-100 uppercase font-bold mt-1">Realizadas</p>
               </div>
-              <CalendarCheck className="h-8 w-8 text-white/30" />
+              <CalendarCheck className="h-6 w-6 text-white/30" />
             </div>
           </motion.div>
 
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-4 text-white shadow-lg"
+            className="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-3 text-white shadow-lg"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-black">{classStats.missed || 0}</p>
-                <p className="text-xs text-red-100 uppercase font-bold">Faltas</p>
+                <p className="text-2xl font-black leading-none">{classStats.missed || 0}</p>
+                <p className="text-[10px] text-red-100 uppercase font-bold mt-1">Faltas</p>
               </div>
-              <AlertCircle className="h-8 w-8 text-white/30" />
+              <AlertCircle className="h-6 w-6 text-white/30" />
             </div>
           </motion.div>
 
           {daysRemaining !== null && (
             <motion.div
               whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-4 text-white shadow-lg"
+              className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-3 text-white shadow-lg"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-3xl font-black">{daysRemaining}</p>
-                  <p className="text-xs text-amber-100 font-bold uppercase">DIAS RESTANTES</p>
+                  <p className="text-2xl font-black leading-none">{daysRemaining}</p>
+                  <p className="text-[10px] text-amber-100 font-bold uppercase mt-1">DIAS</p>
                 </div>
-                <Clock className="h-8 w-8 text-white/30" />
+                <Clock className="h-6 w-6 text-white/30" />
               </div>
             </motion.div>
           )}
 
-          {/* IA Assistant */}
+          {/* IA Assistant - Mobile Compact */}
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl p-4 shadow-lg text-white"
+            className="col-span-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl p-3 shadow-lg text-white"
           >
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/20 rounded-lg">
-                  <Bot className="h-6 w-6 text-white" />
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-white/20 rounded-lg">
+                  <Bot className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="font-bold">Asistente IA de Español</p>
-                  <p className="text-xs text-violet-100">Practica conversación, gramática y más</p>
+                  <p className="text-sm font-bold leading-none">Asistente IA</p>
+                  <p className="text-[10px] text-violet-100 mt-1">Praticar conversação</p>
                 </div>
               </div>
               <Button
                 onClick={() => navigate('/spanish-assistant')}
-                className="bg-white text-violet-600 hover:bg-violet-50 font-bold"
+                size="sm"
+                className="h-8 bg-white text-violet-600 hover:bg-violet-50 font-bold text-xs"
               >
-                Praticar →
+                Ir →
               </Button>
             </div>
           </motion.div>
@@ -900,15 +901,15 @@ const HomePage = () => {
               {(() => {
                 const allowedTabs = roleSettings?.permissions?.tabs || ['dashboard', 'clases', 'chat', 'desempenho', 'faturas'];
                 const tabsDef = [
-                  { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio' },
-                  { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas' },
-                  { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos' },
-                  { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz' },
-                  { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros' },
-                  { id: 'tickets', value: 'tickets', permission: 'dashboard', icon: Ticket, label: 'Tickets' },
-                  { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Chat' },
-                  { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Notas' },
-                  { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas' },
+                  { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', bg: 'bg-sky-50', activeBg: 'data-[state=active]:bg-sky-500', text: 'text-sky-600' },
+                  { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', bg: 'bg-violet-50', activeBg: 'data-[state=active]:bg-violet-500', text: 'text-violet-600' },
+                  { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', bg: 'bg-blue-50', activeBg: 'data-[state=active]:bg-blue-500', text: 'text-blue-600' },
+                  { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', bg: 'bg-emerald-50', activeBg: 'data-[state=active]:bg-emerald-500', text: 'text-emerald-600' },
+                  { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', bg: 'bg-amber-50', activeBg: 'data-[state=active]:bg-amber-500', text: 'text-amber-600' },
+                  { id: 'tickets', value: 'tickets', permission: 'dashboard', icon: Ticket, label: 'Tickets', bg: 'bg-rose-50', activeBg: 'data-[state=active]:bg-rose-500', text: 'text-rose-600' },
+                  { id: 'conversas', value: 'conversas', permission: 'chat', icon: MessageIcon, label: 'Chat', bg: 'bg-teal-50', activeBg: 'data-[state=active]:bg-teal-500', text: 'text-teal-600' },
+                  { id: 'desempenho', value: 'desempenho', permission: 'desempenho', icon: BarChart3, label: 'Notas', bg: 'bg-orange-50', activeBg: 'data-[state=active]:bg-orange-500', text: 'text-orange-600' },
+                  { id: 'faturas', value: 'faturas', permission: 'faturas', icon: FileText, label: 'Faturas', bg: 'bg-slate-50', activeBg: 'data-[state=active]:bg-slate-500', text: 'text-slate-600' },
                 ];
 
                 return tabsDef.filter(t => allowedTabs.includes(t.permission)).map(tab => (
@@ -916,13 +917,15 @@ const HomePage = () => {
                     key={tab.id}
                     value={tab.value}
                     className={cn(
-                      "flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-2 py-2 sm:px-4 sm:py-2.5 rounded-xl transition-all duration-200",
-                      "data-[state=active]:bg-gradient-to-br data-[state=active]:from-sky-500 data-[state=active]:to-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg active:scale-95",
-                      "text-slate-600 font-bold min-w-0"
+                      "flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-1 py-1.5 sm:px-4 sm:py-2.5 rounded-xl transition-all duration-200",
+                      "data-[state=active]:text-white data-[state=active]:shadow-md active:scale-95",
+                      "font-bold min-w-0 sm:bg-transparent sm:text-slate-600 sm:data-[state=active]:bg-gradient-to-br sm:data-[state=active]:from-sky-500 sm:data-[state=active]:to-blue-600",
+                      // Colores específicos para mobile
+                      tab.bg, tab.text, tab.activeBg
                     )}
                   >
-                    <tab.icon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                    <span className="text-[10px] sm:text-sm truncate w-full text-center sm:text-left">{tab.label}</span>
+                    <tab.icon className="h-3.5 w-3.5 sm:h-5 sm:w-5 flex-shrink-0" />
+                    <span className="text-[9px] sm:text-sm truncate w-full text-center sm:text-left">{tab.label}</span>
                   </TabsTrigger>
                 ));
               })()}
