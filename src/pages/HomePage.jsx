@@ -21,6 +21,8 @@ import StudentMessagesWidget from '@/components/StudentMessagesWidget';
 import { PlanExpiringBanner } from '@/components/student/PlanExpiringBanner';
 import { DaysRemainingWidget } from '@/components/student/DaysRemainingWidget';
 import { StudentTicketsTab } from '@/components/student/StudentTicketsTab';
+import { expandedVocabulary } from '@/data/expandedVocabulary';
+import { getDailyPhrase } from '@/data/dailyPhrases';
 
 
 // IMPORTACIONES NECESSÁRIAS, AHORA CON DialogDescription
@@ -109,9 +111,6 @@ export const HelpWidget = () => (
 
 // Widget de Vocabulario Diario - MEJORADO con vocabulario expandido
 const DailyVocabularyWidget = () => {
-  // Importar vocabulario expandido
-  const { getRandomVocabulary } = require('@/data/expandedVocabulary');
-
   // Obtener palabra del día basada en el día del año para variedad
   const getDayOfYear = () => {
     const now = new Date();
@@ -123,7 +122,7 @@ const DailyVocabularyWidget = () => {
 
   // Usar el día del año para seleccionar una palabra consistente cada día
   const dayOfYear = getDayOfYear();
-  const vocabulary = require('@/data/expandedVocabulary').expandedVocabulary;
+  const vocabulary = expandedVocabulary;
   const todayWord = vocabulary[dayOfYear % vocabulary.length];
 
   const [showTranslation, setShowTranslation] = useState(false);
@@ -717,7 +716,6 @@ const HomePage = () => {
   }, []);
 
   // Frases motivacionales - Usando sistema de 360 frases (una para cada día del año)
-  const { getDailyPhrase } = require('@/data/dailyPhrases');
   const todayPhrase = getDailyPhrase();
 
 
