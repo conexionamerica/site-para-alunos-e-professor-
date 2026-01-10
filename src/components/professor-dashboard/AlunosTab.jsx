@@ -1134,24 +1134,38 @@ const AlunosTab = ({ dashboardData }) => {
                             <Input placeholder="Buscar por nome..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
                         </div>
 
-                        {/* Filtro de professor para superadmin */}
-                        {isSuperadmin && professors.length > 0 && (
-                            <Select value={professorFilter} onValueChange={setProfessorFilter}>
-                                <SelectTrigger className="w-[200px]">
-                                    <Filter className="h-4 w-4 mr-2" />
-                                    <SelectValue placeholder="Filtrar professor" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Todos os professores</SelectItem>
-                                    <SelectItem value="none">Sem Professor Vinculado</SelectItem>
-                                    {professors.map(prof => (
-                                        <SelectItem key={prof.id} value={prof.id}>
-                                            {prof.full_name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                className="border-sky-200 text-sky-700 hover:bg-sky-50"
+                                onClick={() => {
+                                    setSelectedStudent(null);
+                                    setIsResourceDialogOpen(true);
+                                }}
+                            >
+                                <Upload className="mr-2 h-4 w-4" />
+                                Compartilhar com Todos
+                            </Button>
+
+                            {/* Filtro de professor para superadmin */}
+                            {isSuperadmin && professors.length > 0 && (
+                                <Select value={professorFilter} onValueChange={setProfessorFilter}>
+                                    <SelectTrigger className="w-[200px]">
+                                        <Filter className="h-4 w-4 mr-2" />
+                                        <SelectValue placeholder="Filtrar professor" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos os professores</SelectItem>
+                                        <SelectItem value="none">Sem Professor Vinculado</SelectItem>
+                                        {professors.map(prof => (
+                                            <SelectItem key={prof.id} value={prof.id}>
+                                                {prof.full_name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        </div>
                     </div>
                     <div className="border rounded-lg overflow-hidden">
                         <Table>

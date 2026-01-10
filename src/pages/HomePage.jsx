@@ -20,7 +20,8 @@ import {
   Send, Loader2, Info, CheckCircle2, Clock3, Sparkles, RotateCcw, Bot,
   Download, ExternalLink, Volume2, Mic, Ticket, AlertCircle, Clock,
   MessageSquare as MessageIcon, BarChart3, Star, MessageCircle,
-  ChevronRight, User, TrendingUp, TrendingDown, Minus, Calendar as CalendarIcon
+  ChevronRight, User, TrendingUp, TrendingDown, Minus, Calendar as CalendarIcon,
+  Camera, Upload
 } from 'lucide-react';
 import NotificationsWidget from '@/components/NotificationsWidget';
 import StudentMessagesWidget from '@/components/StudentMessagesWidget';
@@ -216,6 +217,93 @@ const HomePage = () => {
   const [classMaterials, setClassMaterials] = useState([]);
   const [sharedMaterials, setSharedMaterials] = useState([]);
 
+  const [activeTab, setActiveTab] = useState('agenda');
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || null);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  useEffect(() => {
+    if (profile?.avatar_url) {
+      setAvatarUrl(profile.avatar_url);
+    }
+  }, [profile?.avatar_url]);
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast({
+          title: "Arquivo muito grande",
+          description: "O arquivo deve ter no máximo 2MB.",
+          variant: "destructive"
+        });
+        return;
+      }
+      setAvatarFile(file);
+      const previewUrl = URL.createObjectURL(file);
+      setAvatarPreview(previewUrl);
+    }
+  };
+
+  const handleSaveProfileSettings = async () => {
+    if (!user?.id) return;
+    setIsSavingSettings(true);
+    try {
+      let newAvatarUrl = avatarUrl;
+
+      if (avatarFile) {
+        setIsUploadingAvatar(true);
+        const fileExt = avatarFile.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const filePath = `avatars/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, avatarFile, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath);
+
+        newAvatarUrl = urlData.publicUrl;
+        setIsUploadingAvatar(false);
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          avatar_url: newAvatarUrl
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Configurações salvas",
+        description: "Sua foto de perfil foi atualizada com sucesso.",
+      });
+      setShowProfileSettings(false);
+      setAvatarFile(null);
+      setAvatarPreview(null);
+      setAvatarUrl(newAvatarUrl);
+    } catch (error) {
+      console.error('Erro ao salvar configurações:', error);
+      toast({
+        title: "Erro ao salvar",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsSavingSettings(false);
+      setIsUploadingAvatar(false);
+    }
+  };
+
   const chatEndRef = React.useRef(null);
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(scrollToBottom, [chatMessages]);
@@ -311,6 +399,15 @@ const HomePage = () => {
 
       setClassMaterials(materialsData || []);
 
+      // Cargar materiales compartidos por el profesor (específicos para el alumno o generales)
+      const { data: sharedMaterialsData } = await supabase
+        .from('shared_materials')
+        .select('*')
+        .or(`student_id.eq.${user.id},and(student_id.is.null,professor_id.eq.${profile.assigned_professor_id})`)
+        .order('created_at', { ascending: false });
+
+      setSharedMaterials(sharedMaterialsData || []);
+
       if (chatRes.data) {
         setChat(chatRes.data);
         fetchChatMessages(chatRes.data.chat_id);
@@ -359,17 +456,6 @@ const HomePage = () => {
         pending: pendingClassesCount,
         rescheduledCount: rescheduledClassesCount,
       });
-
-      // Fetch shared materials from professor
-      const { data: sharedMaterialsData, error: materialsError } = await supabase
-        .from('shared_materials')
-        .select('*')
-        .or(`student_id.eq.${user.id},and(student_id.is.null,professor_id.eq.${currentProfessorId})`)
-        .order('created_at', { ascending: false });
-
-      if (!materialsError) {
-        setSharedMaterials(sharedMaterialsData || []);
-      }
 
     } catch (error) {
       toast({ variant: "destructive", title: "Erro ao carregar dados", description: `(${error.message})` });
@@ -755,14 +841,31 @@ const HomePage = () => {
               >
                 Olá, <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-blue-600">{profile?.full_name?.split(' ')[0] || 'Aluno'}</span>! 👋
               </motion.h1>
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="text-slate-500 mt-1"
-              >
-                {todayPhrase}
-              </motion.p>
+              <div className="flex items-center gap-3 mt-1">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowProfileSettings(true)}
+                  className="flex items-center gap-2 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors border border-slate-200"
+                >
+                  <div className="relative h-6 w-6 rounded-full overflow-hidden bg-sky-100 border border-sky-200">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="Perfil" className="h-full w-full object-cover" />
+                    ) : (
+                      <User className="h-full w-full p-1 text-sky-600" />
+                    )}
+                  </div>
+                  <span className="text-xs font-semibold text-slate-600">Editar Perfil</span>
+                </motion.button>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-slate-500"
+                >
+                  {todayPhrase}
+                </motion.p>
+              </div>
             </div>
             {/* Stats + Próxima Aula */}
             <div className="flex items-center gap-2">
@@ -892,7 +995,7 @@ const HomePage = () => {
         <StudentMessagesWidget />
 
         {/* Navegación por tabs moderna */}
-        <Tabs defaultValue="agenda" className="w-full mt-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-6">
           {/* Tabs mejoradas con wrap para mobile y scroll indicators */}
           <div className="relative">
 
@@ -1802,13 +1905,14 @@ const HomePage = () => {
             <motion.button
               whileHover={{ scale: 1.03, y: -2 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => setActiveTab('recursos')}
               className="flex flex-col items-center gap-2 p-4 rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-100 hover:border-sky-200 transition-colors"
             >
               <div className="p-3 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl text-white shadow-lg shadow-sky-200">
                 <FileText className="h-6 w-6" />
               </div>
               <span className="text-sm font-medium text-slate-700">Materiais</span>
-              <span className="text-xs text-slate-400">Em breve</span>
+              <span className="text-xs text-slate-400">Ver Recursos</span>
             </motion.button>
 
             <motion.button
@@ -1839,6 +1943,94 @@ const HomePage = () => {
           </motion.div>
           <HelpWidget />
         </div>
+
+        {/* DIALOG DE CONFIGURACIONES DE PERFIL (FOTO) */}
+        <Dialog open={showProfileSettings} onOpenChange={setShowProfileSettings}>
+          <DialogContent className="sm:max-w-[425px] rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-slate-800">Foto de Perfil</DialogTitle>
+              <DialogDescription>
+                Personalize seu perfil com uma foto. Seus professores poderão vê-la.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col items-center gap-6 py-6">
+              <div className="relative group">
+                <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-sky-100 shadow-xl bg-white">
+                  {(avatarPreview || avatarUrl) ? (
+                    <img
+                      src={avatarPreview || avatarUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-50 drop-shadow-inner">
+                      <User className="h-16 w-16 text-slate-300" />
+                    </div>
+                  )}
+
+                  {isUploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <Loader2 className="h-8 w-8 text-white animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                <label
+                  htmlFor="avatar-upload"
+                  className="absolute bottom-0 right-0 p-2 bg-sky-500 hover:bg-sky-600 text-white rounded-full cursor-pointer shadow-lg transition-all hover:scale-110"
+                >
+                  <Camera className="h-5 w-5" />
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    disabled={isUploadingAvatar || isSavingSettings}
+                  />
+                </label>
+              </div>
+
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-700">{profile?.full_name}</p>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mt-1">{profile?.role === 'student' ? 'Aluno' : profile?.role}</p>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowProfileSettings(false);
+                  setAvatarFile(null);
+                  setAvatarPreview(null);
+                }}
+                disabled={isSavingSettings}
+                className="rounded-xl"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSaveProfileSettings}
+                disabled={isSavingSettings || (!avatarFile)}
+                className="bg-sky-600 hover:bg-sky-700 min-w-[120px] rounded-xl"
+              >
+                {isSavingSettings ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Salvar Foto
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </motion.div>
   );
