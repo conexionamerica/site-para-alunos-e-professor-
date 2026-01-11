@@ -117,7 +117,7 @@ export default async function handler(req, res) {
 
                 // Enviar email
                 const { data: emailResult, error: emailError } = await resend.emails.send({
-                    from: 'Conexión América <suporte@conexionamerica.com.br>',
+                    from: 'Conexión América <noreply@aluno.conexionamerica.com.br>',
                     to: professor.real_email,
                     subject: `⏰ Lembrete: Aula em 10 minutos com ${student?.full_name || 'Aluno'}`,
                     html: `

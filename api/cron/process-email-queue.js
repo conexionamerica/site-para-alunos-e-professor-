@@ -139,7 +139,7 @@ export default async function handler(req, res) {
 
                 // Enviar email
                 const { data: sendResult, error: sendError } = await resend.emails.send({
-                    from: 'Conexión América <suporte@conexionamerica.com.br>',
+                    from: 'Conexión América <noreply@aluno.conexionamerica.com.br>',
                     to: email.recipient_email,
                     subject: email.subject,
                     html: emailHtml
