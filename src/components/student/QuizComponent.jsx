@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, Sparkles, Trophy, Heart, Gift, Crown, Target, Zap, ShoppingCart, Volume2, Mic, MicOff, GraduationCap, Lock, Clock, CreditCard } from 'lucide-react';
 import { LEVELS, LEAGUES, generateExercisesForLevel } from '@/lib/quizData';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 
 const COOLDOWN_HOURS = 4;
 const COOLDOWN_MS = COOLDOWN_HOURS * 60 * 60 * 1000;
@@ -16,36 +17,35 @@ const PAYMENT_LINKS = {
     5: 'https://www.mercadopago.com.br/checkout/v1/payment/redirect/7f1e1720-6e84-45bc-8023-cb921cffaf59/payment-option-form/?source=link&preference-id=46454273-697b4b3d-0e97-4de0-8a3e-004e0b106467&router-request-id=55ae5c3c-ce25-4846-a10f-d6c139a32bcb&journey-id=a5be44cb50d1405c1c14885eecdc40a9&p=9966f0b5bace859e38fb16499917d57f',
 };
 
+// Helper function to create user-specific localStorage keys
+const getStorageKey = (userId, key) => `quiz_${userId}_${key}`;
+
 const QuizComponent = () => {
-    // Estados principais
+    // Get the current user from auth context
+    const { user } = useAuth();
+    const userId = user?.id || 'anonymous';
+    // Estados principais - inicializados con valores por defecto
+    // Los datos del usuario se cargan en useEffect cuando el userId está disponible
     const [exercises, setExercises] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [selectedAnswer, setSelectedAnswer] = useState(null);
     const [isAnswered, setIsAnswered] = useState(false);
     const [score, setScore] = useState({ correct: 0, incorrect: 0, xp: 0 });
-    const [lives, setLives] = useState(() => {
-        const saved = localStorage.getItem('quiz_lives');
-        return saved ? parseInt(saved) : 3;
-    });
-    const [extraLives, setExtraLives] = useState(() => {
-        const saved = localStorage.getItem('quiz_extraLives');
-        return saved ? parseInt(saved) : 0;
-    });
+    const [lives, setLives] = useState(3);
+    const [extraLives, setExtraLives] = useState(0);
     const [streak, setStreak] = useState(0);
-    const [totalXp, setTotalXp] = useState(() => parseInt(localStorage.getItem('quiz_totalXp') || '0'));
-    const [currentLevel, setCurrentLevel] = useState(() => localStorage.getItem('quiz_level') || 'basico1');
+    const [totalXp, setTotalXp] = useState(0);
+    const [currentLevel, setCurrentLevel] = useState('basico1');
     const [showResult, setShowResult] = useState(false);
-    const [perfectLevels, setPerfectLevels] = useState(() => parseInt(localStorage.getItem('quiz_perfectLevels') || '0'));
+    const [perfectLevels, setPerfectLevels] = useState(0);
     const [showBuyLives, setShowBuyLives] = useState(false);
     const [showReward, setShowReward] = useState(false);
     const [dailyGoal, setDailyGoal] = useState({ current: 30, target: 50 });
+    const [dataLoaded, setDataLoaded] = useState(false);
 
     // Sistema de bloqueio
     const [isBlocked, setIsBlocked] = useState(false);
-    const [blockEndTime, setBlockEndTime] = useState(() => {
-        const saved = localStorage.getItem('quiz_blockEndTime');
-        return saved ? parseInt(saved) : null;
-    });
+    const [blockEndTime, setBlockEndTime] = useState(null);
     const [timeRemaining, setTimeRemaining] = useState('');
     const [showConfirmPayment, setShowConfirmPayment] = useState(false);
     const [pendingPaymentQty, setPendingPaymentQty] = useState(0);
@@ -57,19 +57,52 @@ const QuizComponent = () => {
     const [speechResult, setSpeechResult] = useState(null);
     const recognitionRef = useRef(null);
 
+    // Cargar datos del usuario desde localStorage cuando userId esté disponible
+    useEffect(() => {
+        if (!userId || userId === 'anonymous') return;
+
+        // Cargar lives
+        const savedLives = localStorage.getItem(getStorageKey(userId, 'lives'));
+        if (savedLives) setLives(parseInt(savedLives));
+
+        // Cargar extraLives
+        const savedExtraLives = localStorage.getItem(getStorageKey(userId, 'extraLives'));
+        if (savedExtraLives) setExtraLives(parseInt(savedExtraLives));
+
+        // Cargar totalXp
+        const savedXp = localStorage.getItem(getStorageKey(userId, 'totalXp'));
+        if (savedXp) setTotalXp(parseInt(savedXp));
+
+        // Cargar level
+        const savedLevel = localStorage.getItem(getStorageKey(userId, 'level'));
+        if (savedLevel) setCurrentLevel(savedLevel);
+
+        // Cargar perfectLevels
+        const savedPerfect = localStorage.getItem(getStorageKey(userId, 'perfectLevels'));
+        if (savedPerfect) setPerfectLevels(parseInt(savedPerfect));
+
+        // Cargar blockEndTime
+        const savedBlock = localStorage.getItem(getStorageKey(userId, 'blockEndTime'));
+        if (savedBlock) setBlockEndTime(parseInt(savedBlock));
+
+        setDataLoaded(true);
+    }, [userId]);
+
     // Liga e nível atual
     const currentLeague = LEAGUES.reduce((acc, league) => totalXp >= league.minXp ? league : acc, LEAGUES[0]);
     const levelInfo = LEVELS.find(l => l.id === parseInt(currentLevel.replace(/\D/g, '')) || 1) || LEVELS[0];
 
-    // Salvar vidas no localStorage
+    // Salvar vidas no localStorage (solo si userId está disponible)
     useEffect(() => {
-        localStorage.setItem('quiz_lives', lives.toString());
-        localStorage.setItem('quiz_extraLives', extraLives.toString());
-    }, [lives, extraLives]);
+        if (!userId || userId === 'anonymous' || !dataLoaded) return;
+        localStorage.setItem(getStorageKey(userId, 'lives'), lives.toString());
+        localStorage.setItem(getStorageKey(userId, 'extraLives'), extraLives.toString());
+    }, [lives, extraLives, userId, dataLoaded]);
 
     // Verificar si hay pago pendiente al cargar
     useEffect(() => {
-        const pending = localStorage.getItem('quiz_pendingPayment');
+        if (!userId || userId === 'anonymous') return;
+        const pending = localStorage.getItem(getStorageKey(userId, 'pendingPayment'));
         if (pending) {
             try {
                 const { qty, timestamp } = JSON.parse(pending);
@@ -79,13 +112,13 @@ const QuizComponent = () => {
                     setShowConfirmPayment(true);
                 } else {
                     // Pago expirado
-                    localStorage.removeItem('quiz_pendingPayment');
+                    localStorage.removeItem(getStorageKey(userId, 'pendingPayment'));
                 }
             } catch (e) {
-                localStorage.removeItem('quiz_pendingPayment');
+                localStorage.removeItem(getStorageKey(userId, 'pendingPayment'));
             }
         }
-    }, []);
+    }, [userId]);
 
     // Verificar bloqueio ao carregar
     useEffect(() => {
@@ -101,7 +134,9 @@ const QuizComponent = () => {
                 // Tempo de espera acabou - restaurar vidas
                 setIsBlocked(false);
                 setBlockEndTime(null);
-                localStorage.removeItem('quiz_blockEndTime');
+                if (userId && userId !== 'anonymous') {
+                    localStorage.removeItem(getStorageKey(userId, 'blockEndTime'));
+                }
                 setLives(3);
                 setExtraLives(0);
             }
@@ -110,14 +145,15 @@ const QuizComponent = () => {
         checkBlock();
         const interval = setInterval(checkBlock, 1000);
         return () => clearInterval(interval);
-    }, [blockEndTime]);
+    }, [blockEndTime, userId]);
 
-    // Salvar progresso
+    // Salvar progresso (solo si userId está disponible)
     useEffect(() => {
-        localStorage.setItem('quiz_totalXp', totalXp.toString());
-        localStorage.setItem('quiz_level', currentLevel);
-        localStorage.setItem('quiz_perfectLevels', perfectLevels.toString());
-    }, [totalXp, currentLevel, perfectLevels]);
+        if (!userId || userId === 'anonymous' || !dataLoaded) return;
+        localStorage.setItem(getStorageKey(userId, 'totalXp'), totalXp.toString());
+        localStorage.setItem(getStorageKey(userId, 'level'), currentLevel);
+        localStorage.setItem(getStorageKey(userId, 'perfectLevels'), perfectLevels.toString());
+    }, [totalXp, currentLevel, perfectLevels, userId, dataLoaded]);
 
     // Inicializar exercícios
     useEffect(() => {
@@ -243,16 +279,20 @@ const QuizComponent = () => {
     const handleWait = () => {
         const endTime = Date.now() + COOLDOWN_MS;
         setBlockEndTime(endTime);
-        localStorage.setItem('quiz_blockEndTime', endTime.toString());
+        if (userId && userId !== 'anonymous') {
+            localStorage.setItem(getStorageKey(userId, 'blockEndTime'), endTime.toString());
+        }
         setIsBlocked(true);
     };
 
     const handleBuyLife = (qty) => {
         // Guardar pago pendiente en localStorage
-        localStorage.setItem('quiz_pendingPayment', JSON.stringify({
-            qty,
-            timestamp: Date.now()
-        }));
+        if (userId && userId !== 'anonymous') {
+            localStorage.setItem(getStorageKey(userId, 'pendingPayment'), JSON.stringify({
+                qty,
+                timestamp: Date.now()
+            }));
+        }
 
         // Abrir link de pago de MercadoPago
         const link = PAYMENT_LINKS[qty];
@@ -261,14 +301,15 @@ const QuizComponent = () => {
 
     // Confirmar pago después de volver de MercadoPago
     const handleConfirmPayment = () => {
-        const pending = localStorage.getItem('quiz_pendingPayment');
+        if (!userId || userId === 'anonymous') return;
+        const pending = localStorage.getItem(getStorageKey(userId, 'pendingPayment'));
         if (pending) {
             const { qty } = JSON.parse(pending);
             setExtraLives(p => p + qty);
             setIsBlocked(false);
             setBlockEndTime(null);
-            localStorage.removeItem('quiz_blockEndTime');
-            localStorage.removeItem('quiz_pendingPayment');
+            localStorage.removeItem(getStorageKey(userId, 'blockEndTime'));
+            localStorage.removeItem(getStorageKey(userId, 'pendingPayment'));
             setShowConfirmPayment(false);
             setLives(prev => prev === 0 ? 3 : prev); // Restaurar si estaba en 0
         }
@@ -276,7 +317,9 @@ const QuizComponent = () => {
 
     // Cancelar confirmación de pago
     const handleCancelPayment = () => {
-        localStorage.removeItem('quiz_pendingPayment');
+        if (userId && userId !== 'anonymous') {
+            localStorage.removeItem(getStorageKey(userId, 'pendingPayment'));
+        }
         setShowConfirmPayment(false);
     };
 
@@ -381,6 +424,18 @@ const QuizComponent = () => {
             </DialogContent>
         </Dialog>
     );
+
+    // Tela de carregando dados do usuário
+    if (!dataLoaded && userId && userId !== 'anonymous') {
+        return (
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-8 text-center">
+                <div className="animate-pulse">
+                    <div className="text-4xl mb-4">🎯</div>
+                    <p className="text-slate-600">Carregando seu progresso...</p>
+                </div>
+            </div>
+        );
+    }
 
     // Tela de bloqueio
     if (isBlocked) {
