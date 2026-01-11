@@ -1041,11 +1041,11 @@ const HomePage = () => {
             <TabsList className="w-full grid grid-cols-3 sm:flex sm:flex-nowrap justify-start gap-1.5 bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-sm border border-slate-100 overflow-visible h-auto">
               {/* Abas dinâmicas baseadas em permissões */}
               {(() => {
-                const allowedTabs = roleSettings?.permissions?.tabs || ['dashboard', 'clases', 'chat', 'desempenho', 'faturas'];
+                const allowedTabs = roleSettings?.permissions?.tabs || ['dashboard', 'clases', 'chat', 'desempenho', 'faturas', 'recursos'];
                 const tabsDef = [
                   { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', bg: 'bg-sky-50', activeBg: 'data-[state=active]:bg-sky-500', text: 'text-sky-600' },
                   { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', bg: 'bg-violet-50', activeBg: 'data-[state=active]:bg-violet-500', text: 'text-violet-600' },
-                  { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', bg: 'bg-blue-50', activeBg: 'data-[state=active]:bg-blue-500', text: 'text-blue-600' },
+                  { id: 'recursos', value: 'recursos', permission: 'recursos', icon: FileText, label: 'Recursos', bg: 'bg-blue-50', activeBg: 'data-[state=active]:bg-blue-500', text: 'text-blue-600' },
                   { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', bg: 'bg-emerald-50', activeBg: 'data-[state=active]:bg-emerald-500', text: 'text-emerald-600' },
                   { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', bg: 'bg-amber-50', activeBg: 'data-[state=active]:bg-amber-500', text: 'text-amber-600' },
                   { id: 'tickets', value: 'tickets', permission: 'dashboard', icon: Ticket, label: 'Tickets', bg: 'bg-rose-50', activeBg: 'data-[state=active]:bg-rose-500', text: 'text-rose-600' },
@@ -1274,7 +1274,7 @@ const HomePage = () => {
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-slate-800">Biblioteca de Recursos</h2>
-                    <p className="text-sm text-slate-500">Materiais de estudo do seu professor</p>
+                    <p className="text-sm text-slate-500">Recursos de estudo do seu professor</p>
                   </div>
                 </div>
               </div>
@@ -1358,7 +1358,7 @@ const HomePage = () => {
                     </div>
                     <p className="font-medium text-slate-600 mb-2">Nenhum recurso disponível</p>
                     <p className="text-sm text-slate-400">
-                      Seu professor ainda não compartilhou materiais de estudo
+                      Seu professor ainda não compartilhou recursos de estudo
                     </p>
                   </div>
                 )}
@@ -1530,7 +1530,7 @@ const HomePage = () => {
                       <TableHead className="font-semibold">Hora</TableHead>
                       <TableHead className="font-semibold">Duração</TableHead>
                       <TableHead className="font-semibold">Status</TableHead>
-                      <TableHead className="font-semibold">Material</TableHead>
+                      <TableHead className="font-semibold text-center">Recurso</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

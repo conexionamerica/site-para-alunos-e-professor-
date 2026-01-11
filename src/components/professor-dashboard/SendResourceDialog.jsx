@@ -123,8 +123,8 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
             if (dbError) throw dbError;
 
             toast({
-                title: 'Material excluído',
-                description: 'O material foi removido com sucesso.'
+                title: 'Recurso excluído',
+                description: 'O recurso foi removido com sucesso.'
             });
 
             setHistory(prev => prev.filter(m => m.id !== material.id));
@@ -133,7 +133,7 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
             console.error('Error deleting material:', error);
             toast({
                 variant: 'destructive',
-                title: 'Erro ao excluir material',
+                title: 'Erro ao excluir recurso',
                 description: error.message
             });
         } finally {
@@ -146,7 +146,7 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
             toast({
                 variant: 'destructive',
                 title: 'Campos obrigatórios',
-                description: 'Por favor, selecione um arquivo e preencha o nome do material'
+                description: 'Por favor, selecione um arquivo e preencha o nome do recurso'
             });
             return;
         }
@@ -186,10 +186,10 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
             if (insertError) throw insertError;
 
             toast({
-                title: 'Material enviado!',
+                title: 'Recurso enviado!',
                 description: student
-                    ? `Material compartilhado com ${student.full_name}`
-                    : 'Material compartilhado com todos os seus alunos'
+                    ? `Recurso compartilhado com ${student.full_name}`
+                    : 'Recurso compartilhado com todos os seus alunos'
             });
 
             // Reset form
@@ -206,7 +206,7 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
             console.error('Error uploading material:', error);
             toast({
                 variant: 'destructive',
-                title: 'Erro ao enviar material',
+                title: 'Erro ao enviar recurso',
                 description: error.message
             });
         } finally {
@@ -228,12 +228,12 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-xl">
                             <Upload className="h-5 w-5 text-sky-600" />
-                            Gestão de Materiais
+                            Gestão de Recursos
                         </DialogTitle>
                         <DialogDescription className="text-slate-500">
                             {student
-                                ? `Materiais para ${student.full_name}`
-                                : 'Materiais compartilhados com todos os alunos'}
+                                ? `Recursos para ${student.full_name}`
+                                : 'Recursos compartilhados com todos os alunos'}
                         </DialogDescription>
                     </DialogHeader>
                 </div>
@@ -276,7 +276,7 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="material-name" className="font-bold text-slate-700">Nome do Material *</Label>
+                                    <Label htmlFor="material-name" className="font-bold text-slate-700">Nome do Recurso *</Label>
                                     <Input
                                         id="material-name"
                                         value={materialName}
@@ -386,7 +386,7 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
                                         <div className="p-4 bg-slate-50 rounded-full mb-3">
                                             <File className="h-10 w-10 text-slate-200" />
                                         </div>
-                                        <p className="font-medium text-slate-400">Nenhum material enviado ainda.</p>
+                                        <p className="font-medium text-slate-400">Nenhum recurso enviado ainda.</p>
                                         <p className="text-xs">O que você enviar aparecerá aqui.</p>
                                     </div>
                                 )}

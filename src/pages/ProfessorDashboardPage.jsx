@@ -22,6 +22,7 @@ import ServicosTab from '@/components/professor-dashboard/ServicosTab';
 import FinanceiroTab from '@/components/professor-dashboard/FinanceiroTab';
 import LogsTab from '@/components/professor-dashboard/LogsTab';
 import AvisosTab from '@/components/professor-dashboard/AvisosTab';
+import RecursosTab from '@/components/professor-dashboard/RecursosTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 import { getBrazilDate } from '@/lib/dateUtils';
@@ -576,6 +577,7 @@ const ProfessorDashboardPage = () => {
         { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab, permission: 'conversas' },
         { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab, permission: 'alunos' },
         { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab, permission: 'aulas' },
+        { id: 'recursos', icon: FileText, label: 'Recursos', component: RecursosTab, permission: 'recursos' },
         { id: 'servicos', icon: Headphones, label: 'Serviços', component: ServicosTab, permission: 'servicos' },
         { id: 'financeiro', icon: DollarSign, label: 'Financeiro', component: FinanceiroTab, permission: 'financeiro' },
         { id: 'administracao', icon: Shield, label: 'Administração', component: AdminTab, permission: 'admtab' },
@@ -587,6 +589,7 @@ const ProfessorDashboardPage = () => {
         { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab, permission: 'conversas' },
         { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab, permission: 'alunos' },
         { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab, permission: 'aulas' },
+        { id: 'recursos', icon: FileText, label: 'Recursos', component: RecursosTab, permission: 'recursos' },
         { id: 'servicos', icon: Headphones, label: 'Serviços', component: ServicosTab, permission: 'servicos' },
         { id: 'financeiro', icon: DollarSign, label: 'Financeiro', component: FinanceiroTab, permission: 'financeiro' },
         { id: 'avisos', icon: Megaphone, label: 'Avisos', component: AvisosTab, permission: 'inicio' },

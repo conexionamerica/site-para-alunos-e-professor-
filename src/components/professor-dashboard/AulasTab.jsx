@@ -1494,11 +1494,11 @@ const AulasTab = ({ dashboardData }) => {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileText className="h-5 w-5 text-sky-600" />
-                            Adicionar Material PDF
+                            Adicionar Recurso PDF
                         </DialogTitle>
                         <DialogDescription>
                             {selectedAulaForPdf?.student?.full_name && (
-                                <span>Material para aula com <strong>{selectedAulaForPdf.student.full_name}</strong></span>
+                                <span>Recurso para aula com <strong>{selectedAulaForPdf.student.full_name}</strong></span>
                             )}
                         </DialogDescription>
                     </DialogHeader>
@@ -1506,7 +1506,7 @@ const AulasTab = ({ dashboardData }) => {
                     <div className="space-y-4 py-4">
                         {/* Nome do Material */}
                         <div className="space-y-2">
-                            <Label htmlFor="pdf-name">Nome do Material *</Label>
+                            <Label htmlFor="pdf-name">Nome do Recurso *</Label>
                             <Input
                                 id="pdf-name"
                                 placeholder="Ex: Exercícios Capítulo 5"
@@ -1562,7 +1562,7 @@ const AulasTab = ({ dashboardData }) => {
                         <div className="pt-4 border-t">
                             <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
                                 <History className="w-4 h-4" />
-                                Materiais já enviados nesta aula
+                                Recursos já enviados nesta aula
                             </h4>
 
                             {loadingMaterials ? (
@@ -1612,7 +1612,7 @@ const AulasTab = ({ dashboardData }) => {
                                                                     .eq('id', material.id);
                                                                 if (error) throw error;
                                                                 setExistingMaterials(prev => prev.filter(m => m.id !== material.id));
-                                                                toast({ title: 'Material removido' });
+                                                                toast({ title: 'Recurso removido' });
                                                             } catch (err) {
                                                                 console.error(err);
                                                                 toast({ title: 'Erro ao remover', variant: 'destructive' });
@@ -1628,7 +1628,7 @@ const AulasTab = ({ dashboardData }) => {
                                 </div>
                             ) : (
                                 <p className="text-xs text-center py-4 text-slate-400 bg-slate-50 rounded-md border border-dashed">
-                                    Nenhum material enviado para esta aula.
+                                    Nenhum recurso enviado para esta aula.
                                 </p>
                             )}
                         </div>
@@ -1644,7 +1644,7 @@ const AulasTab = ({ dashboardData }) => {
                             {isUploadingPdf ? (
                                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
                             ) : (
-                                <><Upload className="mr-2 h-4 w-4" /> Enviar Material</>
+                                <><Upload className="mr-2 h-4 w-4" /> Enviar Recurso</>
                             )}
                         </Button>
                     </DialogFooter>
