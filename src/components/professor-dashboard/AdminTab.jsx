@@ -190,12 +190,26 @@ const AdminTab = ({ dashboardData }) => {
         // Usar allProfiles para garantir que pegamos o maior código de ALL os perfis do sistema,
         // e não apenas dos alunos visíveis no filtro atual.
         const studentCodes = allProfiles
-            .filter(p => p.student_code)
+            .filter(p => p.student_code && p.role === 'student')
             .map(s => s.student_code)
             .filter(code => code && /^\d+$/.test(code))
             .map(code => parseInt(code, 10));
 
         const lastCode = studentCodes.length > 0 ? Math.max(...studentCodes) : 101014;
+        const nextCode = lastCode + 1;
+        return nextCode.toString().padStart(7, '0');
+    };
+
+    // Función para generar código de profesor
+    const getNextProfessorCode = () => {
+        const professorCodes = allProfiles
+            .filter(p => p.student_code && p.role === 'professor')
+            .map(s => s.student_code)
+            .filter(code => code && /^\d+$/.test(code))
+            .map(code => parseInt(code, 10));
+
+        // Profesores empiezan en 200001
+        const lastCode = professorCodes.length > 0 ? Math.max(...professorCodes) : 200000;
         const nextCode = lastCode + 1;
         return nextCode.toString().padStart(7, '0');
     };
@@ -377,6 +391,11 @@ const AdminTab = ({ dashboardData }) => {
             } else {
                 // Criar novo usuário via RPC - SIMPLIFICADO
                 try {
+                    // Generar código según el rol
+                    const userCode = formData.role === 'professor'
+                        ? getNextProfessorCode()
+                        : (formData.role === 'student' ? getNextStudentCode() : null);
+
                     // A senha é passada exatamente como digitada (respeitando símbolos, maiúsculas, minúsculas)
                     const { data: newUserId, error: rpcError } = await supabase.rpc('admin_create_user', {
                         p_email: formData.email.trim().toLowerCase(),
@@ -390,9 +409,18 @@ const AdminTab = ({ dashboardData }) => {
                         throw new Error(rpcError.message);
                     }
 
+                    // Actualizar el código del usuario después de crearlo
+                    if (newUserId && userCode) {
+                        await supabase
+                            .from('profiles')
+                            .update({ student_code: userCode })
+                            .eq('id', newUserId);
+                    }
+
+                    const roleLabel = formData.role === 'professor' ? 'Professor' : 'Usuário';
                     toast({
                         title: 'Sucesso!',
-                        description: `Usuário criado com sucesso. Senha: ${formData.password}`,
+                        description: `${roleLabel} criado com sucesso. Código: ${userCode || 'N/A'}. Senha: ${formData.password}`,
                         duration: 10000,
                     });
                 } catch (rpcException) {
