@@ -59,18 +59,47 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   const [processingAction, setProcessingAction] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]); // State for online users
 
-  // Estado para modal de vinculação de professor
   const [showVincularModal, setShowVincularModal] = useState(false);
   const [selectedStudentForVinculacao, setSelectedStudentForVinculacao] = useState(null);
   const [selectedProfessorId, setSelectedProfessorId] = useState('');
   const [showEarningsModal, setShowEarningsModal] = useState(false);
 
-  // Lógica de cálculo para My Earnings
+  // Estado para filtro de mes en My Earnings
+  const [earningsMonth, setEarningsMonth] = useState(() => {
+    const now = getBrazilDate();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  // Lógica de cálculo para My Earnings CON FILTRO POR MES
   const appointments = dashboardData?.data?.appointments || [];
   const BASE_RATE = 6.11; // R$ 6.11 por cada 30 minutos
 
+  // Generar lista de meses disponibles (últimos 12 meses)
+  const availableMonths = useMemo(() => {
+    const months = [];
+    const now = getBrazilDate();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = format(date, "MMMM 'de' yyyy", { locale: ptBR });
+      months.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
+    }
+    return months;
+  }, []);
+
   const earningsStats = useMemo(() => {
-    const completedClasses = appointments.filter(apt => apt.status === 'completed');
+    // Filtrar por mes seleccionado
+    const [year, month] = earningsMonth.split('-').map(Number);
+    const startOfMonth = new Date(year, month - 1, 1);
+    const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+
+    const completedClasses = appointments.filter(apt => {
+      if (apt.status !== 'completed') return false;
+      if (!apt.class_datetime) return false;
+      const aptDate = new Date(apt.class_datetime);
+      return aptDate >= startOfMonth && aptDate <= endOfMonth;
+    });
+
     const totalMinutes = completedClasses.reduce((sum, apt) => sum + (apt.duration_minutes || 30), 0);
     const totalUnits = totalMinutes / 30;
     const totalEarnings = totalUnits * BASE_RATE;
@@ -104,8 +133,12 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
       };
     });
 
-    return { totalEarnings, totalMinutes, totalUnits, groupedList };
-  }, [appointments]);
+    // Información adicional del mes
+    const monthLabel = availableMonths.find(m => m.value === earningsMonth)?.label || earningsMonth;
+    const isCurrentMonth = earningsMonth === `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}`;
+
+    return { totalEarnings, totalMinutes, totalUnits, groupedList, monthLabel, isCurrentMonth, classCount: completedClasses.length };
+  }, [appointments, earningsMonth, availableMonths]);
 
   const formatTimeFull = (minutes) => {
     const h = Math.floor(minutes / 60);
@@ -2776,11 +2809,50 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
             </DialogHeader>
 
             <div className="space-y-6 py-4">
+              {/* Selector de Mes */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border">
+                <div className="flex items-center gap-3">
+                  <CalendarDays className="h-5 w-5 text-slate-500" />
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Período</p>
+                    <p className="text-xs text-slate-500">Selecione o mês para visualizar</p>
+                  </div>
+                </div>
+                <Select value={earningsMonth} onValueChange={setEarningsMonth}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Selecione o mês" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableMonths.map(month => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Badge del Mes Actual */}
+              <div className="flex items-center justify-center">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-lg px-4 py-2 font-semibold",
+                    earningsStats.isCurrentMonth
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                      : "bg-amber-50 text-amber-700 border-amber-300"
+                  )}
+                >
+                  {earningsStats.isCurrentMonth ? '📅 Mês Atual: ' : '📆 Histórico: '}
+                  {earningsStats.monthLabel}
+                </Badge>
+              </div>
+
               {/* Cuadrados de Resumen */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <Card className="bg-emerald-600 text-white border-none shadow-sm">
                   <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <p className="text-xs font-semibold opacity-80 uppercase mb-1">Ganhos Totais</p>
+                    <p className="text-xs font-semibold opacity-80 uppercase mb-1">Ganhos do Mês</p>
                     <h3 className="text-2xl font-bold">R$ {earningsStats.totalEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h3>
                   </CardContent>
                 </Card>
@@ -2794,8 +2866,15 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
 
                 <Card className="bg-purple-600 text-white border-none shadow-sm">
                   <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                    <p className="text-xs font-semibold opacity-80 uppercase mb-1">Aulas Completadas</p>
+                    <p className="text-xs font-semibold opacity-80 uppercase mb-1">Unidades (30m)</p>
                     <h3 className="text-2xl font-bold">{earningsStats.totalUnits.toFixed(1)}</h3>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-indigo-600 text-white border-none shadow-sm">
+                  <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                    <p className="text-xs font-semibold opacity-80 uppercase mb-1">Aulas Realizadas</p>
+                    <h3 className="text-2xl font-bold">{earningsStats.classCount}</h3>
                   </CardContent>
                 </Card>
               </div>
