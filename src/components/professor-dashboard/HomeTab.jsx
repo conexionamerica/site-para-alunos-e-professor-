@@ -74,12 +74,15 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   const appointments = dashboardData?.data?.appointments || [];
   const BASE_RATE = 6.11; // R$ 6.11 por cada 30 minutos
 
-  // Generar lista de meses disponibles (últimos 12 meses)
+  // Generar lista de meses disponibles (Todo el año actual 2026)
   const availableMonths = useMemo(() => {
     const months = [];
     const now = getBrazilDate();
+    const currentYear = now.getFullYear();
+
+    // Generar los 12 meses del año actual
     for (let i = 0; i < 12; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const date = new Date(currentYear, i, 1);
       const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const label = format(date, "MMMM 'de' yyyy", { locale: ptBR });
       months.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
