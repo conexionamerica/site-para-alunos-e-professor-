@@ -492,10 +492,24 @@ const AulasTab = ({ dashboardData }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
-    // Filtro automático: Solo muestra aulas del mes actual (sin selector visible)
-    const currentMonth = useMemo(() => {
+    // Filtro de mês: Automático para professores, manual para admins
+    const [selectedMonth, setSelectedMonth] = useState(() => {
         const now = getBrazilDate();
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
+
+    // Gerar lista de meses para o Admin (Todo o ano atual 2026)
+    const availableMonths = useMemo(() => {
+        const months = [];
+        const now = getBrazilDate();
+        const currentYear = now.getFullYear();
+        for (let i = 0; i < 12; i++) {
+            const date = new Date(currentYear, i, 1);
+            const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            const label = format(date, "MMMM 'de' yyyy", { locale: ptBR });
+            months.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
+        }
+        return months;
     }, []);
 
     // Extracción segura das propriedades a partir de dashboardData
@@ -848,8 +862,8 @@ const AulasTab = ({ dashboardData }) => {
 
     // Filtra appointments usando os novos filtros
     const filteredAppointments = useMemo(() => {
-        // Calcular límites del mes actual
-        const [year, month] = currentMonth.split('-').map(Number);
+        // Calcular límites del mes seleccionado/actual
+        const [year, month] = selectedMonth.split('-').map(Number);
         const startOfMonth = new Date(year, month - 1, 1);
         const endOfMonth = new Date(year, month, 0, 23, 59, 59);
 
@@ -912,7 +926,7 @@ const AulasTab = ({ dashboardData }) => {
 
             return monthMatch && nameMatch && dateMatch && statusMatch && professorMatch;
         }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
-    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter, isSuperadmin, professorId, effectiveProfessorFilter, currentMonth]);
+    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter, isSuperadmin, professorId, effectiveProfessorFilter, selectedMonth]);
 
     // Paginação
     const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
@@ -1006,6 +1020,32 @@ const AulasTab = ({ dashboardData }) => {
                         className="pl-10 border-slate-300 focus:border-sky-500 focus:ring-sky-500"
                     />
                 </div>
+
+                {/* Filtro de Mes - Solo para Administrador */}
+                {isSuperadmin && (
+                    <div className="flex items-center gap-2">
+                        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                            <SelectTrigger className="w-[180px] h-10 border-slate-300">
+                                <CalendarIcon className="w-4 h-4 mr-2 text-sky-500" />
+                                <SelectValue placeholder="Selecione o mês" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availableMonths.map(m => (
+                                    <SelectItem key={m.value} value={m.value}>
+                                        {m.value === `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}`
+                                            ? `📅 ${m.label} (Atual)`
+                                            : m.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {selectedMonth !== `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}` && (
+                            <Badge variant="outline" className="h-10 px-3 bg-amber-50 text-amber-700 border-amber-200 uppercase font-bold text-[10px]">
+                                Histórico
+                            </Badge>
+                        )}
+                    </div>
+                )}
 
                 {/* Botões de Filtro Rápido de Data */}
                 <div className="flex items-center border rounded-lg overflow-hidden">
