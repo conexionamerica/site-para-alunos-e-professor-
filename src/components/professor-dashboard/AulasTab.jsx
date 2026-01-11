@@ -492,6 +492,31 @@ const AulasTab = ({ dashboardData }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
+    // NUEVO: Estado para filtro de mes (por defecto: mes actual)
+    const [aulasMonth, setAulasMonth] = useState(() => {
+        const now = getBrazilDate();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
+
+    // Generar lista de meses disponibles (últimos 12 meses + próximos 2 meses para ver próximas aulas en agenda)
+    const availableMonths = useMemo(() => {
+        const months = [];
+        const now = getBrazilDate();
+        // Incluir próximos 2 meses para visualización futura
+        for (let i = -2; i < 12; i++) {
+            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            const label = format(date, "MMMM 'de' yyyy", { locale: ptBR });
+            const isCurrentMonth = i === 0;
+            months.push({
+                value,
+                label: label.charAt(0).toUpperCase() + label.slice(1),
+                isCurrentMonth
+            });
+        }
+        return months;
+    }, []);
+
     // Extracción segura das propriedades a partir de dashboardData
     const data = dashboardData?.data || {};
     const loading = dashboardData?.loading || false;
@@ -842,11 +867,25 @@ const AulasTab = ({ dashboardData }) => {
 
     // Filtra appointments usando os novos filtros
     const filteredAppointments = useMemo(() => {
+        // Calcular límites del mes seleccionado
+        const [year, month] = aulasMonth.split('-').map(Number);
+        const startOfMonth = new Date(year, month - 1, 1);
+        const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+
         return (appointments || []).filter(apt => {
+            // NUEVO: Filtro por mes (prioritario)
+            let monthMatch = true;
+            if (apt.class_datetime) {
+                const aptDate = new Date(apt.class_datetime);
+                monthMatch = aptDate >= startOfMonth && aptDate <= endOfMonth;
+            } else {
+                monthMatch = false;
+            }
+
             // Filtro por nome
             const nameMatch = !nameFilter || apt.student?.full_name?.toLowerCase().includes(nameFilter.toLowerCase());
 
-            // Filtro por data (rango de fechas, date picker ou filtro rápido)
+            // Filtro por data (rango de fechas, date picker ou filtro rápido) - dentro del mes
             let dateMatch = true;
 
             // Prioridad: 1. Rango de fechas, 2. Filtro rápido
@@ -871,7 +910,7 @@ const AulasTab = ({ dashboardData }) => {
             } else if (quickDateFilter === 'AMANHA') {
                 dateMatch = apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === getTomorrowStr();
             }
-            // TODAS não filtra por data
+            // TODAS não filtra por data (dentro do mês)
 
             // Filtro por status
             let statusMatch = true;
@@ -890,9 +929,9 @@ const AulasTab = ({ dashboardData }) => {
                 professorMatch = apt.professor_id === effectiveProfessorFilter;
             }
 
-            return nameMatch && dateMatch && statusMatch && professorMatch;
+            return monthMatch && nameMatch && dateMatch && statusMatch && professorMatch;
         }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
-    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter, isSuperadmin, professorId, effectiveProfessorFilter]);
+    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter, isSuperadmin, professorId, effectiveProfessorFilter, aulasMonth]);
 
     // Paginação
     const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
@@ -963,6 +1002,46 @@ const AulasTab = ({ dashboardData }) => {
                             </Badge>
                         </div>
                     )}
+                </div>
+            </div>
+
+            {/* NUEVO: Selector de Mes */}
+            <div className="mb-4 p-4 bg-gradient-to-r from-sky-50 to-blue-50 rounded-lg border border-sky-200">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-3">
+                        <Calendar className="h-5 w-5 text-sky-600" />
+                        <div>
+                            <p className="text-sm font-medium text-slate-700">Período das Aulas</p>
+                            <p className="text-xs text-slate-500">Mostrando aulas do mês selecionado</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Select value={aulasMonth} onValueChange={setAulasMonth}>
+                            <SelectTrigger className="w-[200px] bg-white">
+                                <SelectValue placeholder="Selecione o mês" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availableMonths.map(month => (
+                                    <SelectItem key={month.value} value={month.value}>
+                                        {month.isCurrentMonth ? `📅 ${month.label} (Atual)` : month.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Badge
+                            variant="outline"
+                            className={cn(
+                                "px-3 py-1 text-sm font-medium",
+                                availableMonths.find(m => m.value === aulasMonth)?.isCurrentMonth
+                                    ? "bg-sky-100 text-sky-700 border-sky-300"
+                                    : "bg-amber-100 text-amber-700 border-amber-300"
+                            )}
+                        >
+                            {availableMonths.find(m => m.value === aulasMonth)?.isCurrentMonth
+                                ? '🔵 Mês Atual'
+                                : '📆 Histórico'}
+                        </Badge>
+                    </div>
                 </div>
             </div>
 
