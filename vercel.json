@@ -5,15 +5,5 @@
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/class-reminders",
-      "schedule": "* * * * *"
-    },
-    {
-      "path": "/api/cron/process-email-queue",
-      "schedule": "*/2 * * * *"
-    }
   ]
 }

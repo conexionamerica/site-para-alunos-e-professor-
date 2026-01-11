@@ -54,53 +54,65 @@ export default async function handler(req, res) {
                     emailHtml = `
                         <!DOCTYPE html>
                         <html>
-                        <head>
-                            <meta charset="utf-8">
-                            <style>
-                                body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px; }
-                                .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-                                .header { background: linear-gradient(135deg, #8b5cf6, #a855f7); color: white; padding: 30px; text-align: center; }
-                                .header h1 { margin: 0; font-size: 24px; }
-                                .content { padding: 30px; }
-                                .student-card { background: linear-gradient(135deg, #faf5ff, #f3e8ff); border: 1px solid #e9d5ff; padding: 25px; margin: 20px 0; border-radius: 12px; }
-                                .student-name { font-size: 22px; font-weight: bold; color: #7c3aed; margin-bottom: 15px; }
-                                .button { display: inline-block; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
-                                .tips { background: #fefce8; border-left: 4px solid #eab308; padding: 15px; margin: 20px 0; border-radius: 8px; }
-                                .footer { background: #f8fafc; padding: 20px; text-align: center; color: #94a3b8; font-size: 12px; }
-                            </style>
-                        </head>
-                        <body>
-                            <div class="container">
-                                <div class="header">
-                                    <h1>🎉 Parabéns! Você tem um novo aluno!</h1>
-                                </div>
-                                <div class="content">
-                                    <p>Olá <strong>${data.professor_name}</strong>,</p>
-                                    <p>Um novo aluno foi atribuído a você! Confira os detalhes:</p>
-                                    
-                                    <div class="student-card">
-                                        <div class="student-name">👤 ${data.student_name}</div>
-                                        <p><strong>📧 Email:</strong> ${data.student_email || 'Não informado'}</p>
-                                    </div>
-                                    
-                                    <div class="tips">
-                                        <strong>💡 Dica:</strong> Acesse o painel do professor para ver mais informações sobre o aluno e agendar a primeira aula.
-                                    </div>
-                                    
-                                    <center>
-                                        <a href="https://aluno.conexionamerica.com.br/professor-dashboard" class="button">
-                                            📚 Acessar Painel do Professor
-                                        </a>
-                                    </center>
-                                    
-                                    <p style="margin-top: 30px; color: #64748b;">
-                                        Boa sorte com seu novo aluno! Qualquer dúvida, estamos à disposição.
-                                    </p>
-                                </div>
-                                <div class="footer">
-                                    <p>© ${new Date().getFullYear()} Conexión América - Escola de Espanhol Online</p>
-                                </div>
+                        <head><meta charset="utf-8"></head>
+                        <body style="font-family: sans-serif; padding: 20px;">
+                            <h2 style="color: #7c3aed;">🎉 Novo aluno atribuído!</h2>
+                            <p>Olá <strong>${data.professor_name}</strong>,</p>
+                            <p>Um nuevo aluno foi atribuído a você:</p>
+                            <div style="background: #f3e8ff; padding: 20px; border-radius: 10px;">
+                                <p><strong>👤 Aluno:</strong> ${data.student_name}</p>
+                                <p><strong>📧 Email:</strong> ${data.student_email || 'Não informado'}</p>
                             </div>
+                            <p><a href="https://aluno.conexionamerica.com.br/professor-dashboard" style="background: #7c3aed; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Acessar Painel</a></p>
+                        </body>
+                        </html>
+                    `;
+                } else if (email.email_type === 'ticket_created') {
+                    const data = email.data;
+                    emailHtml = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head><meta charset="utf-8"></head>
+                        <body style="font-family: sans-serif; padding: 20px;">
+                            <h2 style="color: #0ea5e9;">🎫 Novo Ticket de Suporte</h2>
+                            <p>Olá,</p>
+                            <p>Um novo ticket foi criado por <strong>${data.requester_name}</strong>:</p>
+                            <div style="background: #f0f9ff; padding: 20px; border-radius: 10px;">
+                                <p><strong>🔢 Número:</strong> #${data.ticket_number}</p>
+                                <p><strong>📝 Assunto:</strong> ${data.subject}</p>
+                            </div>
+                            <p><a href="https://aluno.conexionamerica.com.br/professor-dashboard" style="background: #0ea5e9; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Ver Ticket</a></p>
+                        </body>
+                        </html>
+                    `;
+                } else if (email.email_type === 'ticket_status_updated') {
+                    const data = email.data;
+                    emailHtml = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head><meta charset="utf-8"></head>
+                        <body style="font-family: sans-serif; padding: 20px;">
+                            <h2 style="color: #10b981;">🔔 Status do Ticket Atualizado</h2>
+                            <p>Olá <strong>${data.recipient_name}</strong>,</p>
+                            <p>O status do seu ticket <strong>#${data.ticket_number}</strong> foi alterado:</p>
+                            <div style="background: #ecfdf5; padding: 20px; border-radius: 10px;">
+                                <p><strong>📊 Novo Status:</strong> ${data.new_status}</p>
+                            </div>
+                            <p><a href="https://aluno.conexionamerica.com.br/professor-dashboard" style="background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Ver Atualização</a></p>
+                        </body>
+                        </html>
+                    `;
+                } else if (email.email_type === 'ticket_message') {
+                    const data = email.data;
+                    emailHtml = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head><meta charset="utf-8"></head>
+                        <body style="font-family: sans-serif; padding: 20px;">
+                            <h2 style="color: #3b82f6;">💬 Nova Mensagem no Ticket</h2>
+                            <p>Olá <strong>${data.recipient_name}</strong>,</p>
+                            <p>Você recebeu una nova resposta no ticket <strong>#${data.ticket_number}</strong> de <strong>${data.sender_name}</strong>.</p>
+                            <p><a href="https://aluno.conexionamerica.com.br/professor-dashboard" style="background: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Ler Mensagem</a></p>
                         </body>
                         </html>
                     `;

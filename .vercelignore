@@ -1,0 +1,12 @@
+# Ignorar carpetas del sistema y temporales
+C:/Users/USER/AppData
+AppData
+Temp
+WinSAT
+node_modules
+.git
+.next
+.env
+.env.local
+dist
+build
