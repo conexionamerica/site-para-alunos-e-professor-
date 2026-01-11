@@ -1595,7 +1595,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                   <div className="flex items-center gap-2 pb-2">
                     <div className="relative">
                       <Users className="h-4 w-4" />
-                      {onlineUsers.length > 0 && (
+                      {[...students, ...professors].filter(u => u.is_online).length > 0 && (
                         <span className="absolute -top-1 -right-1 flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
@@ -1603,9 +1603,9 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                       )}
                     </div>
                     <span>Online</span>
-                    {onlineUsers.length > 0 && (
+                    {[...students, ...professors].filter(u => u.is_online).length > 0 && (
                       <Badge variant="secondary" className="bg-green-100 text-green-700 h-5 px-1.5 min-w-[1.25rem] text-[10px] flex justify-center items-center">
-                        {onlineUsers.length}
+                        {[...students, ...professors].filter(u => u.is_online).length}
                       </Badge>
                     )}
                   </div>
@@ -1791,51 +1791,115 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
                 <TabsContent value="online" className="p-0">
                   <ScrollArea className="h-[300px] w-full">
                     <div className="p-6">
-                      {onlineUsers.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-center text-slate-500">
-                          <div className="p-3 bg-slate-50 rounded-full mb-3">
-                            <Users className="h-8 w-8 text-slate-200" />
-                          </div>
-                          <p>Nenhum usuário online no momento.</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {onlineUsers.map((u, idx) => (
-                            <div key={u.user_id || idx} className="flex items-center justify-between p-4 bg-white rounded-lg border shadow-sm transition-all hover:shadow-md">
-                              <div className="flex items-center gap-4">
-                                <div className="relative">
-                                  <Avatar className="h-10 w-10 border border-green-100">
-                                    <AvatarImage src={u.avatar_url} />
-                                    <AvatarFallback className="bg-green-50 text-green-700 font-bold">
-                                      {u.full_name?.[0]}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-white ring-1 ring-green-100"></span>
-                                </div>
-                                <div>
-                                  <p className="font-semibold text-slate-800">{u.full_name}</p>
-                                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                                    <Badge variant="outline" className="capitalize text-[10px] h-4 px-1 bg-slate-50">
-                                      {u.role === 'student' ? 'Aluno' : u.role === 'professor' ? 'Professor' : u.role}
-                                    </Badge>
-                                    <span>•</span>
-                                    <span>Entrou {u.online_at ? formatDistanceToNowStrict(new Date(u.online_at), { locale: ptBR, addSuffix: true }) : 'agora'}</span>
-                                  </div>
-                                </div>
+                      {(() => {
+                        // Combinar estudiantes y profesores, ordenar por is_online y last_seen_at
+                        const allUsers = [...students, ...professors]
+                          .filter(u => u && u.full_name)
+                          .sort((a, b) => {
+                            // Primero los online
+                            if (a.is_online && !b.is_online) return -1;
+                            if (!a.is_online && b.is_online) return 1;
+                            // Luego por last_seen_at (más reciente primero)
+                            const aDate = a.last_seen_at ? new Date(a.last_seen_at) : new Date(0);
+                            const bDate = b.last_seen_at ? new Date(b.last_seen_at) : new Date(0);
+                            return bDate - aDate;
+                          });
+
+                        const onlineCount = allUsers.filter(u => u.is_online).length;
+
+                        if (allUsers.length === 0) {
+                          return (
+                            <div className="flex flex-col items-center justify-center py-8 text-center text-slate-500">
+                              <div className="p-3 bg-slate-50 rounded-full mb-3">
+                                <Users className="h-8 w-8 text-slate-200" />
                               </div>
-                              <div className="text-right">
-                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-100 animate-pulse">
-                                  <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                  </span>
-                                  Ativo agora
+                              <p>Nenhum usuário cadastrado.</p>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <>
+                            {/* Resumen de usuarios online */}
+                            <div className="mb-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="relative flex h-3 w-3">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                                </div>
+                                <span className="font-semibold text-green-800">
+                                  {onlineCount} {onlineCount === 1 ? 'usuário' : 'usuários'} online agora
                                 </span>
                               </div>
+                              <span className="text-xs text-green-600">
+                                Total: {allUsers.length} usuários
+                              </span>
                             </div>
-                          ))}
-                        </div>
-                      )}
+
+                            <div className="space-y-2">
+                              {allUsers.map((u, idx) => {
+                                const isOnline = u.is_online === true;
+                                const lastSeen = u.last_seen_at ? new Date(u.last_seen_at) : null;
+
+                                return (
+                                  <div
+                                    key={u.id || idx}
+                                    className={cn(
+                                      "flex items-center justify-between p-3 bg-white rounded-lg border transition-all",
+                                      isOnline ? "border-green-200 shadow-sm" : "border-slate-100"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className="relative">
+                                        <Avatar className={cn("h-9 w-9 border", isOnline ? "border-green-200" : "border-slate-200")}>
+                                          <AvatarImage src={u.photo_url} />
+                                          <AvatarFallback className={cn(
+                                            "font-bold text-sm",
+                                            isOnline ? "bg-green-50 text-green-700" : "bg-slate-50 text-slate-600"
+                                          )}>
+                                            {u.full_name?.[0]}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                        <span className={cn(
+                                          "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white",
+                                          isOnline ? "bg-green-500" : "bg-slate-300"
+                                        )}></span>
+                                      </div>
+                                      <div>
+                                        <p className="font-medium text-slate-800 text-sm">{u.full_name}</p>
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                          <Badge variant="outline" className="capitalize text-[10px] h-4 px-1 bg-slate-50">
+                                            {u.role === 'student' ? 'Aluno' : u.role === 'professor' ? 'Prof' : u.role}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      {isOnline ? (
+                                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-100">
+                                          <span className="relative flex h-1.5 w-1.5">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                                          </span>
+                                          Online
+                                        </span>
+                                      ) : (
+                                        <div className="text-xs text-slate-400">
+                                          {lastSeen ? (
+                                            <span>Visto {formatDistanceToNowStrict(lastSeen, { locale: ptBR, addSuffix: true })}</span>
+                                          ) : (
+                                            <span>Nunca acessou</span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </ScrollArea>
                 </TabsContent>

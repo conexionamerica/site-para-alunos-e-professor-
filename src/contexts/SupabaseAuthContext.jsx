@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +18,70 @@ export const AuthProvider = ({ children }) => {
     return sessionStorage.getItem('professor-session') === 'true';
   });
 
+  // Ref para el canal de presencia
+  const presenceChannelRef = useRef(null);
+
+  // Función para actualizar el estado online del usuario
+  const updateOnlineStatus = useCallback(async (userId, isOnline) => {
+    if (!userId) return;
+    try {
+      await supabase
+        .from('profiles')
+        .update({
+          is_online: isOnline,
+          last_seen_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+    } catch (error) {
+      console.error('Error updating online status:', error);
+    }
+  }, []);
+
+  // Configurar canal de presencia
+  const setupPresenceChannel = useCallback((userId, userProfile) => {
+    if (!userId || presenceChannelRef.current) return;
+
+    const channel = supabase.channel('online-users', {
+      config: {
+        presence: {
+          key: userId,
+        },
+      },
+    });
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        // Sync event - presencia actualizada
+      })
+      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        console.log('User joined:', key);
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        console.log('User left:', key);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          // Anunciar presencia del usuario
+          await channel.track({
+            user_id: userId,
+            full_name: userProfile?.full_name || 'Usuario',
+            role: userProfile?.role || 'student',
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+
+    presenceChannelRef.current = channel;
+  }, []);
+
+  // Limpiar canal de presencia
+  const cleanupPresenceChannel = useCallback(() => {
+    if (presenceChannelRef.current) {
+      supabase.removeChannel(presenceChannelRef.current);
+      presenceChannelRef.current = null;
+    }
+  }, []);
+
   const fetchProfile = useCallback(async (userId) => {
     if (!userId) {
       setProfile(null);
@@ -34,6 +98,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const signOut = useCallback(async () => {
+    const userId = user?.id;
+
+    // Marcar usuario como offline antes de cerrar sesión
+    if (userId) {
+      await updateOnlineStatus(userId, false);
+    }
+
+    // Limpiar canal de presencia
+    cleanupPresenceChannel();
+
     setUser(null);
     setSession(null);
     setProfile(null);
@@ -51,7 +125,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     navigate('/login');
-  }, [navigate, toast]);
+  }, [navigate, toast, user?.id, updateOnlineStatus, cleanupPresenceChannel]);
 
   const handleSetProfessorSession = (isActive) => {
     setProfessorSession(isActive);
@@ -120,6 +194,12 @@ export const AuthProvider = ({ children }) => {
             return;
           }
 
+          // Marcar usuario como online
+          await updateOnlineStatus(session.user.id, true);
+
+          // Configurar canal de presencia
+          setupPresenceChannel(session.user.id, userProfile);
+
           if (userProfile?.role === 'professor' || userProfile?.role === 'superadmin' || userProfile?.role === 'admin') {
             // Handled by ProfessorLoginPage or by staying on current route if already in dashboard
           } else {
@@ -134,14 +214,19 @@ export const AuthProvider = ({ children }) => {
             }
           }
         } else if (_event === 'SIGNED_OUT') {
+          cleanupPresenceChannel();
           setProfessorSession(false);
           sessionStorage.removeItem('professor-session');
         }
       }
     );
 
-    return () => subscription.unsubscribe();
-  }, [handleSession, fetchProfile, navigate, toast]); // createProfessorUser removido
+    // Limpiar al desmontar
+    return () => {
+      subscription.unsubscribe();
+      cleanupPresenceChannel();
+    };
+  }, [handleSession, fetchProfile, navigate, toast, updateOnlineStatus, setupPresenceChannel, cleanupPresenceChannel]);
 
   const signUp = useCallback(async (email, password, options) => {
     const { data, error } = await supabase.auth.signUp({
