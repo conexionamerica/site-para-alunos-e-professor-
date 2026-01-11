@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Loader2, Star, Calendar, Clock, RotateCcw, UserX, Calendar as CalendarIcon, Filter, FileText, Upload, X, ExternalLink, Trash2, History } from 'lucide-react';
+import { MoreVertical, Loader2, Star, Calendar, Clock, RotateCcw, UserX, Filter, FileText, Upload, X, ExternalLink, Trash2, History } from 'lucide-react';
+const CalendarIcon = Calendar;
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -492,6 +493,26 @@ const AulasTab = ({ dashboardData }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
+    // Filtro de mês: Automático para professores, manual para admins
+    const [selectedMonth, setSelectedMonth] = useState(() => {
+        const now = getBrazilDate();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
+
+    // Gerar lista de meses para o Admin (Todo o ano atual 2026)
+    const availableMonths = useMemo(() => {
+        const months = [];
+        const now = getBrazilDate();
+        const currentYear = now.getFullYear();
+        for (let i = 0; i < 12; i++) {
+            const date = new Date(currentYear, i, 1);
+            const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            const label = format(date, "MMMM 'de' yyyy", { locale: ptBR });
+            months.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
+        }
+        return months;
+    }, []);
+
     // Extracción segura das propriedades a partir de dashboardData
     const data = dashboardData?.data || {};
     const loading = dashboardData?.loading || false;
@@ -842,11 +863,25 @@ const AulasTab = ({ dashboardData }) => {
 
     // Filtra appointments usando os novos filtros
     const filteredAppointments = useMemo(() => {
+        // Calcular límites del mes seleccionado/actual
+        const [year, month] = selectedMonth.split('-').map(Number);
+        const startOfMonth = new Date(year, month - 1, 1);
+        const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+
         return (appointments || []).filter(apt => {
+            // NUEVO: Filtro por mes (prioritario)
+            let monthMatch = true;
+            if (apt.class_datetime) {
+                const aptDate = new Date(apt.class_datetime);
+                monthMatch = aptDate >= startOfMonth && aptDate <= endOfMonth;
+            } else {
+                monthMatch = false;
+            }
+
             // Filtro por nome
             const nameMatch = !nameFilter || apt.student?.full_name?.toLowerCase().includes(nameFilter.toLowerCase());
 
-            // Filtro por data (rango de fechas, date picker ou filtro rápido)
+            // Filtro por data (rango de fechas, date picker ou filtro rápido) - dentro del mes
             let dateMatch = true;
 
             // Prioridad: 1. Rango de fechas, 2. Filtro rápido
@@ -871,7 +906,7 @@ const AulasTab = ({ dashboardData }) => {
             } else if (quickDateFilter === 'AMANHA') {
                 dateMatch = apt.class_datetime && format(parseISO(apt.class_datetime), 'yyyy-MM-dd') === getTomorrowStr();
             }
-            // TODAS não filtra por data
+            // TODAS não filtra por data (dentro do mês)
 
             // Filtro por status
             let statusMatch = true;
@@ -890,9 +925,9 @@ const AulasTab = ({ dashboardData }) => {
                 professorMatch = apt.professor_id === effectiveProfessorFilter;
             }
 
-            return nameMatch && dateMatch && statusMatch && professorMatch;
+            return monthMatch && nameMatch && dateMatch && statusMatch && professorMatch;
         }).sort((a, b) => new Date(a.class_datetime) - new Date(b.class_datetime));
-    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter, isSuperadmin, professorId, effectiveProfessorFilter]);
+    }, [appointments, nameFilter, dateFilter, quickDateFilter, statusFilter, startDateFilter, endDateFilter, isSuperadmin, professorId, effectiveProfessorFilter, selectedMonth]);
 
     // Paginação
     const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
@@ -986,6 +1021,32 @@ const AulasTab = ({ dashboardData }) => {
                         className="pl-10 border-slate-300 focus:border-sky-500 focus:ring-sky-500"
                     />
                 </div>
+
+                {/* Filtro de Mes - Solo para Administrador */}
+                {isSuperadmin && (
+                    <div className="flex items-center gap-2">
+                        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                            <SelectTrigger className="w-[180px] h-10 border-slate-300">
+                                <CalendarIcon className="w-4 h-4 mr-2 text-sky-500" />
+                                <SelectValue placeholder="Selecione o mês" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availableMonths.map(m => (
+                                    <SelectItem key={m.value} value={m.value}>
+                                        {m.value === `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}`
+                                            ? `📅 ${m.label} (Atual)`
+                                            : m.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {selectedMonth !== `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}` && (
+                            <Badge variant="outline" className="h-10 px-3 bg-amber-50 text-amber-700 border-amber-200 uppercase font-bold text-[10px]">
+                                Histórico
+                            </Badge>
+                        )}
+                    </div>
+                )}
 
                 {/* Botões de Filtro Rápido de Data */}
                 <div className="flex items-center border rounded-lg overflow-hidden">
@@ -1083,76 +1144,78 @@ const AulasTab = ({ dashboardData }) => {
             </div>
 
             {/* Agenda del Profesor Seleccionado - Solo para Superadmin */}
-            {isSuperadmin && selectedProfessorAgenda && (
-                <div className="mb-6 p-4 bg-slate-50 rounded-lg border">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                            <CalendarIcon className="h-5 w-5 text-sky-600" />
-                            Agenda de {selectedProfessorAgenda.professor?.full_name}
-                        </h3>
-                        <div className="flex gap-2">
-                            <Badge className="bg-green-500 text-white">
-                                {selectedProfessorAgenda.totalActive} disponível(is)
-                            </Badge>
-                            <Badge className="bg-blue-500 text-white">
-                                {selectedProfessorAgenda.totalFilled} ocupado(s)
-                            </Badge>
+            {
+                isSuperadmin && selectedProfessorAgenda && (
+                    <div className="mb-6 p-4 bg-slate-50 rounded-lg border">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                                <CalendarIcon className="h-5 w-5 text-sky-600" />
+                                Agenda de {selectedProfessorAgenda.professor?.full_name}
+                            </h3>
+                            <div className="flex gap-2">
+                                <Badge className="bg-green-500 text-white">
+                                    {selectedProfessorAgenda.totalActive} disponível(is)
+                                </Badge>
+                                <Badge className="bg-blue-500 text-white">
+                                    {selectedProfessorAgenda.totalFilled} ocupado(s)
+                                </Badge>
+                            </div>
                         </div>
-                    </div>
 
-                    {loadingAgenda ? (
-                        <div className="flex justify-center py-4">
-                            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-7 gap-2">
-                            {Object.entries(selectedProfessorAgenda.slotsByDay).map(([dayIndex, dayData]) => (
-                                <div key={dayIndex} className="text-center">
-                                    <p className="text-xs font-semibold mb-2 text-slate-700 bg-slate-200 rounded py-1">
-                                        {dayData.name}
-                                    </p>
-                                    <div className="space-y-1 max-h-40 overflow-y-auto">
-                                        {dayData.active.length > 0 ? (
-                                            dayData.active.map((slot, idx) => (
-                                                <div
-                                                    key={`active-${idx}`}
-                                                    className="text-[10px] px-1 py-0.5 bg-green-100 text-green-700 rounded truncate"
-                                                    title={`Disponível: ${slot.start_time?.substring(0, 5)}`}
-                                                >
-                                                    {slot.start_time?.substring(0, 5)}
-                                                </div>
-                                            ))
-                                        ) : null}
-                                        {dayData.filled.length > 0 ? (
-                                            dayData.filled.map((slot, idx) => (
-                                                <div
-                                                    key={`filled-${idx}`}
-                                                    className="text-[10px] px-1 py-0.5 bg-blue-100 text-blue-600 rounded truncate"
-                                                    title={`Ocupado: ${slot.start_time?.substring(0, 5)}`}
-                                                >
-                                                    {slot.start_time?.substring(0, 5)} ✓
-                                                </div>
-                                            ))
-                                        ) : null}
-                                        {dayData.active.length === 0 && dayData.filled.length === 0 && (
-                                            <div className="text-[10px] text-slate-400 py-1">-</div>
-                                        )}
+                        {loadingAgenda ? (
+                            <div className="flex justify-center py-4">
+                                <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-7 gap-2">
+                                {Object.entries(selectedProfessorAgenda.slotsByDay).map(([dayIndex, dayData]) => (
+                                    <div key={dayIndex} className="text-center">
+                                        <p className="text-xs font-semibold mb-2 text-slate-700 bg-slate-200 rounded py-1">
+                                            {dayData.name}
+                                        </p>
+                                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                                            {dayData.active.length > 0 ? (
+                                                dayData.active.map((slot, idx) => (
+                                                    <div
+                                                        key={`active-${idx}`}
+                                                        className="text-[10px] px-1 py-0.5 bg-green-100 text-green-700 rounded truncate"
+                                                        title={`Disponível: ${slot.start_time?.substring(0, 5)}`}
+                                                    >
+                                                        {slot.start_time?.substring(0, 5)}
+                                                    </div>
+                                                ))
+                                            ) : null}
+                                            {dayData.filled.length > 0 ? (
+                                                dayData.filled.map((slot, idx) => (
+                                                    <div
+                                                        key={`filled-${idx}`}
+                                                        className="text-[10px] px-1 py-0.5 bg-blue-100 text-blue-600 rounded truncate"
+                                                        title={`Ocupado: ${slot.start_time?.substring(0, 5)}`}
+                                                    >
+                                                        {slot.start_time?.substring(0, 5)} ✓
+                                                    </div>
+                                                ))
+                                            ) : null}
+                                            {dayData.active.length === 0 && dayData.filled.length === 0 && (
+                                                <div className="text-[10px] text-slate-400 py-1">-</div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                                ))}
+                            </div>
+                        )}
 
-                    <div className="mt-3 flex gap-4 text-xs text-slate-500">
-                        <span className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-green-100 rounded"></div> Disponível
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <div className="w-3 h-3 bg-blue-100 rounded"></div> Ocupado
-                        </span>
+                        <div className="mt-3 flex gap-4 text-xs text-slate-500">
+                            <span className="flex items-center gap-1">
+                                <div className="w-3 h-3 bg-green-100 rounded"></div> Disponível
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <div className="w-3 h-3 bg-blue-100 rounded"></div> Ocupado
+                            </span>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
             <Dialog open={isFiltersModalOpen} onOpenChange={setIsFiltersModalOpen}>
                 <DialogContent className="sm:max-w-[450px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
@@ -1415,14 +1478,16 @@ const AulasTab = ({ dashboardData }) => {
                 onFeedbackSent={handleUpdate}
             />
             {/* Diálogo de Reagendamento */}
-            {selectedAppointment && (
-                <RescheduleDialog
-                    appointment={selectedAppointment}
-                    isOpen={isRescheduleDialogOpen}
-                    onClose={() => setIsRescheduleDialogOpen(false)}
-                    onReschedule={handleUpdate}
-                />
-            )}
+            {
+                selectedAppointment && (
+                    <RescheduleDialog
+                        appointment={selectedAppointment}
+                        isOpen={isRescheduleDialogOpen}
+                        onClose={() => setIsRescheduleDialogOpen(false)}
+                        onReschedule={handleUpdate}
+                    />
+                )
+            }
 
             {/* Modal de Upload de PDF */}
             <Dialog open={showPdfModal} onOpenChange={setShowPdfModal}>
@@ -1430,11 +1495,11 @@ const AulasTab = ({ dashboardData }) => {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileText className="h-5 w-5 text-sky-600" />
-                            Adicionar Material PDF
+                            Adicionar Recurso PDF
                         </DialogTitle>
                         <DialogDescription>
                             {selectedAulaForPdf?.student?.full_name && (
-                                <span>Material para aula com <strong>{selectedAulaForPdf.student.full_name}</strong></span>
+                                <span>Recurso para aula com <strong>{selectedAulaForPdf.student.full_name}</strong></span>
                             )}
                         </DialogDescription>
                     </DialogHeader>
@@ -1442,7 +1507,7 @@ const AulasTab = ({ dashboardData }) => {
                     <div className="space-y-4 py-4">
                         {/* Nome do Material */}
                         <div className="space-y-2">
-                            <Label htmlFor="pdf-name">Nome do Material *</Label>
+                            <Label htmlFor="pdf-name">Nome do Recurso *</Label>
                             <Input
                                 id="pdf-name"
                                 placeholder="Ex: Exercícios Capítulo 5"
@@ -1498,7 +1563,7 @@ const AulasTab = ({ dashboardData }) => {
                         <div className="pt-4 border-t">
                             <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
                                 <History className="w-4 h-4" />
-                                Materiais já enviados nesta aula
+                                Recursos já enviados nesta aula
                             </h4>
 
                             {loadingMaterials ? (
@@ -1548,7 +1613,7 @@ const AulasTab = ({ dashboardData }) => {
                                                                     .eq('id', material.id);
                                                                 if (error) throw error;
                                                                 setExistingMaterials(prev => prev.filter(m => m.id !== material.id));
-                                                                toast({ title: 'Material removido' });
+                                                                toast({ title: 'Recurso removido' });
                                                             } catch (err) {
                                                                 console.error(err);
                                                                 toast({ title: 'Erro ao remover', variant: 'destructive' });
@@ -1564,7 +1629,7 @@ const AulasTab = ({ dashboardData }) => {
                                 </div>
                             ) : (
                                 <p className="text-xs text-center py-4 text-slate-400 bg-slate-50 rounded-md border border-dashed">
-                                    Nenhum material enviado para esta aula.
+                                    Nenhum recurso enviado para esta aula.
                                 </p>
                             )}
                         </div>
@@ -1580,13 +1645,13 @@ const AulasTab = ({ dashboardData }) => {
                             {isUploadingPdf ? (
                                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
                             ) : (
-                                <><Upload className="mr-2 h-4 w-4" /> Enviar Material</>
+                                <><Upload className="mr-2 h-4 w-4" /> Enviar Recurso</>
                             )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 };
 

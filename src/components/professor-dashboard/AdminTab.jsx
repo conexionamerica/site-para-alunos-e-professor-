@@ -780,6 +780,7 @@ const AdminTab = ({ dashboardData }) => {
                                                     { id: 'conversas', label: 'Conversas' },
                                                     { id: 'alunos', label: 'Alunos' },
                                                     { id: 'aulas', label: 'Aulas' },
+                                                    { id: 'recursos', label: 'Recursos' },
                                                     { id: 'preferencias', label: 'Preferências' }
                                                 ].map(tab => {
                                                     const isAllowed = roleSettings.find(s => s.role === 'professor')?.permissions?.tabs?.includes(tab.id);
@@ -1166,8 +1167,8 @@ const AdminTab = ({ dashboardData }) => {
                             </h4>
                             <div className="grid grid-cols-2 gap-3">
                                 {(editingRole === 'student'
-                                    ? ['dashboard', 'clases', 'chat', 'desempenho', 'faturas']
-                                    : ['inicio', 'agenda', 'alunos', 'aulas', 'conversas', 'servicos', 'financeiro', 'preferencias', 'admtab', 'global']
+                                    ? ['dashboard', 'clases', 'chat', 'desempenho', 'faturas', 'recursos']
+                                    : ['inicio', 'agenda', 'alunos', 'aulas', 'recursos', 'conversas', 'servicos', 'financeiro', 'preferencias', 'admtab', 'global']
                                 ).map(tabId => {
                                     const labels = {
                                         inicio: 'Início',
@@ -1184,7 +1185,8 @@ const AdminTab = ({ dashboardData }) => {
                                         clases: 'Aulas (Aluno)',
                                         chat: 'Chat',
                                         desempenho: 'Desempenho',
-                                        faturas: 'Faturas'
+                                        faturas: 'Faturas',
+                                        recursos: 'Recursos'
                                     };
                                     return (
                                         <div key={tabId} className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-slate-50 cursor-pointer"

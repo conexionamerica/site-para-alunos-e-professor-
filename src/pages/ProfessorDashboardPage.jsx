@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History, Megaphone, ExternalLink, Camera, Upload } from 'lucide-react';
+import { LogOut, Home, BookOpen, Calendar, Users, MessageSquare, Settings, Menu, Loader2, AlertTriangle, Shield, LayoutDashboard, Filter, Headphones, DollarSign, History, Megaphone, ExternalLink, Camera, Upload, FileText, LayoutGrid } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import HomeTab from '@/components/professor-dashboard/HomeTab';
@@ -22,9 +22,11 @@ import ServicosTab from '@/components/professor-dashboard/ServicosTab';
 import FinanceiroTab from '@/components/professor-dashboard/FinanceiroTab';
 import LogsTab from '@/components/professor-dashboard/LogsTab';
 import AvisosTab from '@/components/professor-dashboard/AvisosTab';
+import RecursosTab from '@/components/professor-dashboard/RecursosTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 import { getBrazilDate } from '@/lib/dateUtils';
+import { useIdleTimeout } from '@/hooks/useIdleTimeout';
 
 // Función de busca de datos
 const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) => {
@@ -89,7 +91,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
     // 4. Fetch de ALL os Perfis (para AdmTab y AlunosTab)
     const { data: allProfiles, error: allProfilesError } = await supabase
         .from('profiles')
-        .select('*, created_at, phone, cpf, birth_date, registration_status, address_street, address_city, address_state, address_zip_code')
+        .select('*, created_at, phone, cpf, birth_date, registration_status, address_street, address_city, address_state, address_zip_code, is_online, last_seen_at')
         .order('role', { ascending: true })
         .order('full_name', { ascending: true });
     if (allProfilesError) throw allProfilesError;
@@ -210,6 +212,9 @@ const ProfessorDashboardPage = () => {
     const { user, profile, signOut } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
+
+    // Hook para cerrar sessión automáticamente después de 15 minutos de inactividad
+    useIdleTimeout(true);
 
     const [activeTab, setActiveTab] = useState('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -572,6 +577,7 @@ const ProfessorDashboardPage = () => {
         { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab, permission: 'conversas' },
         { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab, permission: 'alunos' },
         { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab, permission: 'aulas' },
+        { id: 'recursos', icon: FileText, label: 'Recursos', component: RecursosTab, permission: 'recursos' },
         { id: 'servicos', icon: Headphones, label: 'Serviços', component: ServicosTab, permission: 'servicos' },
         { id: 'financeiro', icon: DollarSign, label: 'Financeiro', component: FinanceiroTab, permission: 'financeiro' },
         { id: 'administracao', icon: Shield, label: 'Administração', component: AdminTab, permission: 'admtab' },
@@ -583,6 +589,7 @@ const ProfessorDashboardPage = () => {
         { id: 'conversas', icon: MessageSquare, label: 'Conversas', component: ConversasTab, permission: 'conversas' },
         { id: 'alunos', icon: Users, label: 'Alunos', component: AlunosTab, permission: 'alunos' },
         { id: 'aulas', icon: BookOpen, label: 'Aulas', component: AulasTab, permission: 'aulas' },
+        { id: 'recursos', icon: FileText, label: 'Recursos', component: RecursosTab, permission: 'recursos' },
         { id: 'servicos', icon: Headphones, label: 'Serviços', component: ServicosTab, permission: 'servicos' },
         { id: 'financeiro', icon: DollarSign, label: 'Financeiro', component: FinanceiroTab, permission: 'financeiro' },
         { id: 'avisos', icon: Megaphone, label: 'Avisos', component: AvisosTab, permission: 'inicio' },

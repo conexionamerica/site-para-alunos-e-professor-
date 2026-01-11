@@ -1250,7 +1250,7 @@ const AlunosTab = ({ dashboardData }) => {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                                            title="Enviar Material"
+                                                            title="Enviar Recurso"
                                                             onClick={() => {
                                                                 setSelectedStudent(student);
                                                                 setIsResourceDialogOpen(true);
