@@ -197,6 +197,25 @@ const HomePage = () => {
   const [assignedLogs, setAssignedLogs] = useState([]);
   const [isScrolled, setIsScrolled] = useState(false);
 
+  // Estado para filtro de mes en el Dashboard del Alumno
+  const [dashboardMonth, setDashboardMonth] = useState(() => {
+    const now = getBrazilDate();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  // Generar lista de meses disponibles (últimos 12 meses)
+  const availableMonths = useMemo(() => {
+    const months = [];
+    const now = getBrazilDate();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = format(date, "MMMM 'de' yyyy", { locale: ptBR });
+      months.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
+    }
+    return months;
+  }, []);
+
   const [schedulingStep, setSchedulingStep] = useState(1);
   const [allAvailableSlots, setAllAvailableSlots] = useState([]);
   const [availableTimesForSelectedDays, setAvailableTimesForSelectedDays] = useState([]);
@@ -452,11 +471,22 @@ const HomePage = () => {
       const netUsedClasses = usedClasses + scheduledClassesCount + pendingClassesCount;
       const available = Math.max(0, totalClasses - netUsedClasses + rescheduledClassesCount);
 
+      // Calcular estatísticas MENSAIS para os counters do dashboard
+      const [year, month] = dashboardMonth.split('-').map(Number);
+      const startOfSelectedMonth = new Date(year, month - 1, 1);
+      const endOfSelectedMonth = new Date(year, month, 0, 23, 59, 59);
+
+      const monthlyAppointments = appointmentsData.filter(apt => {
+        if (!apt.class_datetime) return false;
+        const aptDate = new Date(apt.class_datetime);
+        return aptDate >= startOfSelectedMonth && aptDate <= endOfSelectedMonth;
+      });
+
       setClassStats({
-        available,
-        scheduled: scheduledClassesCount,
-        completed: appointmentsData.filter(a => a.status === 'completed').length,
-        missed: appointmentsData.filter(a => a.status === 'missed').length,
+        available, // Créditos totais (não filtrado por mês)
+        scheduled: monthlyAppointments.filter(a => a.status === 'scheduled').length,
+        completed: monthlyAppointments.filter(a => a.status === 'completed').length,
+        missed: monthlyAppointments.filter(a => a.status === 'missed').length,
         pending: pendingClassesCount,
         rescheduledCount: rescheduledClassesCount,
       });
@@ -464,7 +494,7 @@ const HomePage = () => {
     } catch (error) {
       toast({ variant: "destructive", title: "Erro ao carregar dados", description: `(${error.message})` });
     } finally { setLoading(false); }
-  }, [user, profile, toast]);
+  }, [user, profile, toast, dashboardMonth]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -845,6 +875,30 @@ const HomePage = () => {
               >
                 Olá, <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-blue-600">{profile?.full_name?.split(' ')[0] || 'Aluno'}</span>! 👋
               </motion.h1>
+
+              {/* Selector de Mes para el Aluno */}
+              <div className="mt-2 flex items-center gap-2">
+                <Select value={dashboardMonth} onValueChange={setDashboardMonth}>
+                  <SelectTrigger className="w-[180px] h-8 text-xs bg-white/50 border-slate-200">
+                    <CalendarIcon className="w-3 h-3 mr-1 text-sky-500" />
+                    <SelectValue placeholder="Selecione o mês" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableMonths.map(month => (
+                      <SelectItem key={month.value} value={month.value} className="text-xs">
+                        {month.value === `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}`
+                          ? `📅 ${month.label} (Atual)`
+                          : month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {dashboardMonth !== `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}` && (
+                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] bg-amber-50 text-amber-700 border-amber-200 uppercase font-bold">
+                    Histórico
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-3 mt-1">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
