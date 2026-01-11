@@ -135,6 +135,42 @@ export default async function handler(req, res) {
                         </body>
                         </html>
                     `;
+                } else if (email.email_type === 'pending_student_assignment') {
+                    const data = email.data;
+                    emailHtml = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head><meta charset="utf-8"></head>
+                        <body style="font-family: sans-serif; padding: 20px;">
+                            <h2 style="color: #8b5cf6;">📋 Nova Solicitação de Aluno</h2>
+                            <p>Olá <strong>${data.professor_name}</strong>,</p>
+                            <p>Você recebeu uma nova solicitação de vinculação:</p>
+                            <div style="background: #f5f3ff; padding: 20px; border-radius: 10px;">
+                                <p><strong>👤 Aluno:</strong> ${data.student_name}</p>
+                                <p><strong>📝 Ação:</strong> ${data.action_required}</p>
+                            </div>
+                            <p><a href="https://aluno.conexionamerica.com.br/professor-dashboard" style="background: #8b5cf6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Ver Solicitação</a></p>
+                        </body>
+                        </html>
+                    `;
+                } else if (email.email_type === 'assignment_approved') {
+                    const data = email.data;
+                    emailHtml = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head><meta charset="utf-8"></head>
+                        <body style="font-family: sans-serif; padding: 20px;">
+                            <h2 style="color: #10b981;">✅ Vinculação Aprovada</h2>
+                            <p>Olá <strong>Administrador</strong>,</p>
+                            <p>Uma vinculação foi aprovada:</p>
+                            <div style="background: #ecfdf5; padding: 20px; border-radius: 10px;">
+                                <p><strong>👤 Aluno:</strong> ${data.student_name}</p>
+                                <p><strong>👨‍🏫 Professor:</strong> ${data.professor_name}</p>
+                            </div>
+                            <p><a href="https://aluno.conexionamerica.com.br/professor-dashboard" style="background: #10b981; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Ver Detalhes</a></p>
+                        </body>
+                        </html>
+                    `;
                 }
 
                 // Enviar email
