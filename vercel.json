@@ -2,8 +2,18 @@
   "installCommand": "rm -rf node_modules package-lock.json && npm install --legacy-peer-deps",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/class-reminders",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/process-email-queue",
+      "schedule": "*/2 * * * *"
     }
   ]
 }
