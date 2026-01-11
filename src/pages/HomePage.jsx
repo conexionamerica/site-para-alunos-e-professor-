@@ -876,29 +876,7 @@ const HomePage = () => {
                 Olá, <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-blue-600">{profile?.full_name?.split(' ')[0] || 'Aluno'}</span>! 👋
               </motion.h1>
 
-              {/* Selector de Mes para el Aluno */}
-              <div className="mt-2 flex items-center gap-2">
-                <Select value={dashboardMonth} onValueChange={setDashboardMonth}>
-                  <SelectTrigger className="w-[180px] h-8 text-xs bg-white/50 border-slate-200">
-                    <CalendarIcon className="w-3 h-3 mr-1 text-sky-500" />
-                    <SelectValue placeholder="Selecione o mês" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableMonths.map(month => (
-                      <SelectItem key={month.value} value={month.value} className="text-xs">
-                        {month.value === `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}`
-                          ? `📅 ${month.label} (Atual)`
-                          : month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {dashboardMonth !== `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}` && (
-                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] bg-amber-50 text-amber-700 border-amber-200 uppercase font-bold">
-                    Histórico
-                  </Badge>
-                )}
-              </div>
+              {/* Selector de Mes movido para a aba Aulas */}
               <div className="flex items-center gap-3 mt-1">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -1506,13 +1484,38 @@ const HomePage = () => {
           <TabsContent value="aulas" className="mt-4">
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="p-6 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-violet-100 rounded-lg">
-                    <BookOpen className="h-5 w-5 text-violet-600" />
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-violet-100 rounded-lg">
+                      <BookOpen className="h-5 w-5 text-violet-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-800">Minhas Aulas</h2>
+                      <p className="text-sm text-slate-500">Histórico de suas aulas por mês</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-800">Minhas Aulas</h2>
-                    <p className="text-sm text-slate-500">Histórico completo de suas aulas</p>
+
+                  <div className="flex items-center gap-2">
+                    <Select value={dashboardMonth} onValueChange={setDashboardMonth}>
+                      <SelectTrigger className="w-[180px] h-9 text-xs bg-slate-50 border-slate-200">
+                        <CalendarIcon className="w-3 h-3 mr-1 text-sky-500" />
+                        <SelectValue placeholder="Selecione o mês" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableMonths.map(month => (
+                          <SelectItem key={month.value} value={month.value} className="text-xs">
+                            {month.value === `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}`
+                              ? `📅 ${month.label} (Atual)`
+                              : month.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {dashboardMonth !== `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}` && (
+                      <Badge variant="outline" className="h-6 px-2 text-[10px] bg-amber-50 text-amber-700 border-amber-200 uppercase font-bold">
+                        Histórico
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1530,8 +1533,22 @@ const HomePage = () => {
                   <TableBody>
                     {loading ? (
                       <TableRow><TableCell colSpan="5" className="text-center">Carregando...</TableCell></TableRow>
-                    ) : appointments.length > 0 ? (
-                      appointments.map(apt => {
+                    ) : appointments.filter(apt => {
+                      if (!apt.class_datetime) return false;
+                      const [year, month] = dashboardMonth.split('-').map(Number);
+                      const startOfMonth = new Date(year, month - 1, 1);
+                      const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+                      const aptDate = new Date(apt.class_datetime);
+                      return aptDate >= startOfMonth && aptDate <= endOfMonth;
+                    }).length > 0 ? (
+                      appointments.filter(apt => {
+                        if (!apt.class_datetime) return false;
+                        const [year, month] = dashboardMonth.split('-').map(Number);
+                        const startOfMonth = new Date(year, month - 1, 1);
+                        const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+                        const aptDate = new Date(apt.class_datetime);
+                        return aptDate >= startOfMonth && aptDate <= endOfMonth;
+                      }).map(apt => {
                         // Buscar materiales para esta aula
                         const aptMaterials = classMaterials.filter(m => m.appointment_id === apt.id);
 
