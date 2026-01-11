@@ -2260,47 +2260,7 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
   return (
     <div className="w-full">
       <div className="w-full px-4 lg:px-8">
-        {/* Selector de Mes Global para el Dashboard */}
-        <div className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-sky-100 rounded-lg">
-              <Calendar className="h-5 w-5 text-sky-600" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-800">Resumo do Mês</h3>
-              <p className="text-xs text-slate-500">Filtrando estatísticas e gráficos por período</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Select value={earningsMonth} onValueChange={setEarningsMonth}>
-              <SelectTrigger className="w-[200px] h-10">
-                <SelectValue placeholder="Selecione o mês" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableMonths.map(month => (
-                  <SelectItem key={month.value} value={month.value}>
-                    {month.value === `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}`
-                      ? `📅 ${month.label} (Atual)`
-                      : month.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Badge
-              variant="outline"
-              className={cn(
-                "px-3 py-1.5 text-xs font-bold",
-                earningsMonth === `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}`
-                  ? "bg-sky-50 text-sky-700 border-sky-200"
-                  : "bg-amber-50 text-amber-700 border-amber-200"
-              )}
-            >
-              {earningsMonth === `${getBrazilDate().getFullYear()}-${String(getBrazilDate().getMonth() + 1).padStart(2, '0')}`
-                ? '🔵 PERÍODO ATUAL'
-                : '📆 HISTÓRICO'}
-            </Badge>
-          </div>
-        </div>
+
         {/* Grid principal: 2 colunas em desktop */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
