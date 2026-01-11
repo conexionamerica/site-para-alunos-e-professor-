@@ -2166,9 +2166,6 @@ const HomeTab = ({ dashboardData, setActiveTab }) => {
           {/* ===== COLUNA ESQUERDA ===== */}
           <div className="space-y-6">
 
-            {/* PAINEL ADMINISTRATIVO (Novo) - Apenas Superadmin */}
-            {renderPendenciasPanel()}
-
             {/* Card: Solicitações Pendentes */}
             <Card className="shadow-sm h-[400px] flex flex-col border-l-4 border-l-sky-500">
               <CardHeader className="pb-3">
