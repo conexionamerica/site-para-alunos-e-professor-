@@ -1080,7 +1080,7 @@ const HomePage = () => {
                 const tabsDef = [
                   { id: 'agenda', value: 'agenda', permission: 'dashboard', icon: Package, label: 'Inicio', bg: 'bg-sky-50', activeBg: 'data-[state=active]:bg-sky-500', text: 'text-sky-600' },
                   { id: 'aulas', value: 'aulas', permission: 'clases', icon: BookOpen, label: 'Aulas', bg: 'bg-violet-50', activeBg: 'data-[state=active]:bg-violet-500', text: 'text-violet-600' },
-                  { id: 'recursos', value: 'recursos', permission: 'recursos', icon: FileText, label: 'Recursos', bg: 'bg-blue-50', activeBg: 'data-[state=active]:bg-blue-500', text: 'text-blue-600' },
+                  { id: 'recursos', value: 'recursos', permission: 'dashboard', icon: FileText, label: 'Recursos', bg: 'bg-blue-50', activeBg: 'data-[state=active]:bg-blue-500', text: 'text-blue-600' },
                   { id: 'quiz', value: 'quiz', permission: 'dashboard', icon: CheckCircle2, label: 'Quiz', bg: 'bg-emerald-50', activeBg: 'data-[state=active]:bg-emerald-500', text: 'text-emerald-600' },
                   { id: 'logros', value: 'logros', permission: 'dashboard', icon: Star, label: 'Logros', bg: 'bg-amber-50', activeBg: 'data-[state=active]:bg-amber-500', text: 'text-amber-600' },
                   { id: 'tickets', value: 'tickets', permission: 'dashboard', icon: Ticket, label: 'Tickets', bg: 'bg-rose-50', activeBg: 'data-[state=active]:bg-rose-500', text: 'text-rose-600' },
