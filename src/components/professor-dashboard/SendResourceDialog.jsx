@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,16 +7,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
-import { Upload, Loader2, Trash2, FileText as FileIcon, Music, Video, Search, File } from 'lucide-react';
+import { Upload, Loader2, Trash2, FileText as FileIcon, Music, Video, Search, File, Users, User } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 // Component for sending resources to students
-const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId }) => {
+const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId, students = [] }) => {
     const { toast } = useToast();
     const [isUploading, setIsUploading] = useState(false);
     const [isDeleting, setIsDeleting] = useState(null); // ID of material being deleted
@@ -28,6 +29,23 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [activeTab, setActiveTab] = useState('enviar');
     const fileInputRef = React.useRef(null);
+
+    // Estado para selección de alumno destinatario
+    const [selectedStudentId, setSelectedStudentId] = useState(student?.id || 'all');
+
+    // Obtener el alumno seleccionado actual
+    const selectedStudentData = selectedStudentId === 'all'
+        ? null
+        : students.find(s => s.id === selectedStudentId) || student;
+
+    // Actualizar el alumno seleccionado cuando cambie el prop student
+    useEffect(() => {
+        if (student?.id) {
+            setSelectedStudentId(student.id);
+        } else {
+            setSelectedStudentId('all');
+        }
+    }, [student?.id, isOpen]);
 
     const CATEGORIES = [
         'Gramática', 'Vocabulário', 'Listening', 'Speaking', 'Exercícios',
@@ -52,27 +70,38 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
         if (!isOpen) return;
         setIsLoadingHistory(true);
         try {
-            let query = supabase
+            // Buscar TODOS los materiales del profesor (para ver histórico completo)
+            const { data, error } = await supabase
                 .from('shared_materials')
                 .select('*')
                 .eq('professor_id', professorId)
                 .order('created_at', { ascending: false });
 
-            if (student) {
-                query = query.eq('student_id', student.id);
-            } else {
-                query = query.is('student_id', null);
-            }
-
-            const { data, error } = await query;
             if (error) throw error;
-            setHistory(data || []);
+
+            // Enriquecer con nombre del alumno destinatario
+            const enrichedData = await Promise.all((data || []).map(async (material) => {
+                if (material.student_id) {
+                    // Buscar nombre del alumno
+                    const studentData = students.find(s => s.id === material.student_id);
+                    return {
+                        ...material,
+                        student_name: studentData?.full_name || 'Alumno desconhecido'
+                    };
+                }
+                return {
+                    ...material,
+                    student_name: null // NULL = enviado a todos
+                };
+            }));
+
+            setHistory(enrichedData);
         } catch (error) {
             console.error('Error fetching material history:', error);
         } finally {
             setIsLoadingHistory(false);
         }
-    }, [isOpen, professorId, student]);
+    }, [isOpen, professorId, students]);
 
     React.useEffect(() => {
         if (isOpen) {
@@ -100,41 +129,65 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
     };
 
     const handleDeleteMaterial = async (material) => {
-        if (!window.confirm(`Tem certeza que deseja excluir o material "${material.material_name}"?`)) return;
+        console.log('Intentando eliminar material:', material);
+
+        if (!window.confirm(`Tem certeza que deseja excluir o material "${material.material_name}"?`)) {
+            console.log('Usuario canceló la eliminación');
+            return;
+        }
 
         setIsDeleting(material.id);
         try {
-            // 1. Extraer path del storage desde la URL
-            const urlParts = material.file_url.split('/shared-materials/');
-            if (urlParts.length > 1) {
-                const filePath = urlParts[1];
-                const { error: storageError } = await supabase.storage
-                    .from('shared-materials')
-                    .remove([filePath]);
-                if (storageError) console.warn('Could not delete file from storage:', storageError);
-            }
+            console.log('Eliminando de la base de datos...');
 
-            // 2. Eliminar de la base de datos
-            const { error: dbError } = await supabase
+            // 1. PRIMERO eliminar de la base de datos (esto es lo más importante)
+            const { error: dbError, data: deletedData } = await supabase
                 .from('shared_materials')
                 .delete()
-                .eq('id', material.id);
+                .eq('id', material.id)
+                .select();
 
-            if (dbError) throw dbError;
+            console.log('Resultado de eliminación DB:', { dbError, deletedData });
+
+            if (dbError) {
+                console.error('Error de base de datos:', dbError);
+                throw dbError;
+            }
+
+            // 2. Luego intentar eliminar del storage (no bloquea si falla)
+            try {
+                const urlParts = material.file_url?.split('/shared-materials/');
+                if (urlParts && urlParts.length > 1) {
+                    const filePath = decodeURIComponent(urlParts[1]);
+                    console.log('Eliminando archivo del storage:', filePath);
+
+                    const { error: storageError } = await supabase.storage
+                        .from('shared-materials')
+                        .remove([filePath]);
+
+                    if (storageError) {
+                        console.warn('No se pudo eliminar del storage (no es crítico):', storageError);
+                    }
+                }
+            } catch (storageErr) {
+                console.warn('Error al eliminar del storage (ignorado):', storageErr);
+            }
 
             toast({
                 title: 'Material excluído',
                 description: 'O material foi removido com sucesso.'
             });
 
+            // Actualizar lista local
             setHistory(prev => prev.filter(m => m.id !== material.id));
             onUpdate?.();
+
         } catch (error) {
-            console.error('Error deleting material:', error);
+            console.error('Error completo al eliminar material:', error);
             toast({
                 variant: 'destructive',
                 title: 'Erro ao excluir material',
-                description: error.message
+                description: error.message || 'Erro desconhecido'
             });
         } finally {
             setIsDeleting(null);
@@ -174,7 +227,7 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
                 .from('shared_materials')
                 .insert({
                     professor_id: professorId,
-                    student_id: student?.id || null,
+                    student_id: selectedStudentData?.id || null,
                     material_name: materialName.trim(),
                     file_url: publicUrl,
                     file_type: fileType,
@@ -187,8 +240,8 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
 
             toast({
                 title: 'Material enviado!',
-                description: student
-                    ? `Material compartilhado com ${student.full_name}`
+                description: selectedStudentData
+                    ? `Material compartilhado com ${selectedStudentData.full_name}`
                     : 'Material compartilhado com todos os seus alunos'
             });
 
@@ -231,8 +284,8 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
                             Gestão de Materiais
                         </DialogTitle>
                         <DialogDescription className="text-slate-500">
-                            {student
-                                ? `Materiais para ${student.full_name}`
+                            {selectedStudentData
+                                ? `Enviando materiais para ${selectedStudentData.full_name}`
                                 : 'Materiais compartilhados com todos os alunos'}
                         </DialogDescription>
                     </DialogHeader>
@@ -255,6 +308,50 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
                     <div className="p-6 min-h-[400px]">
                         <TabsContent value="enviar" className="mt-0 space-y-4 animate-in fade-in-50 duration-300">
                             <div className="space-y-4">
+                                {/* SELECTOR DE ALUMNO DESTINATARIO */}
+                                {students.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="student-select" className="font-bold text-slate-700 flex items-center gap-2">
+                                            <User className="h-4 w-4" />
+                                            Enviar para *
+                                        </Label>
+                                        <Select
+                                            value={selectedStudentId}
+                                            onValueChange={setSelectedStudentId}
+                                        >
+                                            <SelectTrigger id="student-select" className="bg-white">
+                                                <SelectValue placeholder="Selecione o destinatário" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">
+                                                    <div className="flex items-center gap-2">
+                                                        <Users className="h-4 w-4 text-sky-500" />
+                                                        <span>Todos os Alunos</span>
+                                                    </div>
+                                                </SelectItem>
+                                                {students.map((s) => (
+                                                    <SelectItem key={s.id} value={s.id}>
+                                                        <div className="flex items-center gap-2">
+                                                            <Avatar className="h-5 w-5">
+                                                                <AvatarImage src={s.avatar_url} />
+                                                                <AvatarFallback className="text-[10px]">
+                                                                    {s.full_name?.[0] || 'A'}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <span>{s.full_name}</span>
+                                                        </div>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {selectedStudentData && (
+                                            <p className="text-xs text-sky-600 font-medium">
+                                                ✓ Material será enviado apenas para {selectedStudentData.full_name}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
                                 <div className="space-y-2">
                                     <Label htmlFor="file-upload" className="font-bold text-slate-700">Arquivo *</Label>
                                     <Input
@@ -344,32 +441,45 @@ const SendResourceDialog = ({ student, isOpen, onClose, onUpdate, professorId })
                                     <div className="space-y-3">
                                         {history.map((item) => (
                                             <div key={item.id} className="group flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-sky-100 hover:bg-sky-50 transition-all">
-                                                <div className="flex items-center gap-3 overflow-hidden">
+                                                <div className="flex items-center gap-3 overflow-hidden flex-1">
                                                     <div className="p-2 bg-white rounded-lg shadow-sm">
                                                         {getFileIcon(item.file_type)}
                                                     </div>
-                                                    <div className="min-w-0">
+                                                    <div className="min-w-0 flex-1">
                                                         <p className="font-bold text-slate-800 text-sm truncate">
                                                             {item.material_name}
                                                         </p>
-                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                                             <span className="text-[10px] text-slate-400 font-medium">
                                                                 {format(new Date(item.created_at), "dd/MM/yyyy", { locale: ptBR })}
                                                             </span>
                                                             <Badge variant="outline" className="text-[9px] h-4 py-0 px-1 text-slate-500 uppercase">
                                                                 {item.file_type}
                                                             </Badge>
+                                                            {/* Mostrar destinatario */}
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    "text-[9px] h-4 py-0 px-1.5",
+                                                                    item.student_name
+                                                                        ? "bg-sky-50 text-sky-600 border-sky-200"
+                                                                        : "bg-emerald-50 text-emerald-600 border-emerald-200"
+                                                                )}
+                                                            >
+                                                                {item.student_name ? `→ ${item.student_name}` : '→ Todos'}
+                                                            </Badge>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="flex items-center gap-1">
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50"
                                                         onClick={() => handleDeleteMaterial(item)}
                                                         disabled={isDeleting === item.id}
+                                                        title="Excluir material"
                                                     >
                                                         {isDeleting === item.id ? (
                                                             <Loader2 className="h-4 w-4 animate-spin" />

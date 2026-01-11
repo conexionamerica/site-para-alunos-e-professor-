@@ -400,13 +400,48 @@ const HomePage = () => {
       setClassMaterials(materialsData || []);
 
       // Cargar materiales compartidos por el profesor (específicos para el alumno o generales)
-      const { data: sharedMaterialsData } = await supabase
-        .from('shared_materials')
-        .select('*')
-        .or(`student_id.eq.${user.id},and(student_id.is.null,professor_id.eq.${profile.assigned_professor_id})`)
-        .order('created_at', { ascending: false });
+      // Dividimos en dos consultas para evitar errores de sintaxis con .or() y null checks
+      let sharedMaterialsData = [];
 
-      setSharedMaterials(sharedMaterialsData || []);
+      try {
+        // 1. Materiales específicos para este alumno
+        const { data: studentMaterials, error: studentError } = await supabase
+          .from('shared_materials')
+          .select('*')
+          .eq('student_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (!studentError && studentMaterials) {
+          sharedMaterialsData = [...studentMaterials];
+        }
+
+        // 2. Materiales generales del profesor asignado (student_id IS NULL)
+        if (profile.assigned_professor_id) {
+          const { data: generalMaterials, error: generalError } = await supabase
+            .from('shared_materials')
+            .select('*')
+            .is('student_id', null)
+            .eq('professor_id', profile.assigned_professor_id)
+            .order('created_at', { ascending: false });
+
+          if (!generalError && generalMaterials) {
+            // Combinar y eliminar duplicados por ID
+            const existingIds = new Set(sharedMaterialsData.map(m => m.id));
+            generalMaterials.forEach(m => {
+              if (!existingIds.has(m.id)) {
+                sharedMaterialsData.push(m);
+              }
+            });
+          }
+        }
+
+        // Ordenar por fecha de creación
+        sharedMaterialsData.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      } catch (error) {
+        console.error('Error fetching shared materials:', error);
+      }
+
+      setSharedMaterials(sharedMaterialsData);
 
       if (chatRes.data) {
         setChat(chatRes.data);

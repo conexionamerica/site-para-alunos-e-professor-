@@ -1384,6 +1384,7 @@ const AlunosTab = ({ dashboardData }) => {
                         onClose={() => setIsResourceDialogOpen(false)}
                         onUpdate={onUpdate}
                         professorId={professorId}
+                        students={filteredStudents}
                     />
                 </div>
             </div>
