@@ -30,6 +30,7 @@ import { DaysRemainingWidget } from '@/components/student/DaysRemainingWidget';
 import { StudentTicketsTab } from '@/components/student/StudentTicketsTab';
 import { expandedVocabulary } from '@/data/expandedVocabulary';
 import { getDailyPhrase } from '@/data/dailyPhrases';
+import { useIdleTimeout } from '@/hooks/useIdleTimeout';
 
 // UI Components
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -182,6 +183,9 @@ const HomePage = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Hook para cerrar sessión automáticamente después de 15 minutos de inactividad
+  useIdleTimeout(true);
 
   const [loading, setLoading] = useState(true);
   const [activeBillings, setActiveBillings] = useState([]);

@@ -25,6 +25,7 @@ import AvisosTab from '@/components/professor-dashboard/AvisosTab';
 import { useToast } from '@/components/ui/use-toast';
 import { Link } from 'react-router-dom';
 import { getBrazilDate } from '@/lib/dateUtils';
+import { useIdleTimeout } from '@/hooks/useIdleTimeout';
 
 // Función de busca de datos
 const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) => {
@@ -210,6 +211,9 @@ const ProfessorDashboardPage = () => {
     const { user, profile, signOut } = useAuth();
     const { toast } = useToast();
     const navigate = useNavigate();
+
+    // Hook para cerrar sessión automáticamente después de 15 minutos de inactividad
+    useIdleTimeout(true);
 
     const [activeTab, setActiveTab] = useState('home');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
