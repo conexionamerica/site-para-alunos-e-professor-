@@ -1,5 +1,5 @@
-// Arquivo: src/components/professor-dashboard/ServicosTab.jsx
-// Sistema de tickets de serviço para professores
+// Archivo: src/components/professor-dashboard/ServicosTab.jsx
+// Sistema de tickets de servicio para profesores
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { format, parseISO, differenceInHours } from 'date-fns';
@@ -20,6 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ptBR } from 'date-fns/locale';
 import TicketReportsSection from './TicketReportsSection';
 import { useFormPersistence } from '@/hooks/useFormPersistence';
+import { notifyNewTicket, notifyTicketMessage, notifyTicketStatusChange, requestNotificationPermission } from '@/lib/notifications';
 
 // Tipos de solicitação (baseado na imagem do usuário, removendo os taxados)
 const TICKET_TYPES = [
@@ -1044,6 +1045,11 @@ const ServicosTab = ({ dashboardData }) => {
     const isSuperadmin = dashboardData?.isSuperadmin || false;
     const professorId = dashboardData?.professorId;
 
+    // Solicitar permiso de notificaciones al cargar
+    useEffect(() => {
+        requestNotificationPermission();
+    }, []);
+
     useEffect(() => {
         fetchTickets();
     }, [professorId, isSuperadmin]);
@@ -1067,21 +1073,38 @@ const ServicosTab = ({ dashboardData }) => {
                     table: 'service_tickets',
                     filter: isSuperadmin ? undefined : `requester_id=eq.${professorId}`
                 },
-                (payload) => {
+                async (payload) => {
                     // Reload tickets
                     fetchTickets();
 
-                    // Show notification for new tickets (admin only)
-                    if (payload.eventType === 'INSERT' && isSuperadmin && payload.new.requester_id !== professorId) {
+                    // Show notification for new tickets (admin and professor)
+                    if (payload.eventType === 'INSERT' && payload.new.requester_id !== professorId) {
+                        // Buscar nombre del solicitante
+                        const { data: requester } = await supabase
+                            .from('profiles')
+                            .select('full_name')
+                            .eq('id', payload.new.requester_id)
+                            .single();
+
+                        const requesterName = requester?.full_name || 'Novo solicitante';
+
+                        // Mostrar notificación con sonido
+                        await notifyNewTicket(payload.new.ticket_number, requesterName);
+
+                        // También mostrar toast
                         toast({
-                            title: '🎫 Novo Ticket',
-                            description: `Ticket ${payload.new.ticket_number} foi criado`
+                            title: '🎫 Novo Ticket!',
+                            description: `Ticket ${payload.new.ticket_number} criado por ${requesterName}`
                         });
                     }
 
-                    // Show notification for status changes
+                    // Show notification for status changes (for the ticket creator)
                     if (payload.eventType === 'UPDATE' && payload.old.status !== payload.new.status && !isSuperadmin) {
                         const statusLabel = TICKET_STATUS[payload.new.status]?.label;
+
+                        // Notificación con sonido
+                        await notifyTicketStatusChange(payload.new.ticket_number, statusLabel);
+
                         toast({
                             title: '🔔 Ticket Atualizado',
                             description: `Ticket ${payload.new.ticket_number} está agora: ${statusLabel}`
@@ -1101,15 +1124,27 @@ const ServicosTab = ({ dashboardData }) => {
                     schema: 'public',
                     table: 'service_ticket_messages'
                 },
-                (payload) => {
+                async (payload) => {
                     // Only show notification if message is from another user
                     if (payload.new.user_id !== professorId) {
                         // Check if this message is for one of user's tickets
                         const userTicket = tickets.find(t => t.id === payload.new.ticket_id);
                         if (userTicket) {
+                            // Buscar nombre del remitente
+                            const { data: sender } = await supabase
+                                .from('profiles')
+                                .select('full_name')
+                                .eq('id', payload.new.user_id)
+                                .single();
+
+                            const senderName = sender?.full_name || 'Alguém';
+
+                            // Notificación con sonido
+                            await notifyTicketMessage(userTicket.ticket_number, senderName);
+
                             toast({
-                                title: '💬 Nova Mensagem',
-                                description: `Você recebeu uma resposta no ticket ${userTicket.ticket_number}`
+                                title: '💬 Nova Mensagem!',
+                                description: `${senderName} respondeu no ticket ${userTicket.ticket_number}`
                             });
                         }
                     }
