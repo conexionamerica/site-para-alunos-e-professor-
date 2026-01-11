@@ -52,13 +52,10 @@ const RecursosTab = ({ dashboardData }) => {
     const fetchMaterials = async () => {
         setLoading(true);
         try {
+            // Consulta sin JOINs para evitar error de foreign keys
             let query = supabase
                 .from('shared_materials')
-                .select(`
-                    *,
-                    student:profiles!student_id(id, full_name),
-                    professor:profiles!professor_id(id, full_name)
-                `)
+                .select('*')
                 .order('created_at', { ascending: false });
 
             // Se for professor (não superadmin), filtrar apenas os seus
@@ -71,14 +68,30 @@ const RecursosTab = ({ dashboardData }) => {
 
             const { data: materialsData, error } = await query;
             if (error) throw error;
-            setMaterials(materialsData || []);
+
+            // Enriquecer datos con nombres de alumnos y profesores
+            const enrichedMaterials = (materialsData || []).map(material => {
+                const studentData = students.find(s => s.id === material.student_id);
+                const professorData = allProfessors.find(p => p.id === material.professor_id);
+
+                return {
+                    ...material,
+                    student: studentData ? { id: studentData.id, full_name: studentData.full_name } : null,
+                    professor: professorData ? { id: professorData.id, full_name: professorData.full_name } : null
+                };
+            });
+
+            setMaterials(enrichedMaterials);
         } catch (error) {
             console.error('Error fetching resources:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Erro ao carregar recursos',
-                description: error.message
-            });
+            // Solo mostrar toast si es un error crítico, no de schema
+            if (!error.message?.includes('schema cache')) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Erro ao carregar recursos',
+                    description: error.message
+                });
+            }
         } finally {
             setLoading(false);
         }
@@ -351,6 +364,7 @@ const RecursosTab = ({ dashboardData }) => {
                 onClose={() => setIsSendDialogOpen(false)}
                 onUpdate={fetchMaterials}
                 professorId={professorId}
+                students={students}
             />
         </div>
     );
