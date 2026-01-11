@@ -89,7 +89,7 @@ const fetchProfessorDashboardData = async (professorId, isSuperadmin = false) =>
     // 4. Fetch de ALL os Perfis (para AdmTab y AlunosTab)
     const { data: allProfiles, error: allProfilesError } = await supabase
         .from('profiles')
-        .select('*, created_at, phone, cpf, birth_date, registration_status, address_street, address_city, address_state, address_zip_code')
+        .select('*, created_at, phone, cpf, birth_date, registration_status, address_street, address_city, address_state, address_zip_code, is_online, last_seen_at')
         .order('role', { ascending: true })
         .order('full_name', { ascending: true });
     if (allProfilesError) throw allProfilesError;
