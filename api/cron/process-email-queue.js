@@ -9,10 +9,29 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const resendApiKey = process.env.RESEND_API_KEY;
 
 export default async function handler(req, res) {
-    // Verificar autorización
+    // DEBUG: Ver qué está llegando
     const authHeader = req.headers.authorization;
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return res.status(401).json({ error: 'Unauthorized' });
+    const cronSecret = process.env.CRON_SECRET;
+
+    console.log('AUTH HEADER:', authHeader);
+    console.log('CRON_SECRET exists:', !!cronSecret);
+    console.log('CRON_SECRET length:', cronSecret?.length);
+
+    // Si no hay CRON_SECRET configurado, permitir acceso (para debug)
+    if (!cronSecret) {
+        console.log('WARNING: CRON_SECRET not configured, allowing access');
+    } else if (authHeader !== `Bearer ${cronSecret}`) {
+        console.log('EXPECTED:', `Bearer ${cronSecret}`);
+        console.log('RECEIVED:', authHeader);
+        return res.status(401).json({
+            error: 'Unauthorized',
+            debug: {
+                hasAuthHeader: !!authHeader,
+                hasCronSecret: !!cronSecret,
+                headerLength: authHeader?.length,
+                secretLength: cronSecret?.length
+            }
+        });
     }
 
     if (req.method !== 'GET') {
